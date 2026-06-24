@@ -141,7 +141,7 @@ export const DEFAULT_CLASSIFIED = {
 }
 
 export const DEFAULT_BRANDING = {
-  logoUrl: '/scu-logo.svg',
+  logoUrl: import.meta.env.BASE_URL + 'scu-logo.svg',
   primary: '#3a4794',
   hostile: '#c0392b',
   accent: '#36e0c0',

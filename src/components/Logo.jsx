@@ -5,7 +5,9 @@ import { useData } from '../context/DataContext'
 // branding.logoUrl set in the Operations Centre); falls back to the bundled SVG.
 export default function Logo({ size = 56 }) {
   const { state } = useData()
-  const configured = state?.branding?.logoUrl || '/scu-logo.png'
+  const base = import.meta.env.BASE_URL // '/' locally, '/<repo>/' on Pages
+  const fallbackSvg = base + 'scu-logo.svg'
+  const configured = state?.branding?.logoUrl || base + 'scu-logo.png'
   const [src, setSrc] = useState(configured)
   return (
     <img
@@ -15,7 +17,7 @@ export default function Logo({ size = 56 }) {
       height={size}
       style={{ objectFit: 'contain', filter: 'drop-shadow(0 0 8px rgba(54,224,192,0.25))' }}
       onError={() => {
-        if (src !== '/scu-logo.svg') setSrc('/scu-logo.svg')
+        if (src !== fallbackSvg) setSrc(fallbackSvg)
       }}
     />
   )
