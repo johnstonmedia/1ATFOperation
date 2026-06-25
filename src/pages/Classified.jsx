@@ -1,10 +1,17 @@
-import { Link } from 'react-router-dom'
+import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useData } from '../context/DataContext'
+import { useAuth } from '../context/AuthContext'
 import Logo from '../components/Logo'
+import LoginModal from '../components/LoginModal'
 
-// The link originally sent to everyone: yourdomain.com/Classified
+// The link originally shared with the unit: yourdomain.com/Classified
+// First page everyone sees. "Continue" opens the registration flow.
 export default function Classified() {
   const { state } = useData()
+  const { user } = useAuth()
+  const navigate = useNavigate()
+  const [auth, setAuth] = useState(null) // 'register' | 'login' | null
   const c = state.classified
 
   return (
@@ -16,7 +23,6 @@ export default function Classified() {
         textAlign: 'center', padding: 24, position: 'relative',
       }}
     >
-      {/* CLASSIFIED stamp banding */}
       <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 6,
         background: 'repeating-linear-gradient(90deg,var(--hostile) 0 30px,#111 30px 60px)' }} />
       <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 6,
@@ -25,7 +31,7 @@ export default function Classified() {
       <Logo size={120} />
 
       <div className="mono hostile" style={{ marginTop: 20, letterSpacing: 4, fontSize: 12 }}>
-        ⛔ EYES ONLY · DO NOT DISTRIBUTE
+        YOUR EYES ONLY · DO NOT DISTRIBUTE
       </div>
 
       <h1
@@ -54,8 +60,26 @@ export default function Classified() {
         {c.motto}
       </div>
 
-      <Link to="/" className="btn" style={{ marginTop: 40 }}>Enter Operational Portal →</Link>
+      <div className="row center wrap" style={{ gap: 12, marginTop: 40 }}>
+        {user ? (
+          <button className="primary" onClick={() => navigate('/')}>Enter Operational Portal →</button>
+        ) : (
+          <>
+            <button className="primary" onClick={() => setAuth('register')}>Continue →</button>
+            <button className="ghost" onClick={() => setAuth('login')}>Already registered? Sign in</button>
+          </>
+        )}
+      </div>
+
       <div className="mono dim" style={{ marginTop: 18, fontSize: 10 }}>LUCET PER MINISTERIUM</div>
+
+      {auth && (
+        <LoginModal
+          initialMode={auth}
+          onClose={() => setAuth(null)}
+          onAuthed={() => navigate('/')}
+        />
+      )}
     </div>
   )
 }

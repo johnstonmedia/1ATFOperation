@@ -166,10 +166,9 @@ export const DEFAULT_COMPANY_PAGES = COMPANIES.reduce((acc, c) => {
 // A couple of demo roster rows so the Users admin + signup matching can be
 // exercised before the real spreadsheet is imported.
 export const DEMO_ROSTER = [
-  // Unit administrator — RHQ by default. Logs in with this ID number.
-  { _id: 'rhq-admin', idNumber: '190990', name: 'Unit Administrator', rank: 'RHQ', company: 'S', role: 'RHQ', email: '' },
-  { _id: 'demo-1', idNumber: '0001', name: 'CDT J. Reyes', rank: 'Cadet', company: 'A', role: 'General', email: '' },
-  { _id: 'demo-2', idNumber: '0002', name: 'LCDT M. Okafor', rank: 'Lead Cadet', company: 'B', role: 'General', email: '' },
+  // Bootstrap administrator — RHQ. Logs in directly with this ID (no temp pw).
+  { _id: 'rhq-admin', idNumber: '190990', name: 'Unit Administrator', company: 'S', role: 'RHQ', email: '', rank: '' },
+  { _id: 'demo-1', idNumber: '123456', name: 'CDT J. Reyes', company: 'A', role: 'General', email: '', rank: '', tempPassword: 'DEMOPASS' },
 ]
 
 export const DEFAULT_ACTIVITY = [

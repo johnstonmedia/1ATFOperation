@@ -7,37 +7,29 @@ export const useAuth = () => useContext(AuthContext)
 
 const LS_USER = '1atf-current-user'
 
-// Bootstrap administrator: this ID can always claim an RHQ account, even before
-// any roster has been imported (solves the empty-backend chicken-and-egg).
+// Bootstrap administrator: can sign in directly (no temporary password needed),
+// even before any roster has been imported.
 const ADMIN_ID = '190990'
-const ADMIN_PROFILE = {
-  name: 'Unit Administrator',
-  rank: 'RHQ',
-  company: 'S',
-  role: 'RHQ',
-  email: '',
-}
+const ADMIN_PROFILE = { name: 'Unit Administrator', company: 'S', role: 'RHQ', email: '', rank: '' }
 
-// Members sign in with their ID number, not an email. Firebase Auth requires an
-// email, so we synthesise a stable one from the ID number.
+// Members sign in with their ID number; Firebase Auth needs an email, so we
+// synthesise a stable one from the ID.
 function idToEmail(idNumber) {
   const clean = String(idNumber).trim().toLowerCase().replace(/[^a-z0-9]/g, '')
   return `id-${clean}@1atf.unit`
 }
 
-// Find the roster record provisioned by RHQ (spreadsheet import / Users admin).
 function matchRoster(roster, idNumber) {
   if (!roster) return null
   return roster.find((r) => String(r.idNumber).trim() === String(idNumber).trim()) || null
 }
 
-// Build an account profile from a roster record.
 function profileFromRoster(idNumber, r) {
   return {
     idNumber: String(idNumber).trim(),
     email: r.email || '',
     name: r.name || 'Unnamed',
-    rank: r.rank || 'Cadet',
+    rank: r.rank || '',
     company: r.company || '',
     role: r.role || 'General',
     linked: true,
@@ -45,11 +37,10 @@ function profileFromRoster(idNumber, r) {
 }
 
 export function AuthProvider({ children }) {
-  const { state } = useData()
+  const { state, reload } = useData()
   const [user, setUser] = useState(null)
   const [ready, setReady] = useState(false)
 
-  // --- LOCAL MODE: restore session from localStorage ---
   useEffect(() => {
     if (FIREBASE_ENABLED) return
     try {
@@ -61,7 +52,6 @@ export function AuthProvider({ children }) {
     setReady(true)
   }, [])
 
-  // --- FIREBASE MODE: subscribe to auth + profile ---
   useEffect(() => {
     if (!FIREBASE_ENABLED) return
     let unsub = () => {}
@@ -72,9 +62,10 @@ export function AuthProvider({ children }) {
         if (fbUser) {
           const snap = await getDoc(doc(db, 'users', fbUser.uid))
           if (snap.exists()) setUser({ uid: fbUser.uid, ...snap.data() })
-          // if no profile yet, signIn() is mid-claim and will set it
+          reload() // now authorised to read roster/tasks/activity
         } else {
           setUser(null)
+          reload() // back to public view
         }
         setReady(true)
       })
@@ -82,73 +73,107 @@ export function AuthProvider({ children }) {
     return () => unsub()
   }, [])
 
-  // First login with a roster ID claims the account and sets its password.
-  // Subsequent logins verify that password. Unknown IDs are rejected.
+  // Returning users (and the bootstrap admin's first login) sign in here.
   const signIn = useCallback(
     async ({ idNumber, password }) => {
       const id = String(idNumber || '').trim()
-      if (!id || !password) throw new Error('Enter your ID number and a password.')
+      if (!id || !password) throw new Error('Enter your ID number and password.')
 
       if (FIREBASE_ENABLED) {
-        const {
-          signInWithEmailAndPassword,
-          createUserWithEmailAndPassword,
-          deleteUser,
-        } = await import('firebase/auth')
-        const { doc, getDoc, setDoc } = await import('firebase/firestore')
+        const { signInWithEmailAndPassword, createUserWithEmailAndPassword } = await import('firebase/auth')
+        const { doc, setDoc } = await import('firebase/firestore')
         const authEmail = idToEmail(id)
-
-        // 1) Existing account? Try to sign in.
         try {
           await signInWithEmailAndPassword(auth, authEmail, password)
-          return // profile loaded by onAuthStateChanged
+          return
         } catch {
-          /* not found or wrong password — fall through to claim attempt */
+          /* no account yet, or wrong password */
         }
+        if (id === ADMIN_ID) {
+          // Bootstrap: create the admin account on first sign-in.
+          try {
+            const cred = await createUserWithEmailAndPassword(auth, authEmail, password)
+            const profile = { idNumber: id, ...ADMIN_PROFILE, linked: true }
+            await setDoc(doc(db, 'users', cred.user.uid), profile)
+            setUser({ uid: cred.user.uid, ...profile })
+            return
+          } catch (e) {
+            if (e.code === 'auth/email-already-in-use') throw new Error('Incorrect password.')
+            throw e
+          }
+        }
+        throw new Error('No account found. Register with your temporary password first.')
+      }
 
-        // 2) Claim attempt: create the auth account.
+      // ---- LOCAL MODE ----
+      const existing = readLocalUsers()[id.toLowerCase()]
+      if (existing) {
+        if (existing.password !== password) throw new Error('Incorrect password.')
+        localStorage.setItem(LS_USER, JSON.stringify(existing.profile))
+        setUser(existing.profile)
+        return
+      }
+      if (id === ADMIN_ID) {
+        const profile = { uid: 'local-' + id, idNumber: id, ...ADMIN_PROFILE, linked: true }
+        saveLocalUser(id, password, profile)
+        localStorage.setItem(LS_USER, JSON.stringify(profile))
+        setUser(profile)
+        return
+      }
+      throw new Error('No account found. Register with your temporary password first.')
+    },
+    [],
+  )
+
+  // Registration via the Classified landing page: validate the issued temporary
+  // password against the roster, then set the member's own password.
+  const register = useCallback(
+    async ({ idNumber, tempPassword, newPassword }) => {
+      const id = String(idNumber || '').trim()
+      const temp = String(tempPassword || '').trim()
+      if (!id || !temp || !newPassword) throw new Error('Fill in every field.')
+      if (newPassword.length < 6) throw new Error('New password must be at least 6 characters.')
+
+      if (FIREBASE_ENABLED) {
+        const { createUserWithEmailAndPassword, deleteUser } = await import('firebase/auth')
+        const { doc, setDoc, collection, query, where, getDocs } = await import('firebase/firestore')
+        const authEmail = idToEmail(id)
+
         let cred
         try {
-          cred = await createUserWithEmailAndPassword(auth, authEmail, password)
+          cred = await createUserWithEmailAndPassword(auth, authEmail, newPassword)
         } catch (e) {
           if (e.code === 'auth/email-already-in-use') {
-            throw new Error('Incorrect password for this ID number.')
+            throw new Error('This ID is already registered. Use Sign in instead.')
           }
           throw e
         }
-
-        // 3) Must correspond to a provisioned roster record (or be the admin).
-        const snap = await getDoc(doc(db, 'roster', id))
-        let profile
-        if (snap.exists()) {
-          profile = profileFromRoster(id, snap.data())
-        } else if (id === ADMIN_ID) {
-          profile = { idNumber: id, ...ADMIN_PROFILE, linked: true }
-        } else {
-          await deleteUser(cred.user) // roll back the unauthorised account
-          throw new Error('ID number not recognised. Contact RHQ.')
+        // Now signed in -> we may read the roster to verify the temp password.
+        const qs = await getDocs(query(collection(db, 'roster'), where('idNumber', '==', id)))
+        const rec = qs.docs[0]?.data()
+        const valid = (rec && String(rec.tempPassword || '') === temp) || id === ADMIN_ID
+        if (!valid) {
+          await deleteUser(cred.user) // roll back unauthorised account
+          throw new Error('Invalid ID number or temporary password.')
         }
+        const profile = rec
+          ? profileFromRoster(id, rec)
+          : { idNumber: id, ...ADMIN_PROFILE, linked: true }
         await setDoc(doc(db, 'users', cred.user.uid), profile)
         setUser({ uid: cred.user.uid, ...profile })
         return
       }
 
       // ---- LOCAL MODE ----
-      const existing = readLocalUsers()[id.toLowerCase()]
-      if (existing) {
-        if (existing.password !== password) throw new Error('Incorrect password for this ID number.')
-        localStorage.setItem(LS_USER, JSON.stringify(existing.profile))
-        setUser(existing.profile)
-        return
+      if (readLocalUsers()[id.toLowerCase()]) {
+        throw new Error('This ID is already registered. Use Sign in instead.')
       }
-      // First login — claim if the ID is on the roster (or is the admin).
       const matched = matchRoster(state?.roster, id)
-      let base
-      if (matched) base = profileFromRoster(id, matched)
-      else if (id === ADMIN_ID) base = { idNumber: id, ...ADMIN_PROFILE, linked: true }
-      else throw new Error('ID number not recognised. Contact RHQ.')
+      const valid = (matched && String(matched.tempPassword || '') === temp) || id === ADMIN_ID
+      if (!valid) throw new Error('Invalid ID number or temporary password.')
+      const base = matched ? profileFromRoster(id, matched) : { idNumber: id, ...ADMIN_PROFILE, linked: true }
       const profile = { uid: 'local-' + id, ...base }
-      saveLocalUser(id, password, profile)
+      saveLocalUser(id, newPassword, profile)
       localStorage.setItem(LS_USER, JSON.stringify(profile))
       setUser(profile)
     },
@@ -165,7 +190,7 @@ export function AuthProvider({ children }) {
     }
   }, [])
 
-  const value = { user, ready, signIn, logout, isRHQ: user?.role === 'RHQ' }
+  const value = { user, ready, signIn, register, logout, isRHQ: user?.role === 'RHQ' }
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 

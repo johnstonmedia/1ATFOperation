@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, useCallback } from 'react'
-import { loadState, persistSlice, upsertRoster, makeId } from '../lib/store'
+import { loadState, persistSlice, makeId } from '../lib/store'
 
 const DataContext = createContext(null)
 export const useData = () => useContext(DataContext)
@@ -15,7 +15,13 @@ export function DataProvider({ children }) {
     })
   }, [])
 
-  // Update a slice in memory and persist it to the backend.
+  // Re-fetch everything. Called after sign-in/out so protected collections
+  // (roster/tasks/activity) appear once the user is authorised to read them.
+  const reload = useCallback(async () => {
+    const s = await loadState()
+    setState(s)
+  }, [])
+
   const updateSlice = useCallback(async (slice, value) => {
     setState((prev) => {
       const next = { ...prev, [slice]: value }
@@ -24,15 +30,14 @@ export function DataProvider({ children }) {
     })
   }, [])
 
-  // Replace the entire roster (used by spreadsheet import).
   const replaceRoster = useCallback(async (rows) => {
     setState((prev) => {
       const next = { ...prev, roster: rows }
-      upsertRoster(next, rows)
+      persistSlice(next, 'roster')
       return next
     })
   }, [])
 
-  const value = { state, loading, updateSlice, replaceRoster, makeId }
+  const value = { state, loading, updateSlice, replaceRoster, reload, makeId }
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>
 }
