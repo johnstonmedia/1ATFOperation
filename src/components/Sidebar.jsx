@@ -1,12 +1,15 @@
+import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { PHONETIC } from '../firebase/seed'
+import SupportModal from './SupportModal'
 
 // Left-hand hamburger menu. Profile / Activity / Tasks / Company tabs require a
 // signed-in account; the user's company tab is derived from their profile.
 export default function Sidebar({ open, onClose, onAuth }) {
   const { user } = useAuth()
   const navigate = useNavigate()
+  const [support, setSupport] = useState(false)
 
   const go = (path) => {
     onClose()
@@ -74,10 +77,12 @@ export default function Sidebar({ open, onClose, onAuth }) {
         {!user && (
           <button className="primary" onClick={() => { onClose(); onAuth() }}>Access Portal</button>
         )}
+        <button className="ghost" onClick={() => setSupport(true)}>Help &amp; Support</button>
         <Link to="/" onClick={onClose} className="mono dim" style={{ fontSize: 10, marginTop: 10 }}>
           LUCET PER MINISTERIUM
         </Link>
       </nav>
+      {support && <SupportModal onClose={() => setSupport(false)} />}
     </>
   )
 }

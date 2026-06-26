@@ -46,5 +46,24 @@ service cloud.firestore {
       allow create: if isSignedIn() && request.auth.uid == uid;
       allow update, delete: if request.auth.uid == uid || isRHQ();
     }
+
+    // Help / support messages — anyone (incl. signed-out) may submit; RHQ reads.
+    match /support/{id} {
+      allow create: if true;
+      allow read, update, delete: if isRHQ();
+    }
+
+    // Forgotten-password requests — anyone may raise; RHQ reads and actions.
+    match /resetRequests/{id} {
+      allow create: if true;
+      allow read, update, delete: if isRHQ();
+    }
+
+    // Public auth-version index (no sensitive data) so login can compute the
+    // current credential epoch before sign-in; RHQ bumps it on a reset.
+    match /authIndex/{id} {
+      allow read: if true;
+      allow write: if isRHQ();
+    }
   }
 }

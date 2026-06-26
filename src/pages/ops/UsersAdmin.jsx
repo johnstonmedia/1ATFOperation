@@ -42,9 +42,17 @@ export default function UsersAdmin() {
     const wb = XLSX.read(buf, { type: 'array' })
     const sheet = wb.Sheets[wb.SheetNames[0]]
     const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' })
-    const mapped = rows.map((row) => mapRow(row, makeId))
-    replaceRoster(mapped)
-    setImportInfo({ count: mapped.length, columns: Object.keys(rows[0] || {}) })
+    const incoming = rows.map((row) => mapRow(row, makeId))
+    // Merge: keep every existing member untouched; only add genuinely new IDs.
+    const existing = new Set(roster.map((r) => String(r.idNumber).trim()).filter(Boolean))
+    const toAdd = incoming.filter((r) => r.idNumber && !existing.has(String(r.idNumber).trim()))
+    replaceRoster([...roster, ...toAdd])
+    setImportInfo({
+      count: incoming.length,
+      added: toAdd.length,
+      skipped: incoming.length - toAdd.length,
+      columns: Object.keys(rows[0] || {}),
+    })
     e.target.value = ''
   }
 
@@ -78,8 +86,11 @@ export default function UsersAdmin() {
 
       {importInfo && (
         <div className="panel panel-pad" style={{ marginBottom: 14, borderColor: 'var(--accent)' }}>
-          <span className="accent mono">Imported {importInfo.count} records and issued temporary passwords.</span>
-          <span className="dim mono" style={{ fontSize: 11 }}> Detected columns: {importInfo.columns.join(', ')} · Use “Download temp passwords” to distribute.</span>
+          <span className="accent mono">
+            Added {importInfo.added} new member{importInfo.added === 1 ? '' : 's'} ·
+            kept {importInfo.skipped} existing (unchanged).
+          </span>
+          <span className="dim mono" style={{ fontSize: 11 }}> Columns: {importInfo.columns.join(', ')} · Use “Download temp passwords” to distribute.</span>
         </div>
       )}
 

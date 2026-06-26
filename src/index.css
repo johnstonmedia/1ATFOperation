@@ -178,6 +178,12 @@ label { font-size: 12px; color: var(--text-dim); text-transform: uppercase; lett
 .leaflet-container { background: #050811 !important; font-family: var(--mono); }
 .leaflet-control-attribution { background: rgba(0,0,0,0.5) !important; color: #555 !important; }
 .leaflet-control-attribution a { color: #678 !important; }
+/* Keep all Leaflet controls/panes below the app chrome (top bar, menu, modals)
+   so they never overlap the hamburger drawer or dialogs. */
+.leaflet-pane,
+.leaflet-top,
+.leaflet-bottom { z-index: 400 !important; }
+.leaflet-control { z-index: 401 !important; }
 
 @keyframes pulse {
   0%, 100% { opacity: 1; }

@@ -2,48 +2,89 @@ import { useState } from 'react'
 import { useData } from '../../context/DataContext'
 import { OpsHeader, useSaved } from './OperationsCentre'
 import { Field } from './NarrativeEditor'
-import AustraliaMap from '../../components/AustraliaMap'
+import AustraliaMap, { centroid } from '../../components/AustraliaMap'
 import { COMPANIES } from '../../firebase/seed'
 
 const OCCUPANTS = [...COMPANIES.map((c) => c.name), 'Meridian', 'Contested']
 
-// Update which company / Meridian occupies each territory, edit zone names,
-// and add or remove zones. Live preview reflects edits before saving.
+// Build a default shape centred on the continent.
+function rectAt(lat = -25, lng = 134, dLat = 3, dLng = 4) {
+  return [[lat + dLat, lng - dLng], [lat + dLat, lng + dLng], [lat - dLat, lng + dLng], [lat - dLat, lng - dLng]]
+}
+
+// Drag zones to position them, drag the corner handles to reshape. Zones are
+// either rectangles (corner drag keeps them square) or custom polygons. Arrows
+// connect zones: dotted = intended plan, solid = current movement.
 export default function MapEditor() {
   const { state, updateSlice, makeId } = useData()
   const [zones, setZones] = useState(state.zones)
+  const [arrows, setArrows] = useState(state.arrows || [])
+  const [selId, setSelId] = useState(zones[0]?.id || null)
   const [saved, flash] = useSaved()
 
   const save = () => {
     updateSlice('zones', zones)
+    updateSlice('arrows', arrows)
     flash()
   }
-  const setZone = (id, patch) => setZones(zones.map((z) => (z.id === id ? { ...z, ...patch } : z)))
-  const remove = (id) => setZones(zones.filter((z) => z.id !== id))
-  const add = () =>
-    setZones([
-      ...zones,
-      { id: makeId(), name: 'New Zone', occupant: 'Contested', coords: [[-25, 132], [-25, 138], [-30, 138], [-30, 132]] },
-    ])
+
+  const setZone = (id, patch) => setZones((zs) => zs.map((z) => (z.id === id ? { ...z, ...patch } : z)))
+  const onEditChange = (updated) => setZones((zs) => zs.map((z) => (z.id === updated.id ? updated : z)))
+  const removeZone = (id) => {
+    setZones((zs) => zs.filter((z) => z.id !== id))
+    setArrows((as) => as.filter((a) => a.from !== id && a.to !== id))
+    if (selId === id) setSelId(null)
+  }
+  const addZone = (shape) => {
+    const id = makeId()
+    setZones((zs) => [...zs, { id, name: 'New Zone', occupant: 'Contested', shape, coords: rectAt() }])
+    setSelId(id)
+  }
+
+  const sel = zones.find((z) => z.id === selId)
+
+  // custom-polygon vertex add/remove
+  const addVertex = () => {
+    if (!sel) return
+    const c = centroid(sel.coords)
+    setZone(sel.id, { coords: [...sel.coords, [c[0] - 1, c[1] + 1]] })
+  }
+  const removeVertex = () => {
+    if (!sel || sel.coords.length <= 3) return
+    setZone(sel.id, { coords: sel.coords.slice(0, -1) })
+  }
 
   return (
     <div>
-      <OpsHeader title="Operational Map" sub="EDIT // ZONE CONTROL">
-        <button className="ghost" onClick={add}>+ Add zone</button>
+      <OpsHeader title="Operational Map" sub="EDIT // ZONES & MOVEMENTS">
+        <button className="ghost" onClick={() => addZone('rect')}>+ Rectangle</button>
+        <button className="ghost" onClick={() => addZone('custom')}>+ Custom</button>
         <button className="primary" onClick={save}>{saved ? 'Saved ✓' : 'Save map'}</button>
       </OpsHeader>
 
-      <div className="panel" style={{ marginBottom: 18 }}>
-        <AustraliaMap zones={zones} height={360} />
+      <div className="mono dim" style={{ fontSize: 11, marginBottom: 10 }}>
+        Select a zone below, then drag the ✥ handle to move it or the round handles to reshape it. All edits stay within Australia.
       </div>
 
-      <div className="col" style={{ gap: 12 }}>
+      <div className="panel" style={{ marginBottom: 18 }}>
+        <AustraliaMap zones={zones} arrows={arrows} height={420} editId={selId} onEditChange={onEditChange} onZoneClick={(z) => setSelId(z.id)} />
+      </div>
+
+      {/* Zone list / editor */}
+      <div className="col" style={{ gap: 10, marginBottom: 22 }}>
         {zones.map((z) => (
-          <div key={z.id} className="panel panel-pad row wrap" style={{ gap: 12, alignItems: 'flex-end' }}>
-            <div className="grow" style={{ minWidth: 180 }}>
+          <div
+            key={z.id}
+            className="panel panel-pad row wrap"
+            style={{ gap: 12, alignItems: 'flex-end', borderColor: z.id === selId ? 'var(--accent)' : 'var(--line)' }}
+          >
+            <button className={z.id === selId ? 'primary' : 'ghost'} onClick={() => setSelId(z.id)} style={{ alignSelf: 'center' }}>
+              {z.id === selId ? 'Editing' : 'Select'}
+            </button>
+            <div className="grow" style={{ minWidth: 160 }}>
               <Field label="Zone name"><input value={z.name} onChange={(e) => setZone(z.id, { name: e.target.value })} /></Field>
             </div>
-            <div style={{ minWidth: 160 }}>
+            <div style={{ minWidth: 150 }}>
               <Field label="Occupant">
                 <select value={z.occupant} onChange={(e) => setZone(z.id, { occupant: e.target.value })}
                   style={{ color: z.occupant === 'Meridian' ? 'var(--hostile)' : 'var(--text)' }}>
@@ -51,18 +92,79 @@ export default function MapEditor() {
                 </select>
               </Field>
             </div>
-            <div className="grow" style={{ minWidth: 220 }}>
-              <Field label="Coordinates [lat,lng] (advanced)">
-                <input
-                  className="mono"
-                  value={JSON.stringify(z.coords)}
-                  onChange={(e) => {
-                    try { setZone(z.id, { coords: JSON.parse(e.target.value) }) } catch { /* keep typing */ }
-                  }}
-                />
-              </Field>
-            </div>
-            <button className="danger ghost" onClick={() => remove(z.id)}>Remove</button>
+            <span className="tag">{z.shape === 'rect' ? 'RECTANGLE' : 'CUSTOM'}</span>
+            <button className="danger ghost" onClick={() => removeZone(z.id)}>Remove</button>
+          </div>
+        ))}
+        {sel && sel.shape === 'custom' && (
+          <div className="row" style={{ gap: 8 }}>
+            <button className="ghost" onClick={addVertex}>+ Add corner to “{sel.name}”</button>
+            <button className="ghost" onClick={removeVertex} disabled={sel.coords.length <= 3}>− Remove corner</button>
+          </div>
+        )}
+      </div>
+
+      {/* Arrows / movements */}
+      <ArrowsEditor zones={zones} arrows={arrows} setArrows={setArrows} makeId={makeId} />
+    </div>
+  )
+}
+
+function ArrowsEditor({ zones, arrows, setArrows, makeId }) {
+  const [draft, setDraft] = useState({ from: '', to: '', type: 'current' })
+  const nameOf = (id) => zones.find((z) => z.id === id)?.name || '—'
+
+  const add = () => {
+    if (!draft.from || !draft.to || draft.from === draft.to) return
+    setArrows([...arrows, { id: makeId(), ...draft }])
+    setDraft({ from: '', to: '', type: 'current' })
+  }
+  const remove = (id) => setArrows(arrows.filter((a) => a.id !== id))
+
+  return (
+    <div className="panel panel-pad col" style={{ gap: 12 }}>
+      <div className="row between center wrap" style={{ gap: 8 }}>
+        <strong className="head">Movement Lines</strong>
+        <span className="mono dim" style={{ fontSize: 11 }}>dotted = planned · solid = current</span>
+      </div>
+
+      <div className="row wrap" style={{ gap: 10, alignItems: 'flex-end' }}>
+        <div style={{ minWidth: 150 }}>
+          <Field label="From zone">
+            <select value={draft.from} onChange={(e) => setDraft({ ...draft, from: e.target.value })}>
+              <option value="">—</option>
+              {zones.map((z) => <option key={z.id} value={z.id}>{z.name}</option>)}
+            </select>
+          </Field>
+        </div>
+        <div style={{ minWidth: 150 }}>
+          <Field label="To zone">
+            <select value={draft.to} onChange={(e) => setDraft({ ...draft, to: e.target.value })}>
+              <option value="">—</option>
+              {zones.map((z) => <option key={z.id} value={z.id}>{z.name}</option>)}
+            </select>
+          </Field>
+        </div>
+        <div style={{ minWidth: 150 }}>
+          <Field label="Type">
+            <select value={draft.type} onChange={(e) => setDraft({ ...draft, type: e.target.value })}>
+              <option value="current">Current (solid)</option>
+              <option value="planned">Planned (dotted)</option>
+            </select>
+          </Field>
+        </div>
+        <button className="ghost" onClick={add}>+ Add line</button>
+      </div>
+
+      <div className="col" style={{ gap: 6 }}>
+        {arrows.length === 0 && <div className="mono dim" style={{ fontSize: 12 }}>No movement lines yet.</div>}
+        {arrows.map((a) => (
+          <div key={a.id} className="row between center" style={{ padding: '6px 0', borderBottom: '1px solid var(--line)' }}>
+            <span className="mono" style={{ fontSize: 13 }}>
+              {nameOf(a.from)} <span className="accent">→</span> {nameOf(a.to)}
+              <span className="dim"> · {a.type === 'planned' ? 'planned' : 'current'}</span>
+            </span>
+            <button className="danger ghost" onClick={() => remove(a.id)} style={{ padding: '4px 10px' }}>Remove</button>
           </div>
         ))}
       </div>

@@ -4,14 +4,16 @@ import { useData } from '../context/DataContext'
 import { useAuth } from '../context/AuthContext'
 import Logo from '../components/Logo'
 import LoginModal from '../components/LoginModal'
+import SupportModal from '../components/SupportModal'
 
 // The link originally shared with the unit: yourdomain.com/Classified
-// First page everyone sees. "Continue" opens the registration flow.
+// First page everyone sees. "Continue" opens the temporary-password setup.
 export default function Classified() {
   const { state } = useData()
   const { user } = useAuth()
   const navigate = useNavigate()
-  const [auth, setAuth] = useState(null) // 'register' | 'login' | null
+  const [auth, setAuth] = useState(null) // 'temp' | 'login' | null
+  const [support, setSupport] = useState(false)
   const c = state.classified
 
   return (
@@ -65,11 +67,15 @@ export default function Classified() {
           <button className="primary" onClick={() => navigate('/')}>Enter Operational Portal →</button>
         ) : (
           <>
-            <button className="primary" onClick={() => setAuth('register')}>Continue →</button>
+            <button className="primary" onClick={() => setAuth('temp')}>Continue →</button>
             <button className="ghost" onClick={() => setAuth('login')}>Already registered? Sign in</button>
           </>
         )}
       </div>
+
+      <button className="ghost" onClick={() => setSupport(true)} style={{ marginTop: 14, fontSize: 11 }}>
+        Help &amp; Support
+      </button>
 
       <div className="mono dim" style={{ marginTop: 18, fontSize: 10 }}>LUCET PER MINISTERIUM</div>
 
@@ -80,6 +86,7 @@ export default function Classified() {
           onAuthed={() => navigate('/')}
         />
       )}
+      {support && <SupportModal onClose={() => setSupport(false)} />}
     </div>
   )
 }

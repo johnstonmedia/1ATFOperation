@@ -1,12 +1,13 @@
 // Unified data store. Presents one async API regardless of whether Firebase is
 // configured. In LOCAL MODE everything is persisted to localStorage; with
 // Firebase enabled, single-value slices live under content/{slice} and list
-// slices (roster/tasks/activity) live in their own collections.
+// slices (roster/tasks/activity/support/resetRequests) live in collections.
 
 import { FIREBASE_ENABLED, db } from '../firebase/config'
 import {
   DEFAULT_NARRATIVE,
   DEFAULT_ZONES,
+  DEFAULT_ARROWS,
   DEFAULT_CLASSIFIED,
   DEFAULT_BRANDING,
   DEFAULT_COMPANY_PAGES,
@@ -15,17 +16,22 @@ import {
 } from '../firebase/seed'
 
 const LS_KEY = '1atf-state-v1'
-const COLLECTION_SLICES = ['roster', 'tasks', 'activity']
+const LS_AUTHIDX = '1atf-authindex'
+const SINGLE_SLICES = ['narrative', 'zones', 'arrows', 'classified', 'branding', 'companyPages']
+const COLLECTION_SLICES = ['roster', 'tasks', 'activity', 'support', 'resetRequests']
 
 const DEFAULT_STATE = {
   narrative: DEFAULT_NARRATIVE,
   zones: DEFAULT_ZONES,
+  arrows: DEFAULT_ARROWS,
   classified: DEFAULT_CLASSIFIED,
   branding: DEFAULT_BRANDING,
   companyPages: DEFAULT_COMPANY_PAGES,
   roster: FIREBASE_ENABLED ? [] : DEMO_ROSTER,
   tasks: [],
   activity: FIREBASE_ENABLED ? [] : DEFAULT_ACTIVITY,
+  support: [],
+  resetRequests: [],
 }
 
 /* ----------------------------- LOCAL MODE ------------------------------ */
@@ -44,6 +50,7 @@ function loadLocal() {
 }
 
 function saveLocal(state) {
+  // strip transient before persisting
   localStorage.setItem(LS_KEY, JSON.stringify(state))
 }
 
@@ -52,9 +59,8 @@ function saveLocal(state) {
 async function loadFirebase() {
   const { doc, getDoc, collection, getDocs } = await import('firebase/firestore')
   const out = structuredClone(DEFAULT_STATE)
-  const singles = ['narrative', 'zones', 'classified', 'branding', 'companyPages']
   await Promise.all(
-    singles.map(async (slice) => {
+    SINGLE_SLICES.map(async (slice) => {
       try {
         const snap = await getDoc(doc(db, 'content', slice))
         if (snap.exists()) out[slice] = snap.data().value
@@ -63,14 +69,12 @@ async function loadFirebase() {
       }
     }),
   )
-  // roster/tasks/activity reads require auth (see firestore.rules); a signed-out
-  // visitor is denied — that's fine, leave the defaults.
   for (const coll of COLLECTION_SLICES) {
     try {
       const snap = await getDocs(collection(db, coll))
       out[coll] = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
     } catch {
-      /* permission denied for signed-out visitor */
+      /* permission denied for signed-out / non-RHQ visitor */
     }
   }
   return out
@@ -81,8 +85,6 @@ async function saveFirebaseSlice(slice, value) {
   await setDoc(doc(db, 'content', slice), { value })
 }
 
-// Sync an array slice into its collection: delete removed docs, write the rest.
-// Batched in chunks to respect Firestore's 500-op batch limit.
 async function persistCollection(coll, rows) {
   const { collection, getDocs, writeBatch, doc } = await import('firebase/firestore')
   const idOf = (r) => String(r._id || r.id)
@@ -120,6 +122,86 @@ export async function persistSlice(state, slice) {
     return
   }
   await saveFirebaseSlice(slice, state[slice])
+}
+
+// Append a single document to an inbox collection. Used for anonymous
+// submissions (support / forgotten-password) which can create but not list.
+export async function appendItem(coll, item) {
+  if (FIREBASE_ENABLED) {
+    const { collection, addDoc } = await import('firebase/firestore')
+    const ref = await addDoc(collection(db, coll), item)
+    return ref.id
+  }
+  // local mode
+  const state = loadLocal()
+  state[coll] = [...(state[coll] || []), { id: makeId(), ...item }]
+  saveLocal(state)
+  return state[coll][state[coll].length - 1].id
+}
+
+/* ----- auth version index (credential epoch, bumped on password reset) ---- */
+
+function readLocalAuthIdx() {
+  try {
+    return JSON.parse(localStorage.getItem(LS_AUTHIDX) || '{}')
+  } catch {
+    return {}
+  }
+}
+
+export async function getAuthVersion(idClean) {
+  if (!FIREBASE_ENABLED) return readLocalAuthIdx()[idClean] || 0
+  try {
+    const { doc, getDoc } = await import('firebase/firestore')
+    const snap = await getDoc(doc(db, 'authIndex', idClean))
+    return snap.exists() ? snap.data().pwVersion || 0 : 0
+  } catch {
+    return 0
+  }
+}
+
+export async function setAuthVersion(idClean, v) {
+  if (!FIREBASE_ENABLED) {
+    const all = readLocalAuthIdx()
+    all[idClean] = v
+    localStorage.setItem(LS_AUTHIDX, JSON.stringify(all))
+    return
+  }
+  const { doc, setDoc } = await import('firebase/firestore')
+  await setDoc(doc(db, 'authIndex', idClean), { pwVersion: v })
+}
+
+/* ----- offline queue for auto-reports raised while the network was down ----- */
+const LS_PENDING = '1atf-pending-support'
+
+export function stashPending(item) {
+  try {
+    const a = JSON.parse(localStorage.getItem(LS_PENDING) || '[]')
+    a.push(item)
+    localStorage.setItem(LS_PENDING, JSON.stringify(a))
+  } catch {
+    /* ignore */
+  }
+}
+
+export async function flushPending() {
+  if (!FIREBASE_ENABLED) return
+  let a
+  try {
+    a = JSON.parse(localStorage.getItem(LS_PENDING) || '[]')
+  } catch {
+    a = []
+  }
+  if (!a.length) return
+  const rest = []
+  for (const it of a) {
+    try {
+      await appendItem('support', it)
+    } catch {
+      rest.push(it)
+    }
+  }
+  localStorage.setItem(LS_PENDING, JSON.stringify(rest))
 }
 
 export function makeId() {

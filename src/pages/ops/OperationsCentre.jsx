@@ -9,6 +9,7 @@ import BrandingEditor from './BrandingEditor'
 import DigitalActivities from './DigitalActivities'
 import CompanyEditor from './CompanyEditor'
 import UsersAdmin from './UsersAdmin'
+import HelpAdmin from './HelpAdmin'
 import LoginModal from '../../components/LoginModal'
 
 const SECTIONS = [
@@ -19,6 +20,7 @@ const SECTIONS = [
   { id: 'activities', label: 'Digital Activities', group: 'TASKING' },
   { id: 'company', label: 'Company Pages', group: 'TASKING' },
   { id: 'users', label: 'Users', group: 'ADMIN' },
+  { id: 'help', label: 'Help', group: 'ADMIN' },
 ]
 
 export default function OperationsCentre() {
@@ -92,6 +94,7 @@ export default function OperationsCentre() {
         {section === 'activities' && <DigitalActivities />}
         {section === 'company' && <CompanyEditor />}
         {section === 'users' && <UsersAdmin />}
+        {section === 'help' && <HelpAdmin />}
       </div>
     </div>
   )

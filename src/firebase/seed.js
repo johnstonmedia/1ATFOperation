@@ -94,6 +94,10 @@ export const DEFAULT_ZONES = [
   },
 ]
 
+// Movement lines between zones. type: 'planned' (dotted, intended path) or
+// 'current' (solid, movement under way).
+export const DEFAULT_ARROWS = []
+
 export const DEFAULT_NARRATIVE = {
   unitName: '1st Australian Task Force',
   shortName: '1ATF',

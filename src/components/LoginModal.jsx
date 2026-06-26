@@ -1,48 +1,53 @@
 import { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
+import { useData } from '../context/DataContext'
+import SupportModal from './SupportModal'
 
-// Dual-mode access modal.
-//  - login:    ID number + password (returning members; admin bootstrap).
-//  - register: ID number + issued temporary password + a new password of their
-//              choosing. The new password is only set if the temp password is
-//              correct. Opened from the Classified "Continue" button.
+// Access modal with three modes:
+//  - login:  ID number + password (default).
+//  - temp:   "Log in with temporary password" — ID + issued temp password +
+//            a new password of their choosing (first-time setup / after a reset).
+//  - forgot: raise a forgotten-password request to RHQ.
 export default function LoginModal({ onClose, onAuthed, initialMode = 'login' }) {
-  const { signIn, register } = useAuth()
+  const { signIn, register, forgotPassword } = useAuth()
+  const { reportError } = useData()
   const [mode, setMode] = useState(initialMode)
   const [form, setForm] = useState({ idNumber: '', password: '', tempPassword: '', newPassword: '' })
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
+  const [info, setInfo] = useState('')
+  const [support, setSupport] = useState(false)
 
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value })
-  const isRegister = mode === 'register'
+  const go = (m) => { setErr(''); setInfo(''); setMode(m) }
 
   const submit = async (e) => {
     e.preventDefault()
-    setErr('')
-    setBusy(true)
+    setErr(''); setInfo(''); setBusy(true)
     try {
-      if (isRegister) await register(form)
-      else await signIn(form)
-      onAuthed?.()
-      onClose()
+      if (mode === 'login') { await signIn(form); onAuthed?.(); onClose() }
+      else if (mode === 'temp') { await register(form); onAuthed?.(); onClose() }
+      else { await forgotPassword(form); setInfo('Request sent to RHQ. They will issue you a new temporary password.') }
     } catch (e2) {
-      setErr(e2.message || 'Access denied')
+      const info = await reportError(e2, `login:${mode}`, { idNumber: form.idNumber })
+      setErr(
+        info.reportable
+          ? `${info.message} [${info.code}] — RHQ has been notified.`
+          : `${info.message} [${info.code}]`,
+      )
     } finally {
       setBusy(false)
     }
   }
 
+  const title = mode === 'temp' ? 'LOG IN WITH TEMPORARY PASSWORD' : mode === 'forgot' ? 'FORGOTTEN PASSWORD' : 'SECURE ACCESS'
+
   return (
-    <div
-      onClick={onClose}
-      style={{ position: 'fixed', inset: 0, zIndex: 900, background: 'rgba(2,4,9,0.85)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}
-    >
-      <div className="panel panel-pad" onClick={(e) => e.stopPropagation()} style={{ width: 390, maxWidth: '100%' }}>
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 900, background: 'rgba(2,4,9,0.85)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+      <div className="panel panel-pad" onClick={(e) => e.stopPropagation()} style={{ width: 400, maxWidth: '100%' }}>
         <div className="row between center">
-          <h2 className="accent" style={{ margin: 0, fontSize: 18 }}>
-            {isRegister ? 'REGISTER ACCESS' : 'SECURE ACCESS'}
-          </h2>
+          <h2 className="accent" style={{ margin: 0, fontSize: 17 }}>{title}</h2>
           <button className="ghost" onClick={onClose} style={{ padding: '4px 10px' }}>✕</button>
         </div>
 
@@ -52,7 +57,14 @@ export default function LoginModal({ onClose, onAuthed, initialMode = 'login' })
             <input required value={form.idNumber} onChange={set('idNumber')} placeholder="e.g. 123456" autoComplete="username" />
           </div>
 
-          {isRegister ? (
+          {mode === 'login' && (
+            <div className="col" style={{ gap: 4 }}>
+              <label>Password</label>
+              <input type="password" required value={form.password} onChange={set('password')} autoComplete="current-password" />
+            </div>
+          )}
+
+          {mode === 'temp' && (
             <>
               <div className="col" style={{ gap: 4 }}>
                 <label>Temporary Password (issued by RHQ)</label>
@@ -63,29 +75,40 @@ export default function LoginModal({ onClose, onAuthed, initialMode = 'login' })
                 <input type="password" required value={form.newPassword} onChange={set('newPassword')} placeholder="At least 6 characters" autoComplete="new-password" />
               </div>
             </>
-          ) : (
-            <div className="col" style={{ gap: 4 }}>
-              <label>Password</label>
-              <input type="password" required value={form.password} onChange={set('password')} autoComplete="current-password" />
-            </div>
           )}
 
           {err && <div className="hostile mono" style={{ fontSize: 12 }}>{err}</div>}
+          {info && <div className="accent mono" style={{ fontSize: 12 }}>{info}</div>}
 
           <button className="primary" disabled={busy} type="submit">
-            {busy ? 'PROCESSING…' : isRegister ? 'Set Password & Enter' : 'Authenticate'}
+            {busy ? 'PROCESSING…' : mode === 'login' ? 'Authenticate' : mode === 'temp' ? 'Set Password & Enter' : 'Request Reset'}
           </button>
         </form>
 
         <div className="divider" />
-        <button
-          className="ghost"
-          style={{ width: '100%' }}
-          onClick={() => { setErr(''); setMode(isRegister ? 'login' : 'register') }}
-        >
-          {isRegister ? 'Already registered? Sign in' : 'First time? Register with temp password'}
-        </button>
+        <div className="col" style={{ gap: 8 }}>
+          {mode !== 'temp' && (
+            <button className="ghost" style={{ width: '100%' }} onClick={() => go('temp')}>
+              Log in with temporary password
+            </button>
+          )}
+          {mode !== 'login' && (
+            <button className="ghost" style={{ width: '100%' }} onClick={() => go('login')}>
+              Back to sign in
+            </button>
+          )}
+          {mode === 'login' && (
+            <button className="ghost" style={{ width: '100%' }} onClick={() => go('forgot')}>
+              Forgot password?
+            </button>
+          )}
+          <button className="ghost" style={{ width: '100%' }} onClick={() => setSupport(true)}>
+            Help &amp; Support
+          </button>
+        </div>
       </div>
+
+      {support && <SupportModal onClose={() => setSupport(false)} />}
     </div>
   )
 }
