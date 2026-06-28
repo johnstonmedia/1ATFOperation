@@ -8,9 +8,11 @@
 //   VITE_EMAILJS_SERVICE, VITE_EMAILJS_TEMPLATE, VITE_EMAILJS_PUBLIC_KEY
 // The admin address that receives mail is configured on the EmailJS template.
 
-const SERVICE = import.meta.env.VITE_EMAILJS_SERVICE
-const TEMPLATE = import.meta.env.VITE_EMAILJS_TEMPLATE
-const PUBLIC_KEY = import.meta.env.VITE_EMAILJS_PUBLIC_KEY
+// EmailJS keys are public by design (secured via Allowed Origins in the EmailJS
+// dashboard), so they live here with optional .env overrides.
+const SERVICE = import.meta.env.VITE_EMAILJS_SERVICE || 'service_nj1li97'
+const TEMPLATE = import.meta.env.VITE_EMAILJS_TEMPLATE || 'template_w2o8ugi'
+const PUBLIC_KEY = import.meta.env.VITE_EMAILJS_PUBLIC_KEY || 'ua4RkBmLGO4gIKsOU'
 
 export async function notifyAdmin(subject, message) {
   if (!SERVICE || !TEMPLATE || !PUBLIC_KEY) return false
