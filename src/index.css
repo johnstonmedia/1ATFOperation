@@ -233,4 +233,25 @@ label { font-size: 12px; color: var(--text-dim); text-transform: uppercase; lett
   .panel-pad { padding: 16px; }
   /* keep the header from crowding on phones */
   .topbar-id { max-width: 42vw; }
+  /* comfortable tap targets for the main actions on touch screens */
+  button.primary, button.danger { min-height: 42px; }
+}
+
+/* ---------------------------------- accessibility */
+/* Visible keyboard-focus ring (buttons had none — only inputs did). Uses
+   :focus-visible so it only shows for keyboard users, not mouse clicks. */
+button:focus-visible,
+a:focus-visible,
+[tabindex]:focus-visible,
+.leaflet-marker-icon:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+/* Honour users who ask for less motion (e.g. the blinking "LIVE" tags). */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
 }

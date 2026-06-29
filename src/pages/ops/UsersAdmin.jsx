@@ -4,6 +4,7 @@ import { useData } from '../../context/DataContext'
 import { useConfirm } from '../../context/ConfirmContext'
 import { useToast } from '../../context/ToastContext'
 import { useAudit } from '../../hooks/useAudit'
+import { useDialog } from '../../hooks/useDialog'
 import { OpsHeader } from './OperationsCentre'
 import { Field } from './NarrativeEditor'
 import { COMPANIES, ROLES, PHONETIC } from '../../firebase/seed'
@@ -159,6 +160,7 @@ function newUser(makeId) {
 function UserModal({ rec, onClose, onSave, onDelete }) {
   const [u, setU] = useState(rec)
   const confirm = useConfirm()
+  const dialogRef = useDialog(onClose)
   const set = (k) => (e) => setU({ ...u, [k]: e.target.value })
   const del = async () => {
     const ok = await confirm({
@@ -173,7 +175,7 @@ function UserModal({ rec, onClose, onSave, onDelete }) {
   }
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(2,4,9,0.8)', zIndex: 900, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-      <div className="panel panel-pad col" onClick={(e) => e.stopPropagation()} style={{ width: 420, maxWidth: '100%' }}>
+      <div ref={dialogRef} className="panel panel-pad col" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={rec.name ? 'Edit user' : 'New user'} style={{ width: 420, maxWidth: '100%' }}>
         <h2 className="accent" style={{ margin: 0, fontSize: 18 }}>{rec.name ? 'Edit User' : 'New User'}</h2>
         <Field label="Name"><input value={u.name} onChange={set('name')} /></Field>
         <Field label="Service / ID number"><input value={u.idNumber} onChange={set('idNumber')} /></Field>

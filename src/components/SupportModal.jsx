@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useData } from '../context/DataContext'
+import { useDialog } from '../hooks/useDialog'
 import { notifyAdmin } from '../lib/notify'
 import { classify } from '../lib/errors'
 
@@ -11,6 +12,7 @@ export default function SupportModal({ onClose }) {
   const [done, setDone] = useState(false)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
+  const dialogRef = useDialog(onClose)
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value })
 
   const submit = async (e) => {
@@ -37,10 +39,10 @@ export default function SupportModal({ onClose }) {
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 950, background: 'rgba(2,4,9,0.85)',
       display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-      <div className="panel panel-pad" onClick={(e) => e.stopPropagation()} style={{ width: 420, maxWidth: '100%' }}>
+      <div ref={dialogRef} className="panel panel-pad" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Help and Support" style={{ width: 420, maxWidth: '100%' }}>
         <div className="row between center">
           <h2 className="accent" style={{ margin: 0, fontSize: 18 }}>HELP &amp; SUPPORT</h2>
-          <button className="ghost" onClick={onClose} style={{ padding: '4px 10px' }}>✕</button>
+          <button className="ghost" onClick={onClose} aria-label="Close" style={{ padding: '4px 10px' }}>✕</button>
         </div>
 
         {done ? (

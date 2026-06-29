@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
+import { useDialog } from '../hooks/useDialog'
 import SupportModal from './SupportModal'
 
 // Access modal with three modes:
@@ -21,6 +22,7 @@ export default function LoginModal({ onClose, onAuthed, initialMode = 'login' })
   const [capsOn, setCapsOn] = useState(false)
   const [remember, setRemember] = useState(true)
 
+  const dialogRef = useDialog(onClose)
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value })
   const go = (m) => { setErr(''); setInfo(''); setMode(m) }
 
@@ -48,10 +50,10 @@ export default function LoginModal({ onClose, onAuthed, initialMode = 'login' })
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 900, background: 'rgba(2,4,9,0.85)',
       display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-      <div className="panel panel-pad" onClick={(e) => e.stopPropagation()} style={{ width: 400, maxWidth: '100%' }}>
+      <div ref={dialogRef} className="panel panel-pad" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={title} style={{ width: 400, maxWidth: '100%' }}>
         <div className="row between center">
           <h2 className="accent" style={{ margin: 0, fontSize: 17 }}>{title}</h2>
-          <button className="ghost" onClick={onClose} style={{ padding: '4px 10px' }}>✕</button>
+          <button className="ghost" onClick={onClose} aria-label="Close" style={{ padding: '4px 10px' }}>✕</button>
         </div>
 
         <form onSubmit={submit} className="col" style={{ marginTop: 16 }}>

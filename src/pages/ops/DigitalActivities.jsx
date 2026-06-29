@@ -3,6 +3,7 @@ import { useData } from '../../context/DataContext'
 import { useConfirm } from '../../context/ConfirmContext'
 import { useToast } from '../../context/ToastContext'
 import { useAudit } from '../../hooks/useAudit'
+import { useDialog } from '../../hooks/useDialog'
 import { OpsHeader } from './OperationsCentre'
 import { Field } from './NarrativeEditor'
 import { COMPANIES } from '../../firebase/seed'
@@ -211,6 +212,7 @@ function Builder({ task, onCancel, onSave }) {
 // Clean in-app scheduler: a date field plus hour/minute selects (no free-text
 // prompt, no raw datetime box). Shows a live preview of the chosen moment.
 function SchedulePicker({ onCancel, onConfirm }) {
+  const dialogRef = useDialog(onCancel)
   const pad = (n) => String(n).padStart(2, '0')
   const now = new Date()
   const [date, setDate] = useState(`${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`)
@@ -224,10 +226,10 @@ function SchedulePicker({ onCancel, onConfirm }) {
   return (
     <div onClick={onCancel} style={{ position: 'fixed', inset: 0, zIndex: 950, background: 'rgba(2,4,9,0.85)',
       display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-      <div className="panel panel-pad col" onClick={(e) => e.stopPropagation()} style={{ width: 360, maxWidth: '100%', gap: 12 }}>
+      <div ref={dialogRef} className="panel panel-pad col" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Schedule distribution" style={{ width: 360, maxWidth: '100%', gap: 12 }}>
         <div className="row between center">
           <h2 className="accent" style={{ margin: 0, fontSize: 17 }}>SCHEDULE DISTRIBUTION</h2>
-          <button className="ghost" onClick={onCancel} style={{ padding: '4px 10px' }}>✕</button>
+          <button className="ghost" onClick={onCancel} aria-label="Close" style={{ padding: '4px 10px' }}>✕</button>
         </div>
 
         <Field label="Date"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></Field>

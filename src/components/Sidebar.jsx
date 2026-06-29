@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { PHONETIC } from '../firebase/seed'
@@ -10,6 +10,14 @@ export default function Sidebar({ open, onClose, onAuth }) {
   const { user } = useAuth()
   const navigate = useNavigate()
   const [support, setSupport] = useState(false)
+
+  // Close the drawer on Escape while it is open.
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [open, onClose])
 
   const go = (path) => {
     onClose()
@@ -37,6 +45,8 @@ export default function Sidebar({ open, onClose, onAuth }) {
         }}
       />
       <nav
+        aria-label="Main navigation"
+        aria-hidden={!open}
         style={{
           position: 'fixed', top: 0, left: 0, bottom: 0, zIndex: 700,
           width: 300, maxWidth: '85vw',
@@ -51,7 +61,7 @@ export default function Sidebar({ open, onClose, onAuth }) {
       >
         <div className="row between center" style={{ marginBottom: 8 }}>
           <span className="head accent" style={{ fontSize: 14 }}>NAVIGATION</span>
-          <button className="ghost" onClick={onClose} style={{ padding: '4px 10px' }}>✕</button>
+          <button className="ghost" onClick={onClose} aria-label="Close menu" style={{ padding: '4px 10px' }}>✕</button>
         </div>
 
         <MenuItem label="Command Map" sub="Public overview" onClick={() => go('/')} />

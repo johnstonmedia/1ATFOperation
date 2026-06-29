@@ -37,13 +37,13 @@ function bearingDeg(from, to) {
 
 const vertexIcon = L.divIcon({
   className: 'zone-handle',
-  html: '<div style="width:14px;height:14px;background:#36e0c0;border:2px solid #04121b;border-radius:50%;box-shadow:0 0 6px rgba(54,224,192,0.8)"></div>',
+  html: '<div title="Drag to reshape the zone" style="width:14px;height:14px;background:#36e0c0;border:2px solid #04121b;border-radius:50%;box-shadow:0 0 6px rgba(54,224,192,0.8)"></div>',
   iconSize: [14, 14],
   iconAnchor: [7, 7],
 })
 const moveIcon = L.divIcon({
   className: 'zone-handle',
-  html: '<div style="width:26px;height:26px;border:2px solid #4ea8ff;border-radius:50%;background:rgba(78,168,255,0.25);display:flex;align-items:center;justify-content:center;color:#fff;font-size:14px">✥</div>',
+  html: '<div title="Drag to move the whole zone" style="width:26px;height:26px;border:2px solid #4ea8ff;border-radius:50%;background:rgba(78,168,255,0.25);display:flex;align-items:center;justify-content:center;color:#fff;font-size:14px">✥</div>',
   iconSize: [26, 26],
   iconAnchor: [13, 13],
 })
@@ -75,6 +75,8 @@ export default function AustraliaMap({
 
   return (
     <div
+      role="region"
+      aria-label="Operational map of Australia"
       style={{
         height,
         border: '1px solid var(--line)',
