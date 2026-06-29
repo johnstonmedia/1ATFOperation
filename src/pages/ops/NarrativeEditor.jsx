@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useData } from '../../context/DataContext'
+import { useAudit } from '../../hooks/useAudit'
 import { OpsHeader, useSaved } from './OperationsCentre'
 import { COMPANIES } from '../../firebase/seed'
 
@@ -7,11 +8,13 @@ import { COMPANIES } from '../../firebase/seed'
 // per-company roles, and the Meridian threat brief.
 export default function NarrativeEditor() {
   const { state, updateSlice } = useData()
+  const audit = useAudit()
   const [n, setN] = useState(state.narrative)
   const [saved, flash] = useSaved()
 
   const save = () => {
     updateSlice('narrative', n)
+    audit('Updated main narrative')
     flash()
   }
   const top = (k) => (e) => setN({ ...n, [k]: e.target.value })
@@ -22,7 +25,7 @@ export default function NarrativeEditor() {
 
   return (
     <div>
-      <OpsHeader title="Main Narrative" sub="EDIT // PUBLIC HOME CONTENT">
+      <OpsHeader title="Main Narrative" sub="EDIT // PUBLIC HOME CONTENT" updatedAt={state.contentMeta?.narrative?.updatedAt}>
         <button className="primary" onClick={save}>{saved ? 'Saved ✓' : 'Save changes'}</button>
       </OpsHeader>
 

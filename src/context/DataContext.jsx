@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, useCallback } from 'react'
-import { loadState, persistSlice, appendItem, stashPending, flushPending, makeId } from '../lib/store'
+import { loadState, persistSlice, appendItem, stashPending, flushPending, makeId, isContentSlice } from '../lib/store'
 import { classify, buildReport } from '../lib/errors'
 import { notifyAdmin } from '../lib/notify'
 
@@ -28,9 +28,25 @@ export function DataProvider({ children }) {
   const updateSlice = useCallback(async (slice, value) => {
     setState((prev) => {
       const next = { ...prev, [slice]: value }
+      // Stamp "last updated" for operational content so the UI can show freshness.
+      if (isContentSlice(slice)) {
+        next.contentMeta = { ...prev.contentMeta, [slice]: { updatedAt: Date.now() } }
+      }
       persistSlice(next, slice)
       return next
     })
+  }, [])
+
+  // Append an immutable audit entry (RHQ actions). Best-effort: never blocks the
+  // action it records. The actor is supplied by the caller (see useAudit).
+  const logAudit = useCallback(async (entry) => {
+    const record = { action: '', detail: '', by: '', byId: '', ...entry, ts: Date.now() }
+    try {
+      await appendItem('audit', record)
+      setState((prev) => (prev ? { ...prev, audit: [...(prev.audit || []), { id: makeId(), ...record }] } : prev))
+    } catch {
+      /* audit is best-effort; ignore failures */
+    }
   }, [])
 
   const replaceRoster = useCallback(async (rows) => {
@@ -74,6 +90,6 @@ export function DataProvider({ children }) {
     return info
   }, [append])
 
-  const value = { state, loading, updateSlice, replaceRoster, append, reportError, reload, makeId }
+  const value = { state, loading, updateSlice, replaceRoster, append, reportError, reload, makeId, logAudit }
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>
 }

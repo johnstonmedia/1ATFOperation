@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useData } from '../../context/DataContext'
 import { useConfirm } from '../../context/ConfirmContext'
+import { useAudit } from '../../hooks/useAudit'
 import { OpsHeader, useSaved } from './OperationsCentre'
 import { Field } from './NarrativeEditor'
 import AustraliaMap, { centroid } from '../../components/AustraliaMap'
@@ -24,10 +25,12 @@ export default function MapEditor() {
   const [selId, setSelId] = useState(zones[0]?.id || null)
   const [saved, flash] = useSaved()
   const confirm = useConfirm()
+  const audit = useAudit()
 
   const save = () => {
     updateSlice('zones', zones)
     updateSlice('arrows', arrows)
+    audit('Updated operational map', `${zones.length} zones, ${arrows.length} movement lines`)
     flash()
   }
 
@@ -79,7 +82,7 @@ export default function MapEditor() {
 
   return (
     <div>
-      <OpsHeader title="Operational Map" sub="EDIT // ZONES & MOVEMENTS">
+      <OpsHeader title="Operational Map" sub="EDIT // ZONES & MOVEMENTS" updatedAt={state.contentMeta?.zones?.updatedAt}>
         <button className="ghost" onClick={addCustom}>+ Custom</button>
         <button className="ghost" onClick={addState}>+ State(s)</button>
         <button className="primary" onClick={save}>{saved ? 'Saved ✓' : 'Save map'}</button>

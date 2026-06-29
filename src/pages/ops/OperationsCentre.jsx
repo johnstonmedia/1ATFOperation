@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
 import Logo from '../../components/Logo'
+import LastUpdated from '../../components/LastUpdated'
 import NarrativeEditor from './NarrativeEditor'
 import MapEditor from './MapEditor'
 import ClassifiedEditor from './ClassifiedEditor'
@@ -11,6 +12,7 @@ import DigitalActivities from './DigitalActivities'
 import CompanyEditor from './CompanyEditor'
 import UsersAdmin from './UsersAdmin'
 import HelpAdmin from './HelpAdmin'
+import AuditLog from './AuditLog'
 import LoginModal from '../../components/LoginModal'
 
 const SECTIONS = [
@@ -22,6 +24,7 @@ const SECTIONS = [
   { id: 'company', label: 'Company Pages', group: 'TASKING' },
   { id: 'users', label: 'Users', group: 'ADMIN' },
   { id: 'help', label: 'Help', group: 'ADMIN' },
+  { id: 'audit', label: 'Audit Log', group: 'ADMIN' },
 ]
 
 export default function OperationsCentre() {
@@ -99,18 +102,21 @@ export default function OperationsCentre() {
         {section === 'company' && <CompanyEditor />}
         {section === 'users' && <UsersAdmin />}
         {section === 'help' && <HelpAdmin />}
+        {section === 'audit' && <AuditLog />}
       </div>
     </div>
   )
 }
 
-// Shared header used by all ops panels.
-export function OpsHeader({ title, sub, children }) {
+// Shared header used by all ops panels. Pass `updatedAt` to show when this
+// content was last saved.
+export function OpsHeader({ title, sub, updatedAt, children }) {
   return (
     <div className="row between center wrap" style={{ marginBottom: 20, gap: 12 }}>
       <div>
         <div className="mono accent" style={{ fontSize: 10, letterSpacing: 3 }}>{sub}</div>
         <h1 style={{ margin: '4px 0 0', fontSize: 24, color: '#fff' }}>{title}</h1>
+        {updatedAt !== undefined && <LastUpdated ts={updatedAt} style={{ display: 'block', marginTop: 4 }} />}
       </div>
       <div className="row" style={{ gap: 8 }}>{children}</div>
     </div>

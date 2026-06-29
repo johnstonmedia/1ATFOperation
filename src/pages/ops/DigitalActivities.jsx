@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useData } from '../../context/DataContext'
 import { useConfirm } from '../../context/ConfirmContext'
 import { useToast } from '../../context/ToastContext'
+import { useAudit } from '../../hooks/useAudit'
 import { OpsHeader } from './OperationsCentre'
 import { Field } from './NarrativeEditor'
 import { COMPANIES } from '../../firebase/seed'
@@ -14,6 +15,7 @@ export default function DigitalActivities() {
   const { state, updateSlice, makeId } = useData()
   const confirm = useConfirm()
   const { push } = useToast()
+  const audit = useAudit()
   const [editing, setEditing] = useState(null) // task being built
 
   const tasks = state.tasks
@@ -23,6 +25,8 @@ export default function DigitalActivities() {
     const exists = tasks.some((t) => t.id === task.id)
     saveTasks(exists ? tasks.map((t) => (t.id === task.id ? task : t)) : [...tasks, task])
     push(task.distributed ? 'Activity distributed' : task.scheduledFor ? 'Activity scheduled' : 'Draft saved')
+    if (task.distributed) audit('Distributed activity', `“${task.title}” → ${task.audience}-COY`)
+    else if (task.scheduledFor) audit('Scheduled activity', `“${task.title}” → ${task.audience}-COY`)
   }
   const remove = async (id) => {
     const t = tasks.find((x) => x.id === id)

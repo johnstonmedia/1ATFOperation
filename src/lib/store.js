@@ -18,7 +18,9 @@ import {
 const LS_KEY = '1atf-state-v1'
 const LS_AUTHIDX = '1atf-authindex'
 const SINGLE_SLICES = ['narrative', 'zones', 'arrows', 'classified', 'branding', 'companyPages']
-const COLLECTION_SLICES = ['roster', 'tasks', 'activity', 'support', 'resetRequests']
+const COLLECTION_SLICES = ['roster', 'tasks', 'activity', 'support', 'resetRequests', 'audit']
+
+export const isContentSlice = (slice) => SINGLE_SLICES.includes(slice)
 
 const DEFAULT_STATE = {
   narrative: DEFAULT_NARRATIVE,
@@ -32,6 +34,10 @@ const DEFAULT_STATE = {
   activity: FIREBASE_ENABLED ? [] : DEFAULT_ACTIVITY,
   support: [],
   resetRequests: [],
+  audit: [],
+  // Per-content-slice metadata, e.g. { zones: { updatedAt } }. Populated from
+  // the Firestore docs (or localStorage) so the UI can show "last updated".
+  contentMeta: {},
 }
 
 /* ----------------------------- LOCAL MODE ------------------------------ */
@@ -86,7 +92,10 @@ async function loadFirebase() {
     SINGLE_SLICES.map(async (slice) => {
       try {
         const snap = await getDoc(doc(db, 'content', slice))
-        if (snap.exists()) out[slice] = decodeSlice(slice, snap.data().value)
+        if (snap.exists()) {
+          out[slice] = decodeSlice(slice, snap.data().value)
+          out.contentMeta[slice] = { updatedAt: snap.data().updatedAt || null }
+        }
       } catch {
         /* keep default */
       }
@@ -105,7 +114,7 @@ async function loadFirebase() {
 
 async function saveFirebaseSlice(slice, value) {
   const { doc, setDoc } = await import('firebase/firestore')
-  await setDoc(doc(db, 'content', slice), { value: encodeSlice(slice, value) })
+  await setDoc(doc(db, 'content', slice), { value: encodeSlice(slice, value), updatedAt: Date.now() })
 }
 
 async function persistCollection(coll, rows) {

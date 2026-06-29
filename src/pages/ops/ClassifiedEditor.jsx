@@ -1,19 +1,21 @@
 import { useState } from 'react'
 import { useData } from '../../context/DataContext'
+import { useAudit } from '../../hooks/useAudit'
 import { OpsHeader, useSaved } from './OperationsCentre'
 import { Field } from './NarrativeEditor'
 
 // Edits the URL-only /Classified landing page.
 export default function ClassifiedEditor() {
   const { state, updateSlice } = useData()
+  const audit = useAudit()
   const [c, setC] = useState(state.classified)
   const [saved, flash] = useSaved()
   const set = (k) => (e) => setC({ ...c, [k]: e.target.value })
 
   return (
     <div>
-      <OpsHeader title="Classified Page" sub="EDIT // /CLASSIFIED">
-        <button className="primary" onClick={() => { updateSlice('classified', c); flash() }}>
+      <OpsHeader title="Classified Page" sub="EDIT // /CLASSIFIED" updatedAt={state.contentMeta?.classified?.updatedAt}>
+        <button className="primary" onClick={() => { updateSlice('classified', c); audit('Updated Classified page'); flash() }}>
           {saved ? 'Saved ✓' : 'Save'}
         </button>
       </OpsHeader>

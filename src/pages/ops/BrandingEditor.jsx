@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useData } from '../../context/DataContext'
+import { useAudit } from '../../hooks/useAudit'
 import { OpsHeader, useSaved } from './OperationsCentre'
 import { Field } from './NarrativeEditor'
 
@@ -7,14 +8,15 @@ import { Field } from './NarrativeEditor'
 // folder of the repo (no upload / Firebase Storage required).
 export default function BrandingEditor() {
   const { state, updateSlice } = useData()
+  const audit = useAudit()
   const [b, setB] = useState(state.branding)
   const [saved, flash] = useSaved()
   const set = (k) => (e) => setB({ ...b, [k]: e.target.value })
 
   return (
     <div>
-      <OpsHeader title="Branding & Assets" sub="EDIT // IDENTITY">
-        <button className="primary" onClick={() => { updateSlice('branding', b); flash() }}>
+      <OpsHeader title="Branding & Assets" sub="EDIT // IDENTITY" updatedAt={state.contentMeta?.branding?.updatedAt}>
+        <button className="primary" onClick={() => { updateSlice('branding', b); audit('Updated branding'); flash() }}>
           {saved ? 'Saved ✓' : 'Save'}
         </button>
       </OpsHeader>

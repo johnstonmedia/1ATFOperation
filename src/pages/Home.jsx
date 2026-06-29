@@ -3,6 +3,7 @@ import AustraliaMap from '../components/AustraliaMap'
 import { useData } from '../context/DataContext'
 import { useAuth } from '../context/AuthContext'
 import { COMPANIES } from '../firebase/seed'
+import { formatUpdated } from '../components/LastUpdated'
 
 export default function Home() {
   const { state } = useData()
@@ -13,6 +14,9 @@ export default function Home() {
 
   // For the 1ATF tab show all zones; the Meridian tab highlights hostile holds.
   const zones = state.zones
+  // Freshness of the operational picture = most recent of map / narrative saves.
+  const meta = state.contentMeta || {}
+  const lastUpdated = Math.max(meta.zones?.updatedAt || 0, meta.arrows?.updatedAt || 0, meta.narrative?.updatedAt || 0)
 
   return (
     <div className="container" style={{ padding: '24px 20px 60px' }}>
@@ -30,6 +34,7 @@ export default function Home() {
             <div>THEATRE: AUSTRALIA</div>
             <div>ZONES TRACKED: {zones.length}</div>
             <div className="hostile">MERIDIAN HOLDS: {zones.filter((z) => z.occupant === 'Meridian').length}</div>
+            {lastUpdated > 0 && <div style={{ marginTop: 4 }}>UPDATED: {formatUpdated(lastUpdated)}</div>}
           </div>
         </div>
       </div>

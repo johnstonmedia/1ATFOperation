@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useData } from '../../context/DataContext'
 import { useConfirm } from '../../context/ConfirmContext'
+import { useAudit } from '../../hooks/useAudit'
 import { OpsHeader } from './OperationsCentre'
 import { genTempPassword } from '../../lib/passwords'
 import { getAuthVersion, setAuthVersion } from '../../lib/store'
@@ -82,6 +83,7 @@ function Messages({ list, all, onChange, empty }) {
 function ResetRequests({ resets, state, setResets, updateSlice }) {
   const [working, setWorking] = useState(null)
   const confirm = useConfirm()
+  const audit = useAudit()
 
   const doReset = async (req) => {
     setWorking(req.id)
@@ -100,6 +102,7 @@ function ResetRequests({ resets, state, setResets, updateSlice }) {
       setResets(resets.map((x) => (x.id === req.id
         ? { ...x, status: 'resolved', newTempPassword: newTemp, matched, resolvedTs: Date.now() }
         : x)))
+      audit('Reset password', `ID ${req.idNumber}${matched ? '' : ' (no roster match)'}`)
     } finally {
       setWorking(null)
     }

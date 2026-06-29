@@ -100,6 +100,14 @@ service cloud.firestore {
       allow read, update, delete: if isRHQ();
     }
 
+    // ------------------------------------------------------------- audit log
+    // Record of RHQ actions. RHQ only — created, read and cleared by RHQ; never
+    // edited in place.
+    match /audit/{id} {
+      allow read, create, delete: if isRHQ();
+      allow update: if false;
+    }
+
     // -------------------------------------------------- public auth-version index
     // No sensitive data — just the credential epoch — so login can read it before
     // sign-in. RHQ bumps it on a reset.

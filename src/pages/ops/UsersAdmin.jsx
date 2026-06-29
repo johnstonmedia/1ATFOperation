@@ -3,6 +3,7 @@ import * as XLSX from 'xlsx'
 import { useData } from '../../context/DataContext'
 import { useConfirm } from '../../context/ConfirmContext'
 import { useToast } from '../../context/ToastContext'
+import { useAudit } from '../../hooks/useAudit'
 import { OpsHeader } from './OperationsCentre'
 import { Field } from './NarrativeEditor'
 import { COMPANIES, ROLES, PHONETIC } from '../../firebase/seed'
@@ -16,6 +17,7 @@ export default function UsersAdmin() {
   const { state, updateSlice, replaceRoster, makeId } = useData()
   const confirm = useConfirm()
   const { push } = useToast()
+  const audit = useAudit()
   const roster = state.roster
   const [query, setQuery] = useState('')
   const [editing, setEditing] = useState(null)
@@ -37,8 +39,14 @@ export default function UsersAdmin() {
     save(exists ? roster.map((r) => (r._id === rec._id ? rec : r)) : [...roster, rec])
     setEditing(null)
     push('Member saved')
+    audit(exists ? 'Updated member' : 'Added member', `${rec.name || 'Unnamed'} (ID ${rec.idNumber || '—'}, ${rec.role})`)
   }
-  const remove = (id) => { save(roster.filter((r) => r._id !== id)); push('Member removed') }
+  const remove = (id) => {
+    const r = roster.find((x) => x._id === id)
+    save(roster.filter((x) => x._id !== id))
+    push('Member removed')
+    audit('Removed member', `${r?.name || 'Unnamed'} (ID ${r?.idNumber || '—'})`)
+  }
 
   const onSpreadsheet = async (e) => {
     const file = e.target.files?.[0]
@@ -59,6 +67,7 @@ export default function UsersAdmin() {
       columns: Object.keys(rows[0] || {}),
     })
     push(`Imported ${toAdd.length} new member${toAdd.length === 1 ? '' : 's'}`)
+    audit('Imported roster', `${toAdd.length} added, ${incoming.length - toAdd.length} kept`)
     e.target.value = ''
   }
 

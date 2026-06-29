@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useData } from '../../context/DataContext'
+import { useAudit } from '../../hooks/useAudit'
 import { OpsHeader, useSaved } from './OperationsCentre'
 import { Field } from './NarrativeEditor'
 import { COMPANIES } from '../../firebase/seed'
@@ -8,13 +9,14 @@ import { COMPANIES } from '../../firebase/seed'
 // duties and standing tasks.
 export default function CompanyEditor() {
   const { state, updateSlice } = useData()
+  const audit = useAudit()
   const [pages, setPages] = useState(state.companyPages)
   const [letter, setLetter] = useState('A')
   const [saved, flash] = useSaved()
 
   const page = pages[letter] || { name: '', role: '', duties: [], tasks: [] }
   const setPage = (patch) => setPages({ ...pages, [letter]: { ...page, ...patch } })
-  const save = () => { updateSlice('companyPages', pages); flash() }
+  const save = () => { updateSlice('companyPages', pages); audit('Updated company pages', `${letter}-COY`); flash() }
 
   const listField = (key) => ({
     value: (page[key] || []).join('\n'),
@@ -23,7 +25,7 @@ export default function CompanyEditor() {
 
   return (
     <div>
-      <OpsHeader title="Company Pages" sub="TASKING // PER-COMPANY">
+      <OpsHeader title="Company Pages" sub="TASKING // PER-COMPANY" updatedAt={state.contentMeta?.companyPages?.updatedAt}>
         <button className="primary" onClick={save}>{saved ? 'Saved ✓' : 'Save'}</button>
       </OpsHeader>
 
