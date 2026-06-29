@@ -1,8 +1,8 @@
-import { Fragment, useMemo } from 'react'
+import { Fragment, useMemo, useRef } from 'react'
 import { MapContainer, TileLayer, Polygon, Polyline, Marker, Tooltip } from 'react-leaflet'
 import L from 'leaflet'
 import { COMPANIES } from '../firebase/seed'
-import { clipToLand } from '../lib/clipToLand'
+import { composeZones, mpToLatLng, zoneBaseMP } from '../lib/zoneGeometry'
 
 // Bounds clamp the viewport to the Australian continent.
 const AU_BOUNDS = [
@@ -56,17 +56,6 @@ function arrowHeadIcon(angle, color) {
   })
 }
 
-// Recompute an axis-aligned rectangle's 4 corners when corner `i` is dragged,
-// keeping the opposite corner fixed. Corner order: [NW, NE, SE, SW].
-function resizeRect(coords, i, ll) {
-  const opp = coords[(i + 2) % 4]
-  const n = Math.max(ll[0], opp[0])
-  const s = Math.min(ll[0], opp[0])
-  const w = Math.min(ll[1], opp[1])
-  const e = Math.max(ll[1], opp[1])
-  return [[n, w], [n, e], [s, e], [s, w]]
-}
-
 export default function AustraliaMap({
   zones = [],
   arrows = [],
@@ -76,14 +65,13 @@ export default function AustraliaMap({
   onEditChange,
 }) {
   const zoneById = (id) => zones.find((z) => z.id === id)
+  const dragRef = useRef(null) // live state for the move handle
 
-  // Clip every zone to the coastline so fills hug the land. Memoised so dragging
-  // only pays the (cheap) cost when zone geometry actually changes.
-  const clips = useMemo(() => {
-    const m = {}
-    for (const z of zones) m[z.id] = clipToLand(z.coords)
-    return m
-  }, [zones])
+  // Resolve zones into render geometry: overlaps removed, same-occupant seams
+  // dissolved, plus centres for arrow endpoints. Memoised so dragging only pays
+  // the cost when geometry actually changes.
+  const { fills, strokes, centers } = useMemo(() => composeZones(zones), [zones])
+  const centerOf = (z) => centers[z.id] || null
 
   return (
     <div
@@ -111,55 +99,56 @@ export default function AustraliaMap({
           noWrap
         />
 
-        {/* Zones */}
-        {zones.map((z) => {
+        {/* Zone fills — overlaps already resolved; no per-zone border (seams
+            between same-occupant zones are removed by the occupant outline). */}
+        {fills.map(({ zone: z, geom }) => {
           const col = colorFor(z.occupant)
-          const isEdit = z.id === editId
-          const clipped = clips[z.id]
-          // Show the coastline-clipped shape; fall back to the raw polygon only
-          // if the zone is entirely offshore (so it never silently vanishes).
-          const positions = clipped && clipped.length ? clipped : z.coords
           return (
-            <Fragment key={z.id}>
-              <Polygon
-                positions={positions}
-                eventHandlers={{ click: () => onZoneClick && onZoneClick(z) }}
-                pathOptions={{
-                  color: isEdit ? '#fff' : col,
-                  weight: isEdit ? 3 : 2,
-                  fillColor: col,
-                  fillOpacity: z.occupant === 'Meridian' ? 0.35 : 0.22,
-                  dashArray: z.occupant === 'Contested' ? '6 6' : null,
-                }}
-              >
-                <Tooltip sticky>
-                  <div style={{ fontFamily: 'JetBrains Mono, monospace' }}>
-                    <strong>{z.name}</strong>
-                    <br />
-                    <span style={{ color: z.occupant === 'Meridian' ? '#ff3b46' : '#36e0c0' }}>{z.occupant}</span>
-                  </div>
-                </Tooltip>
-              </Polygon>
-              {/* While editing, show the raw control rectangle so the drag
-                  handles read clearly even where the fill is clipped to coast. */}
-              {isEdit && onEditChange && (
-                <Polyline
-                  positions={[...z.coords, z.coords[0]]}
-                  interactive={false}
-                  pathOptions={{ color: '#fff', weight: 1, opacity: 0.4, dashArray: '4 6' }}
-                />
-              )}
-            </Fragment>
+            <Polygon
+              key={z.id}
+              positions={mpToLatLng(geom)}
+              eventHandlers={{ click: () => onZoneClick && onZoneClick(z) }}
+              pathOptions={{
+                stroke: false,
+                fillColor: col,
+                fillOpacity: z.occupant === 'Meridian' ? 0.35 : 0.22,
+              }}
+            >
+              <Tooltip sticky>
+                <div style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+                  <strong>{z.name}</strong>
+                  <br />
+                  <span style={{ color: z.occupant === 'Meridian' ? '#ff3b46' : '#36e0c0' }}>{z.occupant}</span>
+                </div>
+              </Tooltip>
+            </Polygon>
           )
         })}
+
+        {/* One outline per occupant — adjacent same-occupant zones share a single
+            border, so the darker dividing line between them disappears. */}
+        {strokes.map(({ occupant, geom }) => (
+          <Polygon
+            key={`stroke-${occupant}`}
+            positions={mpToLatLng(geom)}
+            interactive={false}
+            pathOptions={{
+              color: colorFor(occupant),
+              weight: 2,
+              fill: false,
+              dashArray: occupant === 'Contested' ? '6 6' : null,
+            }}
+          />
+        ))}
 
         {/* Movement arrows */}
         {arrows.map((ar) => {
           const from = zoneById(ar.from)
           const to = zoneById(ar.to)
           if (!from || !to) return null
-          const a = centroid(from.coords)
-          const b = centroid(to.coords)
+          const a = centerOf(from)
+          const b = centerOf(to)
+          if (!a || !b) return null
           const planned = ar.type === 'planned'
           // Line colour follows the occupant of the zone being advanced FROM, so
           // an Alpha-held zone pushing outward draws an Alpha-blue line.
@@ -175,29 +164,44 @@ export default function AustraliaMap({
           )
         })}
 
-        {/* Editing handles for the selected zone */}
+        {/* Editing handles — only custom zones are reshaped here; state zones
+            take fixed borders, so they expose no handles. */}
         {editId &&
           onEditChange &&
           (() => {
             const z = zoneById(editId)
             if (!z) return null
+            // White outline of the selected zone so it stands out while editing.
+            const baseMP = zoneBaseMP(z)
+            const highlight = baseMP && (
+              <Polygon
+                positions={mpToLatLng(baseMP)}
+                interactive={false}
+                pathOptions={{ color: '#fff', weight: 2, fill: false }}
+              />
+            )
+            if (z.shape === 'state' || !Array.isArray(z.coords)) return highlight
+            const center = centerOf(z) || centroid(z.coords)
             return (
               <>
+                {highlight}
                 <Marker
-                  position={centroid(z.coords)}
+                  position={center}
                   icon={moveIcon}
                   draggable
                   eventHandlers={{
-                    dragend: (e) => {
-                      const c = centroid(z.coords)
+                    dragstart: (e) => { dragRef.current = { coords: z.coords, last: e.target.getLatLng() } },
+                    drag: (e) => {
+                      const st = dragRef.current
+                      if (!st) return
                       const p = e.target.getLatLng()
-                      const dLat = p.lat - c[0]
-                      const dLng = p.lng - c[1]
-                      onEditChange({
-                        ...z,
-                        coords: z.coords.map(([la, ln]) => [clampLat(la + dLat), clampLng(ln + dLng)]),
-                      })
+                      const dLat = p.lat - st.last.lat
+                      const dLng = p.lng - st.last.lng
+                      st.coords = st.coords.map(([la, ln]) => [clampLat(la + dLat), clampLng(ln + dLng)])
+                      st.last = p
+                      onEditChange({ ...z, coords: st.coords })
                     },
+                    dragend: () => { dragRef.current = null },
                   }}
                 />
                 {z.coords.map((pt, i) => (
@@ -209,11 +213,7 @@ export default function AustraliaMap({
                     eventHandlers={{
                       drag: (e) => {
                         const ll = [clampLat(e.target.getLatLng().lat), clampLng(e.target.getLatLng().lng)]
-                        if (z.shape === 'rect') {
-                          onEditChange({ ...z, coords: resizeRect(z.coords, i, ll) })
-                        } else {
-                          onEditChange({ ...z, coords: z.coords.map((c, idx) => (idx === i ? ll : c)) })
-                        }
+                        onEditChange({ ...z, coords: z.coords.map((c, idx) => (idx === i ? ll : c)) })
                       },
                     }}
                   />

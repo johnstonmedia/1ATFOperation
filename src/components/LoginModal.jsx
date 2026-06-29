@@ -17,6 +17,7 @@ export default function LoginModal({ onClose, onAuthed, initialMode = 'login' })
   const [busy, setBusy] = useState(false)
   const [info, setInfo] = useState('')
   const [support, setSupport] = useState(false)
+  const [showPw, setShowPw] = useState(false)
 
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value })
   const go = (m) => { setErr(''); setInfo(''); setMode(m) }
@@ -60,7 +61,7 @@ export default function LoginModal({ onClose, onAuthed, initialMode = 'login' })
           {mode === 'login' && (
             <div className="col" style={{ gap: 4 }}>
               <label>Password</label>
-              <input type="password" required value={form.password} onChange={set('password')} autoComplete="current-password" />
+              <PwInput required value={form.password} onChange={set('password')} autoComplete="current-password" show={showPw} setShow={setShowPw} />
             </div>
           )}
 
@@ -72,7 +73,7 @@ export default function LoginModal({ onClose, onAuthed, initialMode = 'login' })
               </div>
               <div className="col" style={{ gap: 4 }}>
                 <label>Choose a New Password</label>
-                <input type="password" required value={form.newPassword} onChange={set('newPassword')} placeholder="At least 6 characters" autoComplete="new-password" />
+                <PwInput required value={form.newPassword} onChange={set('newPassword')} placeholder="At least 6 characters" autoComplete="new-password" show={showPw} setShow={setShowPw} />
               </div>
             </>
           )}
@@ -109,6 +110,24 @@ export default function LoginModal({ onClose, onAuthed, initialMode = 'login' })
       </div>
 
       {support && <SupportModal onClose={() => setSupport(false)} />}
+    </div>
+  )
+}
+
+// Password input with a reveal toggle — handy when choosing a new password.
+function PwInput({ show, setShow, ...props }) {
+  return (
+    <div style={{ position: 'relative' }}>
+      <input {...props} type={show ? 'text' : 'password'} style={{ paddingRight: 60, width: '100%' }} />
+      <button
+        type="button"
+        className="ghost"
+        onClick={() => setShow((s) => !s)}
+        aria-label={show ? 'Hide password' : 'Show password'}
+        style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', padding: '2px 8px', fontSize: 11 }}
+      >
+        {show ? 'Hide' : 'Show'}
+      </button>
     </div>
   )
 }

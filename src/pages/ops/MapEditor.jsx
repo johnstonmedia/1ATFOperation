@@ -4,6 +4,7 @@ import { OpsHeader, useSaved } from './OperationsCentre'
 import { Field } from './NarrativeEditor'
 import AustraliaMap, { centroid } from '../../components/AustraliaMap'
 import { COMPANIES } from '../../firebase/seed'
+import { AU_STATE_NAMES } from '../../lib/australiaStates'
 
 const OCCUPANTS = [...COMPANIES.map((c) => c.name), 'Meridian', 'Contested']
 
@@ -35,35 +36,48 @@ export default function MapEditor() {
     setArrows((as) => as.filter((a) => a.from !== id && a.to !== id))
     if (selId === id) setSelId(null)
   }
-  const addZone = (shape) => {
+  // A custom zone starts life as a rectangle and is freely reshaped.
+  const addCustom = () => {
     const id = makeId()
-    setZones((zs) => [...zs, { id, name: 'New Zone', occupant: 'Contested', shape, coords: rectAt() }])
+    setZones((zs) => [...zs, { id, name: 'New Zone', occupant: 'Contested', shape: 'custom', coords: rectAt() }])
+    setSelId(id)
+  }
+  // A state zone snaps to the borders of the selected state(s).
+  const addState = () => {
+    const id = makeId()
+    setZones((zs) => [...zs, { id, name: 'New State Zone', occupant: 'Contested', shape: 'state', states: [] }])
     setSelId(id)
   }
 
   const sel = zones.find((z) => z.id === selId)
+  const isCustom = (z) => z && z.shape !== 'state' && Array.isArray(z.coords)
+  const toggleState = (z, name) => {
+    const have = z.states || []
+    setZone(z.id, { states: have.includes(name) ? have.filter((s) => s !== name) : [...have, name] })
+  }
 
   // custom-polygon vertex add/remove
   const addVertex = () => {
-    if (!sel) return
+    if (!isCustom(sel)) return
     const c = centroid(sel.coords)
     setZone(sel.id, { coords: [...sel.coords, [c[0] - 1, c[1] + 1]] })
   }
   const removeVertex = () => {
-    if (!sel || sel.coords.length <= 3) return
+    if (!isCustom(sel) || sel.coords.length <= 3) return
     setZone(sel.id, { coords: sel.coords.slice(0, -1) })
   }
 
   return (
     <div>
       <OpsHeader title="Operational Map" sub="EDIT // ZONES & MOVEMENTS">
-        <button className="ghost" onClick={() => addZone('rect')}>+ Rectangle</button>
-        <button className="ghost" onClick={() => addZone('custom')}>+ Custom</button>
+        <button className="ghost" onClick={addCustom}>+ Custom</button>
+        <button className="ghost" onClick={addState}>+ State(s)</button>
         <button className="primary" onClick={save}>{saved ? 'Saved ✓' : 'Save map'}</button>
       </OpsHeader>
 
       <div className="mono dim" style={{ fontSize: 11, marginBottom: 10 }}>
-        Select a zone below, then drag the ✥ handle to move it or the round handles to reshape it. All edits stay within Australia.
+        Custom zones start as a rectangle — drag the ✥ handle to move the whole shape, or the round handles to reshape it.
+        State zones snap to the selected borders. Fills hug the coastline and never overlap; same-occupant zones share one border.
       </div>
 
       <div className="panel" style={{ marginBottom: 18 }}>
@@ -92,11 +106,31 @@ export default function MapEditor() {
                 </select>
               </Field>
             </div>
-            <span className="tag">{z.shape === 'rect' ? 'RECTANGLE' : 'CUSTOM'}</span>
+            <span className="tag">{z.shape === 'state' ? 'STATE(S)' : 'CUSTOM'}</span>
             <button className="danger ghost" onClick={() => removeZone(z.id)}>Remove</button>
+            {z.shape === 'state' && (
+              <div className="col" style={{ gap: 4, flexBasis: '100%' }}>
+                <label className="mono dim" style={{ fontSize: 10 }}>States / territories</label>
+                <div className="row wrap" style={{ gap: 6 }}>
+                  {AU_STATE_NAMES.map((s) => {
+                    const on = (z.states || []).includes(s)
+                    return (
+                      <button
+                        key={s}
+                        className={on ? 'primary' : 'ghost'}
+                        onClick={() => toggleState(z, s)}
+                        style={{ padding: '4px 9px', fontSize: 11 }}
+                      >
+                        {s}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         ))}
-        {sel && sel.shape === 'custom' && (
+        {isCustom(sel) && (
           <div className="row" style={{ gap: 8 }}>
             <button className="ghost" onClick={addVertex}>+ Add corner to “{sel.name}”</button>
             <button className="ghost" onClick={removeVertex} disabled={sel.coords.length <= 3}>− Remove corner</button>
