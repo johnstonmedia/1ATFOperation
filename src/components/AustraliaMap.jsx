@@ -1,7 +1,8 @@
-import { Fragment } from 'react'
+import { Fragment, useMemo } from 'react'
 import { MapContainer, TileLayer, Polygon, Polyline, Marker, Tooltip } from 'react-leaflet'
 import L from 'leaflet'
 import { COMPANIES } from '../firebase/seed'
+import { clipToLand } from '../lib/clipToLand'
 
 // Bounds clamp the viewport to the Australian continent.
 const AU_BOUNDS = [
@@ -76,6 +77,14 @@ export default function AustraliaMap({
 }) {
   const zoneById = (id) => zones.find((z) => z.id === id)
 
+  // Clip every zone to the coastline so fills hug the land. Memoised so dragging
+  // only pays the (cheap) cost when zone geometry actually changes.
+  const clips = useMemo(() => {
+    const m = {}
+    for (const z of zones) m[z.id] = clipToLand(z.coords)
+    return m
+  }, [zones])
+
   return (
     <div
       style={{
@@ -106,27 +115,41 @@ export default function AustraliaMap({
         {zones.map((z) => {
           const col = colorFor(z.occupant)
           const isEdit = z.id === editId
+          const clipped = clips[z.id]
+          // Show the coastline-clipped shape; fall back to the raw polygon only
+          // if the zone is entirely offshore (so it never silently vanishes).
+          const positions = clipped && clipped.length ? clipped : z.coords
           return (
-            <Polygon
-              key={z.id}
-              positions={z.coords}
-              eventHandlers={{ click: () => onZoneClick && onZoneClick(z) }}
-              pathOptions={{
-                color: isEdit ? '#fff' : col,
-                weight: isEdit ? 3 : 2,
-                fillColor: col,
-                fillOpacity: z.occupant === 'Meridian' ? 0.35 : 0.22,
-                dashArray: z.occupant === 'Contested' ? '6 6' : null,
-              }}
-            >
-              <Tooltip sticky>
-                <div style={{ fontFamily: 'JetBrains Mono, monospace' }}>
-                  <strong>{z.name}</strong>
-                  <br />
-                  <span style={{ color: z.occupant === 'Meridian' ? '#ff3b46' : '#36e0c0' }}>{z.occupant}</span>
-                </div>
-              </Tooltip>
-            </Polygon>
+            <Fragment key={z.id}>
+              <Polygon
+                positions={positions}
+                eventHandlers={{ click: () => onZoneClick && onZoneClick(z) }}
+                pathOptions={{
+                  color: isEdit ? '#fff' : col,
+                  weight: isEdit ? 3 : 2,
+                  fillColor: col,
+                  fillOpacity: z.occupant === 'Meridian' ? 0.35 : 0.22,
+                  dashArray: z.occupant === 'Contested' ? '6 6' : null,
+                }}
+              >
+                <Tooltip sticky>
+                  <div style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+                    <strong>{z.name}</strong>
+                    <br />
+                    <span style={{ color: z.occupant === 'Meridian' ? '#ff3b46' : '#36e0c0' }}>{z.occupant}</span>
+                  </div>
+                </Tooltip>
+              </Polygon>
+              {/* While editing, show the raw control rectangle so the drag
+                  handles read clearly even where the fill is clipped to coast. */}
+              {isEdit && onEditChange && (
+                <Polyline
+                  positions={[...z.coords, z.coords[0]]}
+                  interactive={false}
+                  pathOptions={{ color: '#fff', weight: 1, opacity: 0.4, dashArray: '4 6' }}
+                />
+              )}
+            </Fragment>
           )
         })}
 
