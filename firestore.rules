@@ -1,69 +1,118 @@
 rules_version = '2';
 
 // Security model for the 1ATF portal.
-//  - Public operational content (content/*) is world-readable but only RHQ can write.
-//  - Roster + tasks are readable by signed-in users; only RHQ can write.
-//  - A user may read/write only their own users/{uid} profile.
+//
+//  - Public operational content (content/*) is world-readable; only RHQ writes.
+//  - roster / tasks / activity are readable by any signed-in member (the client
+//    needs the roster query during temporary-password registration, before the
+//    member has a profile that marks them RHQ); only RHQ writes.
+//  - users/{uid}: a member may read and update ONLY their own profile, and may
+//    NOT change their own role or ID number (anti-escalation); RHQ manages all.
+//  - support / resetRequests: anyone (incl. signed-out) may submit a single,
+//    size-bounded request; only RHQ can read or action them.
+//  - authIndex/{id}: public read (login computes the credential epoch before
+//    sign-in); only RHQ bumps it on a password reset.
+//  - Everything else is denied by default.
 //
 // "RHQ" is determined by the role field on the caller's own user profile.
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // ---------------------------------------------------------------- helpers
     function isSignedIn() {
       return request.auth != null;
     }
+    function userDoc() {
+      return /databases/$(database)/documents/users/$(request.auth.uid);
+    }
     function isRHQ() {
       return isSignedIn()
-        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'RHQ';
+        && exists(userDoc())
+        && get(userDoc()).data.role == 'RHQ';
+    }
+    // True when a (possibly missing) field is a string no longer than `max`.
+    function strOk(data, key, max) {
+      return !(key in data) || (data[key] is string && data[key].size() <= max);
     }
 
-    // Public site content — anyone can read, RHQ edits.
+    // ------------------------------------------------------- public site content
+    // Anyone can read; RHQ edits.
     match /content/{doc} {
       allow read: if true;
       allow write: if isRHQ();
     }
 
-    // Pre-provisioned roster (used to link new accounts).
+    // --------------------------------------------------------------- roster
+    // Read access is required by every signed-in member because temporary-
+    // password registration queries the roster before the member has an RHQ
+    // marker. Writes are RHQ-only. (Tightening reads to RHQ-only would require
+    // a matching change to the registration flow in the app.)
     match /roster/{id} {
-      allow read: if isSignedIn();
+      allow read:  if isSignedIn();
       allow write: if isRHQ();
     }
 
-    // Distributed digital activities + activity feed.
+    // ------------------------------------------ distributed tasks + activity feed
     match /tasks/{id} {
-      allow read: if isSignedIn();
+      allow read:  if isSignedIn();
       allow write: if isRHQ();
     }
     match /activity/{id} {
-      allow read: if isSignedIn();
+      allow read:  if isSignedIn();
       allow write: if isRHQ();
     }
 
-    // Personnel profiles. Users manage their own; RHQ can manage all.
+    // ------------------------------------------------------ personnel profiles
+    // A member reads only their own profile; RHQ reads all. On self-update a
+    // member may not change their role or ID number — only RHQ can. Profiles are
+    // never deleted by their owner.
     match /users/{uid} {
-      allow read: if isSignedIn();
+      allow read:   if isRHQ() || (isSignedIn() && request.auth.uid == uid);
       allow create: if isSignedIn() && request.auth.uid == uid;
-      allow update, delete: if request.auth.uid == uid || isRHQ();
+      allow update: if isRHQ()
+        || (request.auth.uid == uid
+            && request.resource.data.role == resource.data.role
+            && request.resource.data.idNumber == resource.data.idNumber);
+      allow delete: if isRHQ();
     }
 
-    // Help / support messages — anyone (incl. signed-out) may submit; RHQ reads.
+    // ------------------------------------------------------- help / support inbox
+    // Anyone (incl. signed-out) may file ONE bounded request; RHQ reads/actions.
     match /support/{id} {
-      allow create: if true;
+      allow create: if request.resource.data.keys()
+                        .hasOnly(['category','name','contact','message','code','auto','ts','status'])
+        && request.resource.data.message is string
+        && request.resource.data.message.size() <= 5000
+        && strOk(request.resource.data, 'category', 64)
+        && strOk(request.resource.data, 'name', 200)
+        && strOk(request.resource.data, 'contact', 200)
+        && strOk(request.resource.data, 'code', 32);
       allow read, update, delete: if isRHQ();
     }
 
-    // Forgotten-password requests — anyone may raise; RHQ reads and actions.
+    // --------------------------------------------------- forgotten-password inbox
+    // Anyone may raise a reset request; RHQ reads and actions it.
     match /resetRequests/{id} {
-      allow create: if true;
+      allow create: if request.resource.data.keys().hasOnly(['idNumber','ts','status'])
+        && request.resource.data.idNumber is string
+        && request.resource.data.idNumber.size() > 0
+        && request.resource.data.idNumber.size() <= 64;
       allow read, update, delete: if isRHQ();
     }
 
-    // Public auth-version index (no sensitive data) so login can compute the
-    // current credential epoch before sign-in; RHQ bumps it on a reset.
+    // -------------------------------------------------- public auth-version index
+    // No sensitive data — just the credential epoch — so login can read it before
+    // sign-in. RHQ bumps it on a reset.
     match /authIndex/{id} {
-      allow read: if true;
-      allow write: if isRHQ();
+      allow read:  if true;
+      allow write: if isRHQ()
+        && request.resource.data.keys().hasOnly(['pwVersion'])
+        && request.resource.data.pwVersion is int;
+    }
+
+    // ------------------------------------------------------------- default deny
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

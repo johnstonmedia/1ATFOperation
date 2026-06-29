@@ -1,4 +1,3 @@
-<!-- Push-access verification: privacy-hardening session -->
 # 1ATF // Operational Portal
 
 A futuristic, intelligence-agency–styled portal for the **Shore Cadet Unit /
