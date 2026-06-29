@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useData } from '../../context/DataContext'
+import { useConfirm } from '../../context/ConfirmContext'
 import { OpsHeader } from './OperationsCentre'
 import { genTempPassword } from '../../lib/passwords'
 import { getAuthVersion, setAuthVersion } from '../../lib/store'
@@ -46,8 +47,12 @@ export default function HelpAdmin() {
 }
 
 function Messages({ list, all, onChange, empty }) {
+  const confirm = useConfirm()
   const resolve = (id) => onChange(all.map((m) => (m.id === id ? { ...m, status: 'resolved' } : m)))
-  const remove = (id) => onChange(all.filter((m) => m.id !== id))
+  const remove = async (id) => {
+    if (!(await confirm({ title: 'Delete message', message: 'Permanently delete this message?', danger: true, confirmLabel: 'Delete' }))) return
+    onChange(all.filter((m) => m.id !== id))
+  }
   if (list.length === 0) return <div className="panel panel-pad mono dim" style={{ fontSize: 13 }}>{empty}</div>
   return (
     <div className="col" style={{ gap: 12 }}>
@@ -76,6 +81,7 @@ function Messages({ list, all, onChange, empty }) {
 
 function ResetRequests({ resets, state, setResets, updateSlice }) {
   const [working, setWorking] = useState(null)
+  const confirm = useConfirm()
 
   const doReset = async (req) => {
     setWorking(req.id)
@@ -99,7 +105,10 @@ function ResetRequests({ resets, state, setResets, updateSlice }) {
     }
   }
 
-  const remove = (id) => setResets(resets.filter((x) => x.id !== id))
+  const remove = async (id) => {
+    if (!(await confirm({ title: 'Clear request', message: 'Clear this reset request from the list?', danger: true, confirmLabel: 'Clear' }))) return
+    setResets(resets.filter((x) => x.id !== id))
+  }
   if (resets.length === 0) return <div className="panel panel-pad mono dim" style={{ fontSize: 13 }}>No password-reset requests.</div>
 
   return (

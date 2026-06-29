@@ -18,6 +18,8 @@ export default function LoginModal({ onClose, onAuthed, initialMode = 'login' })
   const [info, setInfo] = useState('')
   const [support, setSupport] = useState(false)
   const [showPw, setShowPw] = useState(false)
+  const [capsOn, setCapsOn] = useState(false)
+  const [remember, setRemember] = useState(true)
 
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value })
   const go = (m) => { setErr(''); setInfo(''); setMode(m) }
@@ -26,7 +28,7 @@ export default function LoginModal({ onClose, onAuthed, initialMode = 'login' })
     e.preventDefault()
     setErr(''); setInfo(''); setBusy(true)
     try {
-      if (mode === 'login') { await signIn(form); onAuthed?.(); onClose() }
+      if (mode === 'login') { await signIn({ ...form, remember }); onAuthed?.(); onClose() }
       else if (mode === 'temp') { await register(form); onAuthed?.(); onClose() }
       else { await forgotPassword(form); setInfo('Request sent to RHQ. They will issue you a new temporary password.') }
     } catch (e2) {
@@ -61,7 +63,11 @@ export default function LoginModal({ onClose, onAuthed, initialMode = 'login' })
           {mode === 'login' && (
             <div className="col" style={{ gap: 4 }}>
               <label>Password</label>
-              <PwInput required value={form.password} onChange={set('password')} autoComplete="current-password" show={showPw} setShow={setShowPw} />
+              <PwInput required value={form.password} onChange={set('password')} autoComplete="current-password" show={showPw} setShow={setShowPw} onCaps={setCapsOn} />
+              <label className="row center" style={{ gap: 8, fontSize: 11, cursor: 'pointer', textTransform: 'none', letterSpacing: 0 }}>
+                <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} style={{ width: 'auto' }} />
+                Keep me signed in on this device
+              </label>
             </div>
           )}
 
@@ -73,11 +79,15 @@ export default function LoginModal({ onClose, onAuthed, initialMode = 'login' })
               </div>
               <div className="col" style={{ gap: 4 }}>
                 <label>Choose a New Password</label>
-                <PwInput required value={form.newPassword} onChange={set('newPassword')} placeholder="At least 6 characters" autoComplete="new-password" show={showPw} setShow={setShowPw} />
+                <PwInput required value={form.newPassword} onChange={set('newPassword')} placeholder="At least 6 characters" autoComplete="new-password" show={showPw} setShow={setShowPw} onCaps={setCapsOn} />
+                <StrengthMeter pw={form.newPassword} />
               </div>
             </>
           )}
 
+          {capsOn && (mode === 'login' || mode === 'temp') && (
+            <div className="warn mono" style={{ fontSize: 11 }}>⚠ Caps Lock is on.</div>
+          )}
           {err && <div className="hostile mono" style={{ fontSize: 12 }}>{err}</div>}
           {info && <div className="accent mono" style={{ fontSize: 12 }}>{info}</div>}
 
@@ -114,11 +124,18 @@ export default function LoginModal({ onClose, onAuthed, initialMode = 'login' })
   )
 }
 
-// Password input with a reveal toggle — handy when choosing a new password.
-function PwInput({ show, setShow, ...props }) {
+// Password input with a reveal toggle and Caps Lock detection.
+function PwInput({ show, setShow, onCaps, ...props }) {
+  const caps = (e) => onCaps && e.getModifierState && onCaps(e.getModifierState('CapsLock'))
   return (
     <div style={{ position: 'relative' }}>
-      <input {...props} type={show ? 'text' : 'password'} style={{ paddingRight: 60, width: '100%' }} />
+      <input
+        {...props}
+        type={show ? 'text' : 'password'}
+        onKeyUp={caps}
+        onKeyDown={caps}
+        style={{ paddingRight: 60, width: '100%' }}
+      />
       <button
         type="button"
         className="ghost"
@@ -128,6 +145,34 @@ function PwInput({ show, setShow, ...props }) {
       >
         {show ? 'Hide' : 'Show'}
       </button>
+    </div>
+  )
+}
+
+// Rough password-strength indicator shown while choosing a new password.
+function pwStrength(pw) {
+  if (!pw) return 0
+  let s = 0
+  if (pw.length >= 6) s++
+  if (pw.length >= 10) s++
+  if (/[a-z]/.test(pw) && /[A-Z]/.test(pw)) s++
+  if (/\d/.test(pw)) s++
+  if (/[^A-Za-z0-9]/.test(pw)) s++
+  return Math.min(s, 4)
+}
+function StrengthMeter({ pw }) {
+  if (!pw) return null
+  const score = pwStrength(pw)
+  const colors = ['#ff3b46', '#ff8a3b', '#ffcf4a', '#7bd66a', '#36e0c0']
+  const labels = ['Very weak', 'Weak', 'Fair', 'Good', 'Strong']
+  return (
+    <div className="col" style={{ gap: 4 }}>
+      <div className="row" style={{ gap: 4 }}>
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} style={{ height: 4, flex: 1, borderRadius: 2, background: i <= score - 1 ? colors[score] : 'var(--line)' }} />
+        ))}
+      </div>
+      <span className="mono dim" style={{ fontSize: 10 }}>Strength: <span style={{ color: colors[score] }}>{labels[score]}</span></span>
     </div>
   )
 }

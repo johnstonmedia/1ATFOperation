@@ -100,14 +100,16 @@ export function AuthProvider({ children }) {
 
   // Returning members (and the admin's first sign-in) authenticate here.
   const signIn = useCallback(
-    async ({ idNumber, password }) => {
+    async ({ idNumber, password, remember = true }) => {
       const id = String(idNumber || '').trim()
       if (!id || !password) throw appError('VALIDATION', 'Enter your ID number and password.')
       const version = await getAuthVersion(cleanId(id))
 
       if (FIREBASE_ENABLED) {
-        const { signInWithEmailAndPassword, createUserWithEmailAndPassword } = await import('firebase/auth')
+        const { signInWithEmailAndPassword, createUserWithEmailAndPassword, setPersistence, browserLocalPersistence, browserSessionPersistence } = await import('firebase/auth')
         const { doc, setDoc } = await import('firebase/firestore')
+        // "Keep me signed in" → persist across sessions; otherwise clear on close.
+        try { await setPersistence(auth, remember ? browserLocalPersistence : browserSessionPersistence) } catch { /* non-fatal */ }
         const authEmail = idToEmail(id, version)
         try {
           await signInWithEmailAndPassword(auth, authEmail, password)

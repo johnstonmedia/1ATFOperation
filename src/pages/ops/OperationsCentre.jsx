@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
+import { useToast } from '../../context/ToastContext'
 import Logo from '../../components/Logo'
 import NarrativeEditor from './NarrativeEditor'
 import MapEditor from './MapEditor'
@@ -24,7 +25,7 @@ const SECTIONS = [
 ]
 
 export default function OperationsCentre() {
-  const { user, isRHQ } = useAuth()
+  const { user, isRHQ, logout } = useAuth()
   const [section, setSection] = useState('narrative')
   const [authOpen, setAuthOpen] = useState(false)
 
@@ -82,7 +83,10 @@ export default function OperationsCentre() {
           </div>
         ))}
         <div className="grow" />
-        <div className="mono dim" style={{ fontSize: 10 }}>{user.rank} {user.name}</div>
+        <div className="divider" />
+        <div className="mono dim" style={{ fontSize: 10 }}>Signed in as</div>
+        <div className="mono accent" style={{ fontSize: 11, marginBottom: 6 }}>{user.rank} {user.name}</div>
+        <button className="ghost" onClick={logout} style={{ width: '100%', fontSize: 12 }}>Sign out</button>
       </aside>
 
       {/* Work area */}
@@ -113,11 +117,14 @@ export function OpsHeader({ title, sub, children }) {
   )
 }
 
-// Small saved-confirmation hook helper.
+// Small saved-confirmation hook helper. Also pops a consistent toast so saves
+// are confirmed the same way across every editor.
 export function useSaved() {
+  const { push } = useToast()
   const [saved, setSaved] = useState(false)
-  const flash = () => {
+  const flash = (msg = 'Changes saved') => {
     setSaved(true)
+    push(msg, { type: 'success' })
     setTimeout(() => setSaved(false), 1800)
   }
   return [saved, flash]

@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { useData } from '../../context/DataContext'
+import { useConfirm } from '../../context/ConfirmContext'
+import { useToast } from '../../context/ToastContext'
 import { OpsHeader } from './OperationsCentre'
 import { Field } from './NarrativeEditor'
 import { COMPANIES } from '../../firebase/seed'
@@ -10,6 +12,8 @@ import { parseTextToQuestions, extractText } from '../../lib/docToQuiz'
 // appear under "Your Tasks" for the targeted audience.
 export default function DigitalActivities() {
   const { state, updateSlice, makeId } = useData()
+  const confirm = useConfirm()
+  const { push } = useToast()
   const [editing, setEditing] = useState(null) // task being built
 
   const tasks = state.tasks
@@ -18,8 +22,20 @@ export default function DigitalActivities() {
   const upsert = (task) => {
     const exists = tasks.some((t) => t.id === task.id)
     saveTasks(exists ? tasks.map((t) => (t.id === task.id ? task : t)) : [...tasks, task])
+    push(task.distributed ? 'Activity distributed' : task.scheduledFor ? 'Activity scheduled' : 'Draft saved')
   }
-  const remove = (id) => saveTasks(tasks.filter((t) => t.id !== id))
+  const remove = async (id) => {
+    const t = tasks.find((x) => x.id === id)
+    const ok = await confirm({
+      title: 'Delete activity',
+      message: `Delete “${t?.title || 'Untitled activity'}”? This cannot be undone.`,
+      danger: true,
+      confirmLabel: 'Delete',
+    })
+    if (!ok) return
+    saveTasks(tasks.filter((x) => x.id !== id))
+    push('Activity deleted')
+  }
 
   if (editing) {
     return (

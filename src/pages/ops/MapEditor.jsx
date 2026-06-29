@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useData } from '../../context/DataContext'
+import { useConfirm } from '../../context/ConfirmContext'
 import { OpsHeader, useSaved } from './OperationsCentre'
 import { Field } from './NarrativeEditor'
 import AustraliaMap, { centroid } from '../../components/AustraliaMap'
@@ -22,6 +23,7 @@ export default function MapEditor() {
   const [arrows, setArrows] = useState(state.arrows || [])
   const [selId, setSelId] = useState(zones[0]?.id || null)
   const [saved, flash] = useSaved()
+  const confirm = useConfirm()
 
   const save = () => {
     updateSlice('zones', zones)
@@ -31,8 +33,16 @@ export default function MapEditor() {
 
   const setZone = (id, patch) => setZones((zs) => zs.map((z) => (z.id === id ? { ...z, ...patch } : z)))
   const onEditChange = (updated) => setZones((zs) => zs.map((z) => (z.id === updated.id ? updated : z)))
-  const removeZone = (id) => {
-    setZones((zs) => zs.filter((z) => z.id !== id))
+  const removeZone = async (id) => {
+    const z = zones.find((x) => x.id === id)
+    const ok = await confirm({
+      title: 'Remove zone',
+      message: `Remove “${z?.name || 'this zone'}” and any movement lines using it? This applies when you next save the map.`,
+      danger: true,
+      confirmLabel: 'Remove',
+    })
+    if (!ok) return
+    setZones((zs) => zs.filter((x) => x.id !== id))
     setArrows((as) => as.filter((a) => a.from !== id && a.to !== id))
     if (selId === id) setSelId(null)
   }

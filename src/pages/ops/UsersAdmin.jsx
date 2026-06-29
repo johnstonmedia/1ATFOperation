@@ -1,6 +1,8 @@
 import { useState, useMemo } from 'react'
 import * as XLSX from 'xlsx'
 import { useData } from '../../context/DataContext'
+import { useConfirm } from '../../context/ConfirmContext'
+import { useToast } from '../../context/ToastContext'
 import { OpsHeader } from './OperationsCentre'
 import { Field } from './NarrativeEditor'
 import { COMPANIES, ROLES, PHONETIC } from '../../firebase/seed'
@@ -12,6 +14,8 @@ import { genTempPassword } from '../../lib/passwords'
 // sets their own password. Role (RHQ / General) is chosen here, not imported.
 export default function UsersAdmin() {
   const { state, updateSlice, replaceRoster, makeId } = useData()
+  const confirm = useConfirm()
+  const { push } = useToast()
   const roster = state.roster
   const [query, setQuery] = useState('')
   const [editing, setEditing] = useState(null)
@@ -32,8 +36,9 @@ export default function UsersAdmin() {
     const exists = roster.some((r) => r._id === rec._id)
     save(exists ? roster.map((r) => (r._id === rec._id ? rec : r)) : [...roster, rec])
     setEditing(null)
+    push('Member saved')
   }
-  const remove = (id) => save(roster.filter((r) => r._id !== id))
+  const remove = (id) => { save(roster.filter((r) => r._id !== id)); push('Member removed') }
 
   const onSpreadsheet = async (e) => {
     const file = e.target.files?.[0]
@@ -53,6 +58,7 @@ export default function UsersAdmin() {
       skipped: incoming.length - toAdd.length,
       columns: Object.keys(rows[0] || {}),
     })
+    push(`Imported ${toAdd.length} new member${toAdd.length === 1 ? '' : 's'}`)
     e.target.value = ''
   }
 
@@ -143,7 +149,19 @@ function newUser(makeId) {
 
 function UserModal({ rec, onClose, onSave, onDelete }) {
   const [u, setU] = useState(rec)
+  const confirm = useConfirm()
   const set = (k) => (e) => setU({ ...u, [k]: e.target.value })
+  const del = async () => {
+    const ok = await confirm({
+      title: 'Remove member',
+      message: `Remove ${u.name || 'this member'} (ID ${u.idNumber || '—'}) from the roster? This cannot be undone.`,
+      danger: true,
+      confirmLabel: 'Remove',
+    })
+    if (!ok) return
+    onDelete(u._id)
+    onClose()
+  }
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(2,4,9,0.8)', zIndex: 900, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
       <div className="panel panel-pad col" onClick={(e) => e.stopPropagation()} style={{ width: 420, maxWidth: '100%' }}>
@@ -173,7 +191,7 @@ function UserModal({ rec, onClose, onSave, onDelete }) {
           The member registers with their ID + this temporary password, then sets their own password.
         </div>
         <div className="row between" style={{ marginTop: 8 }}>
-          <button className="danger ghost" onClick={() => { onDelete(u._id); onClose() }}>Delete</button>
+          <button className="danger ghost" onClick={del}>Delete</button>
           <div className="row" style={{ gap: 8 }}>
             <button className="ghost" onClick={onClose}>Cancel</button>
             <button className="primary" onClick={() => onSave(u)}>Save</button>
