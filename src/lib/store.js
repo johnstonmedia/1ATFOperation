@@ -56,6 +56,29 @@ function saveLocal(state) {
 
 /* ---------------------------- FIREBASE MODE ---------------------------- */
 
+// Firestore does not allow an array element to itself be an array, so zone
+// polygons (coords: [[lat,lng], …]) cannot be stored as-is. Encode each point
+// as a {lat,lng} map on write and turn it back into a [lat,lng] pair on read.
+// Both directions tolerate the opposite shape so old/new data interoperate.
+function encodeSlice(slice, value) {
+  if (slice !== 'zones' || !Array.isArray(value)) return value
+  return value.map((z) => ({
+    ...z,
+    coords: Array.isArray(z.coords)
+      ? z.coords.map((p) => (Array.isArray(p) ? { lat: p[0], lng: p[1] } : p))
+      : z.coords,
+  }))
+}
+function decodeSlice(slice, value) {
+  if (slice !== 'zones' || !Array.isArray(value)) return value
+  return value.map((z) => ({
+    ...z,
+    coords: Array.isArray(z.coords)
+      ? z.coords.map((p) => (Array.isArray(p) ? p : [p.lat, p.lng]))
+      : z.coords,
+  }))
+}
+
 async function loadFirebase() {
   const { doc, getDoc, collection, getDocs } = await import('firebase/firestore')
   const out = structuredClone(DEFAULT_STATE)
@@ -63,7 +86,7 @@ async function loadFirebase() {
     SINGLE_SLICES.map(async (slice) => {
       try {
         const snap = await getDoc(doc(db, 'content', slice))
-        if (snap.exists()) out[slice] = snap.data().value
+        if (snap.exists()) out[slice] = decodeSlice(slice, snap.data().value)
       } catch {
         /* keep default */
       }
@@ -82,7 +105,7 @@ async function loadFirebase() {
 
 async function saveFirebaseSlice(slice, value) {
   const { doc, setDoc } = await import('firebase/firestore')
-  await setDoc(doc(db, 'content', slice), { value })
+  await setDoc(doc(db, 'content', slice), { value: encodeSlice(slice, value) })
 }
 
 async function persistCollection(coll, rows) {

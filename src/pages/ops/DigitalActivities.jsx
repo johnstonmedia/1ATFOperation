@@ -77,7 +77,18 @@ export default function DigitalActivities() {
 function Builder({ task, onCancel, onSave }) {
   const [t, setT] = useState(task)
   const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  const [scheduling, setScheduling] = useState(false)
   const set = (k, v) => setT((p) => ({ ...p, [k]: v }))
+
+  // An activity can only be distributed once it actually has content.
+  const ready = t.title.trim() !== '' && t.questions.length > 0
+  const requireContent = () => {
+    if (!t.title.trim()) { setErr('Give the activity a title before distributing.'); return false }
+    if (t.questions.length === 0) { setErr('Add at least one question before distributing.'); return false }
+    setErr('')
+    return true
+  }
 
   const onUpload = async (e) => {
     const file = e.target.files?.[0]
@@ -98,20 +109,12 @@ function Builder({ task, onCancel, onSave }) {
   const addQ = () => set('questions', [...t.questions, { type: 'mc', prompt: '', options: ['', ''], answer: 0 }])
   const delQ = (i) => set('questions', t.questions.filter((_, idx) => idx !== i))
 
-  const finalise = (mode) => {
-    let out = { ...t }
-    if (mode === 'draft') out = { ...out, distributed: false, scheduledFor: null }
-    if (mode === 'now') out = { ...out, distributed: true, scheduledFor: Date.now() }
-    if (mode === 'schedule') {
-      const when = prompt('Distribute at (YYYY-MM-DD HH:MM):')
-      const ts = when ? Date.parse(when.replace(' ', 'T')) : NaN
-      if (Number.isNaN(ts)) return
-      // For preview we mark scheduled; a Cloud Function/cron flips `distributed`
-      // when the time arrives. In local mode it distributes if already due.
-      out = { ...out, distributed: ts <= Date.now(), scheduledFor: ts }
-    }
-    onSave(out)
-  }
+  const saveDraft = () => onSave({ ...t, distributed: false, scheduledFor: null })
+  const distributeNow = () => { if (requireContent()) onSave({ ...t, distributed: true, scheduledFor: Date.now() }) }
+  const openSchedule = () => { if (requireContent()) setScheduling(true) }
+  // A Cloud Function/cron flips `distributed` when the time arrives; if the
+  // chosen time is already past, it distributes immediately.
+  const confirmSchedule = (ts) => { setScheduling(false); onSave({ ...t, distributed: ts <= Date.now(), scheduledFor: ts }) }
 
   return (
     <div>
@@ -168,10 +171,68 @@ function Builder({ task, onCancel, onSave }) {
       </div>
 
       <div className="divider" />
+      {err && <div className="hostile mono" style={{ fontSize: 12, marginBottom: 10 }}>{err}</div>}
+      {!ready && (
+        <div className="mono dim" style={{ fontSize: 11, marginBottom: 10 }}>
+          Add a title and at least one question to enable distribution.
+        </div>
+      )}
       <div className="row wrap" style={{ gap: 10 }}>
-        <button onClick={() => finalise('draft')}>Save draft</button>
-        <button className="primary" onClick={() => finalise('now')}>Distribute now</button>
-        <button onClick={() => finalise('schedule')}>Schedule distribution</button>
+        <button onClick={saveDraft}>Save draft</button>
+        <button className="primary" onClick={distributeNow} disabled={!ready}>Distribute now</button>
+        <button onClick={openSchedule} disabled={!ready}>Schedule distribution</button>
+      </div>
+
+      {scheduling && <SchedulePicker onCancel={() => setScheduling(false)} onConfirm={confirmSchedule} />}
+    </div>
+  )
+}
+
+// Clean in-app scheduler: a date field plus hour/minute selects (no free-text
+// prompt, no raw datetime box). Shows a live preview of the chosen moment.
+function SchedulePicker({ onCancel, onConfirm }) {
+  const pad = (n) => String(n).padStart(2, '0')
+  const now = new Date()
+  const [date, setDate] = useState(`${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`)
+  const [hour, setHour] = useState(pad(now.getHours()))
+  const [minute, setMinute] = useState('00')
+
+  const ts = Date.parse(`${date}T${hour}:${minute}:00`)
+  const valid = !Number.isNaN(ts)
+  const past = valid && ts <= Date.now()
+
+  return (
+    <div onClick={onCancel} style={{ position: 'fixed', inset: 0, zIndex: 950, background: 'rgba(2,4,9,0.85)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+      <div className="panel panel-pad col" onClick={(e) => e.stopPropagation()} style={{ width: 360, maxWidth: '100%', gap: 12 }}>
+        <div className="row between center">
+          <h2 className="accent" style={{ margin: 0, fontSize: 17 }}>SCHEDULE DISTRIBUTION</h2>
+          <button className="ghost" onClick={onCancel} style={{ padding: '4px 10px' }}>✕</button>
+        </div>
+
+        <Field label="Date"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></Field>
+        <div className="row" style={{ gap: 10 }}>
+          <Field label="Hour">
+            <select value={hour} onChange={(e) => setHour(e.target.value)}>
+              {Array.from({ length: 24 }, (_, h) => pad(h)).map((h) => <option key={h} value={h}>{h}</option>)}
+            </select>
+          </Field>
+          <Field label="Minute">
+            <select value={minute} onChange={(e) => setMinute(e.target.value)}>
+              {Array.from({ length: 12 }, (_, m) => pad(m * 5)).map((m) => <option key={m} value={m}>{m}</option>)}
+            </select>
+          </Field>
+        </div>
+
+        <div className="mono dim" style={{ fontSize: 11 }}>
+          {valid ? <>Distributes: <span className="accent">{new Date(ts).toLocaleString()}</span></> : 'Pick a valid date.'}
+          {past && <span className="warn"> · time is in the past — will distribute immediately.</span>}
+        </div>
+
+        <div className="row between" style={{ marginTop: 4 }}>
+          <button className="ghost" onClick={onCancel}>Cancel</button>
+          <button className="primary" disabled={!valid} onClick={() => onConfirm(ts)}>Confirm schedule</button>
+        </div>
       </div>
     </div>
   )

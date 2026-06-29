@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useData } from '../context/DataContext'
 import { notifyAdmin } from '../lib/notify'
+import { classify } from '../lib/errors'
 
 // Help / support form. Submissions land in Operations Centre → Help under the
 // chosen category (Support or Account Issue) and optionally email the admin.
@@ -23,8 +24,11 @@ export default function SupportModal({ onClose }) {
         `Category: ${form.category}\nFrom: ${form.name || 'Anonymous'} (${form.contact || 'no contact'})\n\n${form.message}`,
       )
       setDone(true)
-    } catch {
-      setErr('Could not send — check your connection and try again. [ATF-NET-01]')
+    } catch (e) {
+      // Surface the real reason (e.g. a permission-denied means RHQ still needs
+      // to publish the database rules) rather than always blaming the network.
+      const info = classify(e)
+      setErr(`${info.message} [${info.code}]`)
     } finally {
       setBusy(false)
     }

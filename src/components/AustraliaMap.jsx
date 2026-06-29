@@ -138,7 +138,9 @@ export default function AustraliaMap({
           const a = centroid(from.coords)
           const b = centroid(to.coords)
           const planned = ar.type === 'planned'
-          const color = planned ? '#4ea8ff' : '#36e0c0'
+          // Line colour follows the occupant of the zone being advanced FROM, so
+          // an Alpha-held zone pushing outward draws an Alpha-blue line.
+          const color = colorFor(from.occupant)
           return (
             <Fragment key={ar.id}>
               <Polyline
