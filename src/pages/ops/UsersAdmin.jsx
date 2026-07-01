@@ -23,6 +23,7 @@ export default function UsersAdmin() {
   const [query, setQuery] = useState('')
   const [editing, setEditing] = useState(null)
   const [importInfo, setImportInfo] = useState(null)
+  const [selected, setSelected] = useState(() => new Set())
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -47,6 +48,35 @@ export default function UsersAdmin() {
     save(roster.filter((x) => x._id !== id))
     push('Member removed')
     audit('Removed member', `${r?.name || 'Unnamed'} (ID ${r?.idNumber || '—'})`)
+  }
+
+  // ---- bulk selection ----
+  const visible = filtered.slice(0, 300)
+  const allVisibleSelected = visible.length > 0 && visible.every((r) => selected.has(r._id))
+  const toggleOne = (id) =>
+    setSelected((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
+  const toggleAllVisible = () =>
+    setSelected((s) => {
+      const n = new Set(s)
+      const flip = allVisibleSelected ? (id) => n.delete(id) : (id) => n.add(id)
+      visible.forEach((r) => flip(r._id))
+      return n
+    })
+  const clearSelection = () => setSelected(new Set())
+  const removeSelected = async () => {
+    const rows = roster.filter((r) => selected.has(r._id))
+    if (!rows.length) return
+    const ok = await confirm({
+      title: 'Remove members',
+      message: `Remove ${rows.length} selected member${rows.length === 1 ? '' : 's'} from the roster? This cannot be undone.`,
+      danger: true,
+      confirmLabel: `Remove ${rows.length}`,
+    })
+    if (!ok) return
+    save(roster.filter((r) => !selected.has(r._id)))
+    push(`Removed ${rows.length} member${rows.length === 1 ? '' : 's'}`)
+    audit('Bulk removed members', `${rows.length} removed`)
+    clearSelection()
   }
 
   const onSpreadsheet = async (e) => {
@@ -117,19 +147,35 @@ export default function UsersAdmin() {
         style={{ marginBottom: 14 }}
       />
 
+      {selected.size > 0 && (
+        <div className="panel panel-pad row between center wrap" style={{ marginBottom: 12, borderColor: 'var(--accent)', gap: 10 }}>
+          <span className="accent mono">{selected.size} selected</span>
+          <div className="row" style={{ gap: 8 }}>
+            <button className="ghost" onClick={clearSelection}>Clear selection</button>
+            <button className="danger" onClick={removeSelected}>Remove selected</button>
+          </div>
+        </div>
+      )}
+
       <div className="panel" style={{ overflow: 'hidden' }}>
         <div className="table-scroll">
-        <table style={{ width: '100%', minWidth: 680, borderCollapse: 'collapse', fontSize: 13 }}>
+        <table style={{ width: '100%', minWidth: 720, borderCollapse: 'collapse', fontSize: 13 }}>
           <thead>
             <tr style={{ background: 'rgba(58,71,148,0.25)', fontFamily: 'JetBrains Mono', fontSize: 10, letterSpacing: 1 }}>
+              <th style={{ padding: '10px 12px', width: 34 }}>
+                <input type="checkbox" aria-label="Select all shown" checked={allVisibleSelected} onChange={toggleAllVisible} style={{ width: 'auto' }} />
+              </th>
               {['ID', 'NAME', 'COMPANY', 'ROLE', 'EMAIL', 'TEMP PW', ''].map((h) => (
                 <th key={h} style={{ textAlign: 'left', padding: '10px 12px', color: 'var(--text-dim)' }}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {filtered.slice(0, 300).map((r) => (
-              <tr key={r._id || r.idNumber} style={{ borderTop: '1px solid var(--line)' }}>
+            {visible.map((r) => (
+              <tr key={r._id || r.idNumber} style={{ borderTop: '1px solid var(--line)', background: selected.has(r._id) ? 'rgba(54,224,192,0.08)' : 'transparent' }}>
+                <td style={cell}>
+                  <input type="checkbox" aria-label={`Select ${r.name || r.idNumber}`} checked={selected.has(r._id)} onChange={() => toggleOne(r._id)} style={{ width: 'auto' }} />
+                </td>
                 <td style={cell} className="mono">{r.idNumber}</td>
                 <td style={cell}>{r.name}</td>
                 <td style={cell}>{PHONETIC[r.company] || '—'} {r.company && `(${r.company})`}</td>

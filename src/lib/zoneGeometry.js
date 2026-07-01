@@ -67,6 +67,59 @@ export function zoneCenter(zone) {
   return mp ? mpCenter(mp) : null
 }
 
+// Ray-cast point-in-polygon over a MultiPolygon's outer rings. pt is [x, y].
+function pointInMP(pt, mp) {
+  for (const poly of mp) {
+    const ring = poly[0]
+    let inside = false
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const xi = ring[i][0], yi = ring[i][1], xj = ring[j][0], yj = ring[j][1]
+      if (((yi > pt[1]) !== (yj > pt[1])) && (pt[0] < ((xj - xi) * (pt[1] - yi)) / (yj - yi) + xi)) {
+        inside = !inside
+      }
+    }
+    if (inside) return true
+  }
+  return false
+}
+
+// Endpoints for a movement line so it hugs the shared border rather than running
+// to the target's centre. Walking the centre-to-centre line, we find where it
+// leaves the origin zone and where it enters the target, then place the start
+// just inside the origin near that border and the end just across it into the
+// target. Different attackers cross at different points, so the lines fan out.
+// Returns { a, b } as [lat, lng], or null.
+export function arrowEndpoints(fromZone, toZone) {
+  const fromMP = zoneBaseMP(fromZone)
+  const toMP = zoneBaseMP(toZone)
+  if (!fromMP || !toMP) return null
+  const ca = mpCenter(fromMP) // [lat, lng]
+  const cb = mpCenter(toMP)
+  const A = [ca[1], ca[0]] // [x, y] = [lng, lat]
+  const B = [cb[1], cb[0]]
+  const at = (t) => [A[0] + (B[0] - A[0]) * t, A[1] + (B[1] - A[1]) * t]
+
+  const N = 80
+  let exitFrom = null // last t still inside the origin zone
+  let entryTo = null // first t inside the target zone
+  for (let i = 0; i <= N; i++) {
+    const t = i / N
+    const p = at(t)
+    if (pointInMP(p, fromMP)) exitFrom = t
+    if (entryTo === null && pointInMP(p, toMP)) entryTo = t
+  }
+  const border = entryTo !== null ? entryTo : exitFrom !== null ? exitFrom : 0.5
+  const fromEdge = exitFrom !== null ? exitFrom : border
+
+  const dist = Math.hypot(B[0] - A[0], B[1] - A[1]) || 1
+  // Offset ~18% of the run, but never more than ~0.9° so long attacks still end
+  // near the border instead of deep inside the target.
+  const dFrac = Math.min(0.18, 0.9 / dist)
+  const o = at(Math.max(0, fromEdge - dFrac)) // just inside the origin
+  const e = at(Math.min(1, border + dFrac)) // just across into the target
+  return { a: [o[1], o[0]], b: [e[1], e[0]] }
+}
+
 // Resolve all zones into render geometry:
 //   - fills:   one entry per zone, with overlaps removed so a smaller zone of a
 //              DIFFERENT occupant "punches" the larger one (containment → hole).

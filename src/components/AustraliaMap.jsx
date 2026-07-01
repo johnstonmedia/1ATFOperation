@@ -2,7 +2,7 @@ import { Fragment, useMemo, useRef } from 'react'
 import { MapContainer, TileLayer, Polygon, Polyline, Marker, Tooltip } from 'react-leaflet'
 import L from 'leaflet'
 import { COMPANIES } from '../firebase/seed'
-import { composeZones, mpToLatLng, zoneBaseMP } from '../lib/zoneGeometry'
+import { composeZones, mpToLatLng, zoneBaseMP, arrowEndpoints } from '../lib/zoneGeometry'
 
 // Bounds clamp the viewport to the Australian continent.
 const AU_BOUNDS = [
@@ -70,8 +70,22 @@ export default function AustraliaMap({
   // Resolve zones into render geometry: overlaps removed, same-occupant seams
   // dissolved, plus centres for arrow endpoints. Memoised so dragging only pays
   // the cost when geometry actually changes.
-  const { fills, strokes, centers } = useMemo(() => composeZones(zones), [zones])
-  const centerOf = (z) => centers[z.id] || null
+  const { fills, strokes } = useMemo(() => composeZones(zones), [zones])
+
+  // Border-hugging endpoints for each movement line (memoised — geometry only
+  // changes when zones or arrows change).
+  const arrowSegs = useMemo(() => {
+    const byId = (id) => zones.find((z) => z.id === id)
+    return arrows
+      .map((ar) => {
+        const from = byId(ar.from)
+        const to = byId(ar.to)
+        if (!from || !to) return null
+        const seg = arrowEndpoints(from, to)
+        return seg ? { ar, from, seg } : null
+      })
+      .filter(Boolean)
+  }, [arrows, zones])
 
   return (
     <div
@@ -143,14 +157,10 @@ export default function AustraliaMap({
           />
         ))}
 
-        {/* Movement arrows */}
-        {arrows.map((ar) => {
-          const from = zoneById(ar.from)
-          const to = zoneById(ar.to)
-          if (!from || !to) return null
-          const a = centerOf(from)
-          const b = centerOf(to)
-          if (!a || !b) return null
+        {/* Movement arrows — each hugs the border it crosses so many attackers on
+            one target fan out instead of converging on a single point. */}
+        {arrowSegs.map(({ ar, from, seg }) => {
+          const { a, b } = seg
           const planned = ar.type === 'planned'
           // Line colour follows the occupant of the zone being advanced FROM, so
           // an Alpha-held zone pushing outward draws an Alpha-blue line.
@@ -183,7 +193,7 @@ export default function AustraliaMap({
               />
             )
             if (z.shape === 'state' || !Array.isArray(z.coords)) return highlight
-            const center = centerOf(z) || centroid(z.coords)
+            const center = centroid(z.coords)
             return (
               <>
                 {highlight}
