@@ -185,7 +185,9 @@ export function AuthProvider({ children }) {
           throw appError('BAD_TEMP', 'Invalid temporary password.')
         }
         const profile = rec ? profileFromRoster(id, rec) : { idNumber: id, ...ADMIN_PROFILE, linked: true }
-        await setDoc(doc(db, 'users', cred.user.uid), profile)
+        // Record when the account was activated so RHQ can tell a used temp
+        // password from an unused one (the temp is consumed once registered).
+        await setDoc(doc(db, 'users', cred.user.uid), { ...profile, registeredAt: Date.now() })
         if (id === ADMIN_ID) await ensureAdminRoster(id)
         setUser({ uid: cred.user.uid, ...profile })
         return

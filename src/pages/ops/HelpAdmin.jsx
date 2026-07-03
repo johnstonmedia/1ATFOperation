@@ -96,7 +96,7 @@ function ResetRequests({ resets, state, setResets, updateSlice }) {
       const matched = (state.roster || []).some((r) => String(r.idNumber).trim() === String(req.idNumber).trim())
       if (matched) {
         updateSlice('roster', state.roster.map((r) =>
-          String(r.idNumber).trim() === String(req.idNumber).trim() ? { ...r, tempPassword: newTemp } : r,
+          String(r.idNumber).trim() === String(req.idNumber).trim() ? { ...r, tempPassword: newTemp, tempIssuedAt: Date.now() } : r,
         ))
       }
       setResets(resets.map((x) => (x.id === req.id

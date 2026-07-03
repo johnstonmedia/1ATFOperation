@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import * as XLSX from 'xlsx'
 import { useData } from '../../context/DataContext'
 import { useConfirm } from '../../context/ConfirmContext'
@@ -9,6 +9,7 @@ import { OpsHeader } from './OperationsCentre'
 import { Field } from './NarrativeEditor'
 import { COMPANIES, ROLES, PHONETIC } from '../../firebase/seed'
 import { genTempPassword } from '../../lib/passwords'
+import { FIREBASE_ENABLED, db } from '../../firebase/config'
 
 // Roster management. Import a spreadsheet of name / ID / company / email, then
 // the site issues each member a random temporary password (downloadable). A
@@ -24,6 +25,39 @@ export default function UsersAdmin() {
   const [editing, setEditing] = useState(null)
   const [importInfo, setImportInfo] = useState(null)
   const [selected, setSelected] = useState(() => new Set())
+  // idNumber -> latest registration time, read from the users collection (RHQ
+  // only). Lets us tell which issued temp passwords have already been consumed.
+  const [registered, setRegistered] = useState({})
+
+  useEffect(() => {
+    if (!FIREBASE_ENABLED) return
+    let live = true
+    ;(async () => {
+      try {
+        const { collection, getDocs } = await import('firebase/firestore')
+        const snap = await getDocs(collection(db, 'users'))
+        const map = {}
+        snap.forEach((d) => {
+          const u = d.data()
+          const id = String(u.idNumber || '').trim()
+          if (!id) return
+          const ts = u.registeredAt || 1 // legacy accounts: mark as registered
+          if (!map[id] || ts > map[id]) map[id] = ts
+        })
+        if (live) setRegistered(map)
+      } catch {
+        /* non-RHQ or offline — leave empty (temps just show normally) */
+      }
+    })()
+    return () => { live = false }
+  }, [roster])
+
+  // A temp password is "used" once the member has registered at or after the
+  // time this temp was issued. Regenerating (new tempIssuedAt) reveals it again.
+  const isUsed = (r) => {
+    const reg = registered[String(r.idNumber).trim()]
+    return Boolean(reg) && reg >= (r.tempIssuedAt || 0)
+  }
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -103,8 +137,9 @@ export default function UsersAdmin() {
   }
 
   // Download the roster with the issued temporary passwords for distribution.
+  // Only unused temps are exported — consumed ones are worthless.
   const downloadTempPasswords = () => {
-    const data = roster.map((r) => ({
+    const data = roster.filter((r) => r.tempPassword && !isUsed(r)).map((r) => ({
       Name: r.name,
       'ID Number': r.idNumber,
       Email: r.email,
@@ -117,7 +152,7 @@ export default function UsersAdmin() {
     XLSX.writeFile(wb, '1ATF-temporary-passwords.xlsx')
   }
 
-  const hasTemps = roster.some((r) => r.tempPassword)
+  const hasTemps = roster.some((r) => r.tempPassword && !isUsed(r))
 
   return (
     <div>
@@ -181,7 +216,11 @@ export default function UsersAdmin() {
                 <td style={cell}>{PHONETIC[r.company] || '—'} {r.company && `(${r.company})`}</td>
                 <td style={cell}><span className={r.role === 'RHQ' ? 'tag hostile' : 'tag'}>{r.role}</span></td>
                 <td style={cell} className="mono dim">{r.email}</td>
-                <td style={cell} className="mono accent">{r.tempPassword || '—'}</td>
+                <td style={cell} className="mono">
+                  {isUsed(r)
+                    ? <span className="dim" title="This temporary password has been used to activate the account">USED</span>
+                    : <span className="accent">{r.tempPassword || '—'}</span>}
+                </td>
                 <td style={cell}><button className="ghost" onClick={() => setEditing(r)} style={{ padding: '4px 10px' }}>Edit</button></td>
               </tr>
             ))}
@@ -192,7 +231,7 @@ export default function UsersAdmin() {
         {filtered.length > 300 && <div className="mono dim panel-pad">Showing first 300 of {filtered.length}. Refine your search.</div>}
       </div>
 
-      {editing && <UserModal rec={editing} onClose={() => setEditing(null)} onSave={upsert} onDelete={remove} />}
+      {editing && <UserModal rec={editing} used={isUsed(editing)} onClose={() => setEditing(null)} onSave={upsert} onDelete={remove} />}
     </div>
   )
 }
@@ -200,10 +239,10 @@ export default function UsersAdmin() {
 const cell = { padding: '9px 12px' }
 
 function newUser(makeId) {
-  return { _id: makeId(), name: '', idNumber: '', email: '', company: 'A', role: 'General', rank: '', tempPassword: genTempPassword() }
+  return { _id: makeId(), name: '', idNumber: '', email: '', company: 'A', role: 'General', rank: '', tempPassword: genTempPassword(), tempIssuedAt: Date.now() }
 }
 
-function UserModal({ rec, onClose, onSave, onDelete }) {
+function UserModal({ rec, onClose, onSave, onDelete, used }) {
   const [u, setU] = useState(rec)
   const confirm = useConfirm()
   const dialogRef = useDialog(onClose)
@@ -240,10 +279,15 @@ function UserModal({ rec, onClose, onSave, onDelete }) {
         </div>
         <Field label="Temporary password">
           <div className="row" style={{ gap: 8 }}>
-            <input className="mono" value={u.tempPassword || ''} onChange={set('tempPassword')} />
-            <button className="ghost" type="button" onClick={() => setU({ ...u, tempPassword: genTempPassword() })}>Regenerate</button>
+            <input className="mono" value={u.tempPassword || ''} onChange={(e) => setU({ ...u, tempPassword: e.target.value, tempIssuedAt: Date.now() })} />
+            <button className="ghost" type="button" onClick={() => setU({ ...u, tempPassword: genTempPassword(), tempIssuedAt: Date.now() })}>Regenerate</button>
           </div>
         </Field>
+        {used && (
+          <div className="warn mono" style={{ fontSize: 10 }}>
+            This temporary password has already been used to activate the account. Regenerate to issue a fresh one (and reset the member’s password from Help if they’re locked out).
+          </div>
+        )}
         <div className="mono dim" style={{ fontSize: 10 }}>
           The member registers with their ID + this temporary password, then sets their own password.
         </div>
@@ -300,5 +344,6 @@ function mapRow(row, makeId) {
     role: 'General',
     rank: '',
     tempPassword: genTempPassword(),
+    tempIssuedAt: Date.now(),
   }
 }
