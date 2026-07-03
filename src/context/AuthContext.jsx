@@ -3,6 +3,25 @@ import { FIREBASE_ENABLED, auth, db } from '../firebase/config'
 import { useData } from './DataContext'
 import { getAuthVersion } from '../lib/store'
 import { appError } from '../lib/errors'
+import { COMPANIES, PHONETIC } from '../firebase/seed'
+
+// RHQ "view as" emulation. A new tab opened with ?emulate=<company|GENERAL>
+// overlays a synthetic General member on top of the real (RHQ) session, so RHQ
+// can see exactly what that member sees. Reads still run under the real session.
+const EMU_KEY = '1atf-emulate'
+function emulatedUser(code) {
+  const c = String(code || '').toUpperCase()
+  const isCompany = COMPANIES.some((x) => x.letter === c)
+  const company = isCompany ? c : ''
+  return {
+    idNumber: 'EMULATED',
+    name: company ? `Emulated ${PHONETIC[company]} member` : 'Emulated General member',
+    company,
+    role: 'General',
+    rank: '',
+    emulated: true,
+  }
+}
 
 // Firebase reports both "no such account" and "wrong password" as these codes
 // (email-enumeration protection). Only these fall through to the claim path;
@@ -228,7 +247,39 @@ export function AuthProvider({ children }) {
     }
   }, [])
 
-  const value = { user, ready, signIn, register, forgotPassword, logout, isRHQ: user?.role === 'RHQ' }
+  // Emulation state (survives navigation within the tab via sessionStorage).
+  const [emulation, setEmulation] = useState(() => {
+    try {
+      const fromUrl = new URLSearchParams(window.location.search).get('emulate')
+      if (fromUrl) sessionStorage.setItem(EMU_KEY, fromUrl)
+      return sessionStorage.getItem(EMU_KEY) || null
+    } catch {
+      return null
+    }
+  })
+  const exitEmulation = useCallback(() => {
+    try { sessionStorage.removeItem(EMU_KEY) } catch { /* ignore */ }
+    setEmulation(null)
+  }, [])
+
+  // Only a real RHQ session may emulate; otherwise the overlay is ignored.
+  const realIsRHQ = user?.role === 'RHQ'
+  const emulated = emulation && realIsRHQ ? emulatedUser(emulation) : null
+  const effUser = emulated || user
+
+  const value = {
+    user: effUser,
+    realUser: user,
+    emulating: Boolean(emulated),
+    exitEmulation,
+    ready,
+    signIn,
+    register,
+    forgotPassword,
+    logout,
+    // While emulating, the app must behave as a General member (no RHQ powers).
+    isRHQ: !emulated && effUser?.role === 'RHQ',
+  }
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 

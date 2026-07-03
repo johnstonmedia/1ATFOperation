@@ -3,7 +3,7 @@ import { useData } from '../../context/DataContext'
 import { useConfirm } from '../../context/ConfirmContext'
 import { useToast } from '../../context/ToastContext'
 import { useAudit } from '../../hooks/useAudit'
-import { useDialog } from '../../hooks/useDialog'
+import SchedulePicker from '../../components/SchedulePicker'
 import { OpsHeader } from './OperationsCentre'
 import { Field } from './NarrativeEditor'
 import { COMPANIES } from '../../firebase/seed'
@@ -204,58 +204,7 @@ function Builder({ task, onCancel, onSave }) {
         <button onClick={openSchedule} disabled={!ready}>Schedule distribution</button>
       </div>
 
-      {scheduling && <SchedulePicker onCancel={() => setScheduling(false)} onConfirm={confirmSchedule} />}
-    </div>
-  )
-}
-
-// Clean in-app scheduler: a date field plus hour/minute selects (no free-text
-// prompt, no raw datetime box). Shows a live preview of the chosen moment.
-function SchedulePicker({ onCancel, onConfirm }) {
-  const dialogRef = useDialog(onCancel)
-  const pad = (n) => String(n).padStart(2, '0')
-  const now = new Date()
-  const [date, setDate] = useState(`${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`)
-  const [hour, setHour] = useState(pad(now.getHours()))
-  const [minute, setMinute] = useState('00')
-
-  const ts = Date.parse(`${date}T${hour}:${minute}:00`)
-  const valid = !Number.isNaN(ts)
-  const past = valid && ts <= Date.now()
-
-  return (
-    <div onClick={onCancel} style={{ position: 'fixed', inset: 0, zIndex: 950, background: 'rgba(2,4,9,0.85)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-      <div ref={dialogRef} className="panel panel-pad col" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Schedule distribution" style={{ width: 360, maxWidth: '100%', gap: 12 }}>
-        <div className="row between center">
-          <h2 className="accent" style={{ margin: 0, fontSize: 17 }}>SCHEDULE DISTRIBUTION</h2>
-          <button className="ghost" onClick={onCancel} aria-label="Close" style={{ padding: '4px 10px' }}>✕</button>
-        </div>
-
-        <Field label="Date"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></Field>
-        <div className="row" style={{ gap: 10 }}>
-          <Field label="Hour">
-            <select value={hour} onChange={(e) => setHour(e.target.value)}>
-              {Array.from({ length: 24 }, (_, h) => pad(h)).map((h) => <option key={h} value={h}>{h}</option>)}
-            </select>
-          </Field>
-          <Field label="Minute">
-            <select value={minute} onChange={(e) => setMinute(e.target.value)}>
-              {Array.from({ length: 12 }, (_, m) => pad(m * 5)).map((m) => <option key={m} value={m}>{m}</option>)}
-            </select>
-          </Field>
-        </div>
-
-        <div className="mono dim" style={{ fontSize: 11 }}>
-          {valid ? <>Distributes: <span className="accent">{new Date(ts).toLocaleString()}</span></> : 'Pick a valid date.'}
-          {past && <span className="warn"> · time is in the past — will distribute immediately.</span>}
-        </div>
-
-        <div className="row between" style={{ marginTop: 4 }}>
-          <button className="ghost" onClick={onCancel}>Cancel</button>
-          <button className="primary" disabled={!valid} onClick={() => onConfirm(ts)}>Confirm schedule</button>
-        </div>
-      </div>
+      {scheduling && <SchedulePicker title="SCHEDULE DISTRIBUTION" verb="distribute" onCancel={() => setScheduling(false)} onConfirm={confirmSchedule} />}
     </div>
   )
 }

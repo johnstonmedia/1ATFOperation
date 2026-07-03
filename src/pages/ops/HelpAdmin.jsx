@@ -60,7 +60,7 @@ function Messages({ list, all, onChange, empty }) {
       {list.sort((a, b) => (b.ts || 0) - (a.ts || 0)).map((m) => (
         <div key={m.id} className="panel panel-pad col" style={{ gap: 6, opacity: m.status === 'resolved' ? 0.55 : 1 }}>
           <div className="row between center wrap" style={{ gap: 8 }}>
-            <strong>{m.name || 'Anonymous'} <span className="mono dim" style={{ fontSize: 11 }}>{m.contact}</span></strong>
+            <strong>{m.name || 'Anonymous'} <span className="mono dim" style={{ fontSize: 11 }}>{m.idNumber ? `ID ${m.idNumber}` : m.contact}</span></strong>
             <div className="row center" style={{ gap: 6 }}>
               {m.code && <span className="tag hostile">{m.code}</span>}
               {m.auto && <span className="tag">AUTO</span>}

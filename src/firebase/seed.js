@@ -144,6 +144,16 @@ export const DEFAULT_CLASSIFIED = {
   motto: 'One Unit, One Mission.',
 }
 
+// Optional home-page video. `draft` is what RHQ is editing; `live` is what the
+// public sees (null = nothing published, so the section is hidden entirely);
+// `publishAt` is when `live` becomes visible (immediate deploy = now, scheduled
+// = a future time, evaluated on load since there is no server cron).
+export const DEFAULT_VIDEO = {
+  draft: { url: '', title: '', caption: '' },
+  live: null,
+  publishAt: null,
+}
+
 export const DEFAULT_BRANDING = {
   // Prefers your real PNG if present in public/; Logo falls back to the SVG.
   logoUrl: import.meta.env.BASE_URL + 'scu-logo.png',

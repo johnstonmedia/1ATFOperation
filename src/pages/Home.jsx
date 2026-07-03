@@ -4,6 +4,7 @@ import { useData } from '../context/DataContext'
 import { useAuth } from '../context/AuthContext'
 import { COMPANIES } from '../firebase/seed'
 import { formatUpdated } from '../components/LastUpdated'
+import VideoEmbed from '../components/VideoEmbed'
 
 export default function Home() {
   const { state } = useData()
@@ -73,6 +74,23 @@ export default function Home() {
           {tab === '1ATF' ? <OneATFBrief n={n} authed={Boolean(user)} /> : <MeridianBrief n={n} />}
         </div>
       </div>
+
+      <HomeVideo video={state.video} />
+    </div>
+  )
+}
+
+// Public video section, shown below the map only when RHQ has published one and
+// its scheduled publish time has arrived. Nothing renders otherwise — no header.
+function HomeVideo({ video }) {
+  const live = video?.live
+  const due = live && video.publishAt && Date.now() >= video.publishAt
+  if (!due || !live.url) return null
+  return (
+    <div className="panel panel-pad" style={{ marginTop: 20 }}>
+      {live.title && <h2 className="accent" style={{ marginTop: 0, fontSize: 20 }}>{live.title}</h2>}
+      <VideoEmbed url={live.url} />
+      {live.caption && <p className="mono dim" style={{ fontSize: 12, marginTop: 10, marginBottom: 0 }}>{live.caption}</p>}
     </div>
   )
 }

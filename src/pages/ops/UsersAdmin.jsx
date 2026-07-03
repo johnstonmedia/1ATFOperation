@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from 'react'
 import * as XLSX from 'xlsx'
 import { useData } from '../../context/DataContext'
+import { useAuth } from '../../context/AuthContext'
 import { useConfirm } from '../../context/ConfirmContext'
 import { useToast } from '../../context/ToastContext'
 import { useAudit } from '../../hooks/useAudit'
@@ -17,10 +18,25 @@ import { FIREBASE_ENABLED, db } from '../../firebase/config'
 // sets their own password. Role (RHQ / General) is chosen here, not imported.
 export default function UsersAdmin() {
   const { state, updateSlice, replaceRoster, makeId } = useData()
+  const { realUser } = useAuth()
   const confirm = useConfirm()
   const { push } = useToast()
   const audit = useAudit()
   const roster = state.roster
+
+  // Self-heal: make sure the signed-in RHQ (incl. the bootstrap admin 190990)
+  // always appears in the roster, even if the account was created before it was
+  // written or the write was previously blocked.
+  useEffect(() => {
+    const me = realUser
+    if (!me?.idNumber || me.role !== 'RHQ') return
+    const id = String(me.idNumber).trim()
+    if (roster.some((r) => String(r.idNumber).trim() === id)) return
+    updateSlice('roster', [
+      ...roster,
+      { _id: `self-${id}`, idNumber: id, name: me.name || 'RHQ', email: me.email || '', company: me.company || 'S', role: 'RHQ', rank: me.rank || '' },
+    ])
+  }, [realUser, roster, updateSlice])
   const [query, setQuery] = useState('')
   const [editing, setEditing] = useState(null)
   const [importInfo, setImportInfo] = useState(null)
@@ -162,6 +178,7 @@ export default function UsersAdmin() {
           <input type="file" accept=".xlsx,.xls,.csv" onChange={onSpreadsheet} style={{ display: 'none' }} />
         </label>
         {hasTemps && <button onClick={downloadTempPasswords}>Download temp passwords</button>}
+        <EmulateMenu />
         <button className="primary" onClick={() => setEditing(newUser(makeId))}>+ New user</button>
       </OpsHeader>
 
@@ -237,6 +254,32 @@ export default function UsersAdmin() {
 }
 
 const cell = { padding: '9px 12px' }
+
+// RHQ-only: open a new tab that previews what a given member would see.
+function EmulateMenu() {
+  const [open, setOpen] = useState(false)
+  const go = (code) => {
+    const url = `${location.origin}${import.meta.env.BASE_URL}?emulate=${encodeURIComponent(code)}`
+    window.open(url, '_blank', 'noopener')
+    setOpen(false)
+  }
+  const opts = [['GENERAL', 'General (no company)'], ...COMPANIES.map((c) => [c.letter, `${c.name} (${c.letter})`])]
+  return (
+    <div style={{ position: 'relative' }}>
+      <button className="ghost" onClick={() => setOpen((o) => !o)}>Emulate user ▾</button>
+      {open && (
+        <div className="panel" onMouseLeave={() => setOpen(false)} style={{ position: 'absolute', right: 0, top: '110%', zIndex: 60, minWidth: 210, padding: 6 }}>
+          <div className="mono dim" style={{ fontSize: 10, letterSpacing: 1, padding: '4px 8px' }}>OPEN MEMBER VIEW (NEW TAB)</div>
+          {opts.map(([code, label]) => (
+            <button key={code} className="ghost" onClick={() => go(code)} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 8px', textTransform: 'none', letterSpacing: 0 }}>
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
 
 function newUser(makeId) {
   return { _id: makeId(), name: '', idNumber: '', email: '', company: 'A', role: 'General', rank: '', tempPassword: genTempPassword(), tempIssuedAt: Date.now() }

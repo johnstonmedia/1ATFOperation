@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useData } from '../context/DataContext'
+import { useAuth } from '../context/AuthContext'
 import { useDialog } from '../hooks/useDialog'
 import { notifyAdmin } from '../lib/notify'
 import { classify } from '../lib/errors'
@@ -8,7 +9,10 @@ import { classify } from '../lib/errors'
 // chosen category (Support or Account Issue) and optionally email the admin.
 export default function SupportModal({ onClose }) {
   const { append } = useData()
-  const [form, setForm] = useState({ category: 'Support', name: '', contact: '', message: '' })
+  const { user } = useAuth()
+  // A signed-in member's ID is taken automatically and can't be changed.
+  const lockedId = user?.idNumber && user.idNumber !== 'EMULATED' ? String(user.idNumber) : ''
+  const [form, setForm] = useState({ category: 'Support', name: user?.name || '', idNumber: lockedId, message: '' })
   const [done, setDone] = useState(false)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
@@ -18,12 +22,14 @@ export default function SupportModal({ onClose }) {
   const submit = async (e) => {
     e.preventDefault()
     setErr('')
+    const id = String(form.idNumber || '').trim()
+    if (!id) { setErr('Your ID number is required. [ATF-INP-01]'); return }
     setBusy(true)
     try {
-      await append('support', { ...form, ts: Date.now(), status: 'open' })
+      await append('support', { category: form.category, name: form.name, idNumber: id, message: form.message, ts: Date.now(), status: 'open' })
       notifyAdmin(
         `1ATF ${form.category} request`,
-        `Category: ${form.category}\nFrom: ${form.name || 'Anonymous'} (${form.contact || 'no contact'})\n\n${form.message}`,
+        `Category: ${form.category}\nFrom: ${form.name || 'Anonymous'} (ID ${id})\n\n${form.message}`,
       )
       setDone(true)
     } catch (e) {
@@ -67,8 +73,17 @@ export default function SupportModal({ onClose }) {
               <input value={form.name} onChange={set('name')} />
             </div>
             <div className="col" style={{ gap: 4 }}>
-              <label>Contact (email or ID, optional)</label>
-              <input value={form.contact} onChange={set('contact')} />
+              <label>ID number (required)</label>
+              <input
+                required
+                value={form.idNumber}
+                onChange={set('idNumber')}
+                readOnly={Boolean(lockedId)}
+                placeholder="e.g. 123456"
+                title={lockedId ? 'Taken from your signed-in account' : undefined}
+                style={lockedId ? { opacity: 0.7, cursor: 'not-allowed' } : undefined}
+              />
+              {lockedId && <span className="mono dim" style={{ fontSize: 10 }}>Taken from your account — you’re signed in.</span>}
             </div>
             <div className="col" style={{ gap: 4 }}>
               <label>Message</label>

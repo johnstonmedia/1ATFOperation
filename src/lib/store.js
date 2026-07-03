@@ -11,13 +11,14 @@ import {
   DEFAULT_CLASSIFIED,
   DEFAULT_BRANDING,
   DEFAULT_COMPANY_PAGES,
+  DEFAULT_VIDEO,
   DEMO_ROSTER,
   DEFAULT_ACTIVITY,
 } from '../firebase/seed'
 
 const LS_KEY = '1atf-state-v1'
 const LS_AUTHIDX = '1atf-authindex'
-const SINGLE_SLICES = ['narrative', 'zones', 'arrows', 'classified', 'branding', 'companyPages']
+const SINGLE_SLICES = ['narrative', 'zones', 'arrows', 'classified', 'branding', 'companyPages', 'video']
 const COLLECTION_SLICES = ['roster', 'tasks', 'activity', 'support', 'resetRequests', 'audit']
 
 export const isContentSlice = (slice) => SINGLE_SLICES.includes(slice)
@@ -29,6 +30,7 @@ const DEFAULT_STATE = {
   classified: DEFAULT_CLASSIFIED,
   branding: DEFAULT_BRANDING,
   companyPages: DEFAULT_COMPANY_PAGES,
+  video: DEFAULT_VIDEO,
   roster: FIREBASE_ENABLED ? [] : DEMO_ROSTER,
   tasks: [],
   activity: FIREBASE_ENABLED ? [] : DEFAULT_ACTIVITY,

@@ -80,11 +80,12 @@ service cloud.firestore {
     // Anyone (incl. signed-out) may file ONE bounded request; RHQ reads/actions.
     match /support/{id} {
       allow create: if request.resource.data.keys()
-                        .hasOnly(['category','name','contact','message','code','auto','ts','status'])
+                        .hasOnly(['category','name','idNumber','contact','message','code','auto','ts','status'])
         && request.resource.data.message is string
         && request.resource.data.message.size() <= 5000
         && strOk(request.resource.data, 'category', 64)
         && strOk(request.resource.data, 'name', 200)
+        && strOk(request.resource.data, 'idNumber', 64)
         && strOk(request.resource.data, 'contact', 200)
         && strOk(request.resource.data, 'code', 32);
       allow read, update, delete: if isRHQ();

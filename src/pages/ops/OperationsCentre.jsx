@@ -6,6 +6,7 @@ import Logo from '../../components/Logo'
 import LastUpdated from '../../components/LastUpdated'
 import NarrativeEditor from './NarrativeEditor'
 import MapEditor from './MapEditor'
+import VideoEditor from './VideoEditor'
 import ClassifiedEditor from './ClassifiedEditor'
 import BrandingEditor from './BrandingEditor'
 import DigitalActivities from './DigitalActivities'
@@ -18,6 +19,7 @@ import LoginModal from '../../components/LoginModal'
 const SECTIONS = [
   { id: 'narrative', label: 'Main Narrative', group: 'CONTENT' },
   { id: 'map', label: 'Operational Map', group: 'CONTENT' },
+  { id: 'video', label: 'Home Video', group: 'CONTENT' },
   { id: 'classified', label: 'Classified Page', group: 'CONTENT' },
   { id: 'branding', label: 'Branding & Assets', group: 'CONTENT' },
   { id: 'activities', label: 'Digital Activities', group: 'TASKING' },
@@ -96,6 +98,7 @@ export default function OperationsCentre() {
       <div className="ops-work">
         {section === 'narrative' && <NarrativeEditor />}
         {section === 'map' && <MapEditor />}
+        {section === 'video' && <VideoEditor />}
         {section === 'classified' && <ClassifiedEditor />}
         {section === 'branding' && <BrandingEditor />}
         {section === 'activities' && <DigitalActivities />}
