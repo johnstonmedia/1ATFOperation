@@ -10,7 +10,10 @@ import { OpsHeader } from './OperationsCentre'
 import { Field } from './NarrativeEditor'
 import { COMPANIES, ROLES, PHONETIC } from '../../firebase/seed'
 import { genTempPassword } from '../../lib/passwords'
+import { getAuthVersion, setAuthVersion } from '../../lib/store'
 import { FIREBASE_ENABLED, db } from '../../firebase/config'
+
+const cleanId = (s) => String(s).trim().toLowerCase().replace(/[^a-z0-9]/g, '')
 
 // Roster management. Import a spreadsheet of name / ID / company / email, then
 // the site issues each member a random temporary password (downloadable). A
@@ -86,12 +89,28 @@ export default function UsersAdmin() {
   }, [roster, query])
 
   const save = (rows) => updateSlice('roster', rows)
-  const upsert = (rec) => {
-    const exists = roster.some((r) => r._id === rec._id)
+  const upsert = async (rec) => {
+    const prev = roster.find((r) => r._id === rec._id)
+    const exists = Boolean(prev)
     save(exists ? roster.map((r) => (r._id === rec._id ? rec : r)) : [...roster, rec])
     setEditing(null)
     push('Member saved')
     audit(exists ? 'Updated member' : 'Added member', `${rec.name || 'Unnamed'} (ID ${rec.idNumber || '—'}, ${rec.role})`)
+    // A re-issued temp password only works if the member's existing login is
+    // invalidated too (bump their auth epoch), so they can register afresh with
+    // the new temp. Only for existing members whose temp actually just changed.
+    const reissued = exists && rec.tempPassword && rec.tempIssuedAt && rec.tempIssuedAt !== prev.tempIssuedAt
+    if (reissued) {
+      try {
+        const idc = cleanId(rec.idNumber)
+        const v = await getAuthVersion(idc)
+        await setAuthVersion(idc, v + 1)
+        audit('Re-issued login', `ID ${rec.idNumber}`)
+        push('Login reset — the member can sign in with the new temporary password')
+      } catch {
+        push('Saved, but could not reset login (publish the database rules)', { type: 'error' })
+      }
+    }
   }
   const remove = (id) => {
     const r = roster.find((x) => x._id === id)
@@ -328,11 +347,12 @@ function UserModal({ rec, onClose, onSave, onDelete, used }) {
         </Field>
         {used && (
           <div className="warn mono" style={{ fontSize: 10 }}>
-            This temporary password has already been used to activate the account. Regenerate to issue a fresh one (and reset the member’s password from Help if they’re locked out).
+            This temporary password has already been used to activate the account.
           </div>
         )}
         <div className="mono dim" style={{ fontSize: 10 }}>
-          The member registers with their ID + this temporary password, then sets their own password.
+          The member signs in via “Log in with temporary password” using their ID + this temp password, then sets their own password.
+          Regenerating and saving for an existing member resets their login so the new temp works (their old password stops working).
         </div>
         <div className="row between" style={{ marginTop: 8 }}>
           <button className="danger ghost" onClick={del}>Delete</button>
