@@ -325,7 +325,7 @@ function UserModal({ rec, onClose, onSave, onDelete, used }) {
       <div ref={dialogRef} className="panel panel-pad col" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={rec.name ? 'Edit user' : 'New user'} style={{ width: 420, maxWidth: '100%' }}>
         <h2 className="accent" style={{ margin: 0, fontSize: 18 }}>{rec.name ? 'Edit User' : 'New User'}</h2>
         <Field label="Name"><input value={u.name} onChange={set('name')} /></Field>
-        <Field label="Service / ID number"><input value={u.idNumber} onChange={set('idNumber')} /></Field>
+        <Field label="Student ID number"><input value={u.idNumber} onChange={set('idNumber')} placeholder="e.g. 183271" /></Field>
         <Field label="Email"><input value={u.email} onChange={set('email')} /></Field>
         <div className="row" style={{ gap: 10 }}>
           <Field label="Company">

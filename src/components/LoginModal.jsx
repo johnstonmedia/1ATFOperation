@@ -21,9 +21,17 @@ export default function LoginModal({ onClose, onAuthed, initialMode = 'login' })
   const [showPw, setShowPw] = useState(false)
   const [capsOn, setCapsOn] = useState(false)
   const [remember, setRemember] = useState(true)
+  const [idHint, setIdHint] = useState('')
 
   const dialogRef = useDialog(onClose)
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value })
+  // Student ID is digits only — strip anything else and flag it.
+  const setId = (e) => {
+    const raw = e.target.value
+    const digits = raw.replace(/\D/g, '')
+    setForm((f) => ({ ...f, idNumber: digits }))
+    setIdHint(raw !== digits ? 'Numbers only.' : '')
+  }
   const go = (m) => { setErr(''); setInfo(''); setMode(m) }
 
   const submit = async (e) => {
@@ -58,8 +66,9 @@ export default function LoginModal({ onClose, onAuthed, initialMode = 'login' })
 
         <form onSubmit={submit} className="col" style={{ marginTop: 16 }}>
           <div className="col" style={{ gap: 4 }}>
-            <label>Service / ID Number</label>
-            <input required value={form.idNumber} onChange={set('idNumber')} placeholder="e.g. 123456" autoComplete="username" />
+            <label>Student ID Number</label>
+            <input required value={form.idNumber} onChange={setId} inputMode="numeric" pattern="[0-9]*" placeholder="e.g. 183271" autoComplete="username" />
+            {idHint && <span className="warn mono" style={{ fontSize: 10 }}>{idHint}</span>}
           </div>
 
           {mode === 'login' && (
@@ -75,9 +84,13 @@ export default function LoginModal({ onClose, onAuthed, initialMode = 'login' })
 
           {mode === 'temp' && (
             <>
+              <div className="mono dim" style={{ fontSize: 11, lineHeight: 1.5 }}>
+                First time here? Enter your Student ID and the temporary password sent to your email, then choose your own password.
+              </div>
               <div className="col" style={{ gap: 4 }}>
-                <label>Temporary Password (issued by RHQ)</label>
-                <input required value={form.tempPassword} onChange={set('tempPassword')} placeholder="From your activation message" />
+                <label>Temporary Password</label>
+                <input required value={form.tempPassword} onChange={set('tempPassword')} placeholder="From your email" />
+                <span className="mono dim" style={{ fontSize: 10 }}>Enter the temporary password sent to your email.</span>
               </div>
               <div className="col" style={{ gap: 4 }}>
                 <label>Choose a New Password</label>

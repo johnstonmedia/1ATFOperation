@@ -62,7 +62,23 @@ export default function Classified() {
         {c.motto}
       </div>
 
-      <div className="row center wrap" style={{ gap: 12, marginTop: 40 }}>
+      {!user && (
+        <div className="panel panel-pad" style={{ marginTop: 34, maxWidth: 560, textAlign: 'left', borderColor: 'var(--accent)' }}>
+          <div className="mono accent" style={{ fontSize: 11, letterSpacing: 3, marginBottom: 12 }}>HOW TO LOG IN</div>
+          <ol className="mono" style={{ margin: 0, paddingLeft: 20, lineHeight: 1.9, fontSize: 13 }}>
+            <li>Click <span className="accent">Continue</span> below.</li>
+            <li>Enter your <span className="accent">Student ID number</span> (e.g. 183271).</li>
+            <li>Find your <span className="accent">temporary password</span> in your email.</li>
+            <li>Enter that temporary password, then choose your own password.</li>
+          </ol>
+          <div className="mono dim" style={{ fontSize: 11, marginTop: 12, lineHeight: 1.5 }}>
+            Already set your password before? Choose <span className="accent">Already registered? Sign in</span>.<br />
+            No email or temporary password? Use <span className="accent">Help &amp; Support</span> below.
+          </div>
+        </div>
+      )}
+
+      <div className="row center wrap" style={{ gap: 12, marginTop: 28 }}>
         {user ? (
           <button className="primary" onClick={() => navigate('/')}>Enter Operational Portal →</button>
         ) : (

@@ -16,8 +16,15 @@ export default function SupportModal({ onClose }) {
   const [done, setDone] = useState(false)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
+  const [idHint, setIdHint] = useState('')
   const dialogRef = useDialog(onClose)
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value })
+  const setId = (e) => {
+    const raw = e.target.value
+    const digits = raw.replace(/\D/g, '')
+    setForm((f) => ({ ...f, idNumber: digits }))
+    setIdHint(raw !== digits ? 'Numbers only.' : '')
+  }
 
   const submit = async (e) => {
     e.preventDefault()
@@ -73,17 +80,21 @@ export default function SupportModal({ onClose }) {
               <input value={form.name} onChange={set('name')} />
             </div>
             <div className="col" style={{ gap: 4 }}>
-              <label>ID number (required)</label>
+              <label>Student ID number (required)</label>
               <input
                 required
                 value={form.idNumber}
-                onChange={set('idNumber')}
+                onChange={setId}
+                inputMode="numeric"
+                pattern="[0-9]*"
                 readOnly={Boolean(lockedId)}
-                placeholder="e.g. 123456"
+                placeholder="e.g. 183271"
                 title={lockedId ? 'Taken from your signed-in account' : undefined}
                 style={lockedId ? { opacity: 0.7, cursor: 'not-allowed' } : undefined}
               />
-              {lockedId && <span className="mono dim" style={{ fontSize: 10 }}>Taken from your account — you’re signed in.</span>}
+              {lockedId
+                ? <span className="mono dim" style={{ fontSize: 10 }}>Taken from your account — you’re signed in.</span>
+                : idHint && <span className="warn mono" style={{ fontSize: 10 }}>{idHint}</span>}
             </div>
             <div className="col" style={{ gap: 4 }}>
               <label>Message</label>
