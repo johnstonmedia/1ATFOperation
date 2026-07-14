@@ -8,7 +8,7 @@ import { useAudit } from '../../hooks/useAudit'
 import { useDialog } from '../../hooks/useDialog'
 import { OpsHeader } from './OperationsCentre'
 import { Field } from './NarrativeEditor'
-import { COMPANIES, ROLES, RANKS, PHONETIC } from '../../firebase/seed'
+import { COMPANIES, ROLES, RANKS, PHONETIC, rankShort, normalizeRank } from '../../firebase/seed'
 import { genTempPassword } from '../../lib/passwords'
 import { getAuthVersion, setAuthVersion } from '../../lib/store'
 import { sendMemberEmail } from '../../lib/notify'
@@ -207,7 +207,7 @@ export default function UsersAdmin() {
     let failed = 0
     for (const r of emailTargets) {
       const message = [
-        `Hello ${[r.rank, r.name].filter(Boolean).join(' ') || 'Cadet'},`,
+        `Hello ${[rankShort(r.rank), r.name].filter(Boolean).join(' ') || 'Cadet'},`,
         '',
         'Your 1ATF Operational Portal access:',
         `  Student ID: ${r.idNumber}`,
@@ -292,7 +292,7 @@ export default function UsersAdmin() {
                   <input type="checkbox" aria-label={`Select ${r.name || r.idNumber}`} checked={selected.has(r._id)} onChange={() => toggleOne(r._id)} style={{ width: 'auto' }} />
                 </td>
                 <td style={cell} className="mono">{r.idNumber}</td>
-                <td style={cell}>{r.rank ? <span className="dim">{r.rank} </span> : ''}{r.name}</td>
+                <td style={cell}>{r.rank ? <span className="dim">{rankShort(r.rank)} </span> : ''}{r.name}</td>
                 <td style={cell}>{PHONETIC[r.company] || '—'} {r.company && `(${r.company})`}</td>
                 <td style={cell}><span className={r.role === 'RHQ' ? 'tag hostile' : 'tag'}>{r.role}</span></td>
                 <td style={cell} className="mono dim">{r.email}</td>
@@ -371,8 +371,10 @@ function UserModal({ rec, onClose, onSave, onDelete, used }) {
         <Field label="Name"><input value={u.name} onChange={set('name')} /></Field>
         <div className="row" style={{ gap: 10 }}>
           <Field label="Rank">
-            <input list="rank-options" value={u.rank || ''} onChange={set('rank')} placeholder="e.g. Cadet" />
-            <datalist id="rank-options">{RANKS.map((r) => <option key={r} value={r} />)}</datalist>
+            <select value={rankShort(u.rank)} onChange={set('rank')}>
+              <option value="">— Select rank —</option>
+              {RANKS.map((r) => <option key={r.short} value={r.short}>{r.long} ({r.short})</option>)}
+            </select>
           </Field>
           <Field label="Student ID number"><input value={u.idNumber} onChange={set('idNumber')} placeholder="e.g. 183271" /></Field>
         </div>
@@ -456,7 +458,7 @@ function mapRow(row, makeId) {
     email: get('email'),
     company: COMPANIES.some((c) => c.letter === company) ? company : '',
     role: 'General',
-    rank: get('rank'),
+    rank: normalizeRank(get('rank')),
     tempPassword: genTempPassword(),
     tempIssuedAt: Date.now(),
   }

@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import Logo from './Logo'
 import { useData } from '../context/DataContext'
 import { useAuth } from '../context/AuthContext'
+import { rankShort } from '../firebase/seed'
 
 export default function TopBar({ onMenu, onAuth }) {
   const { state } = useData()
@@ -41,7 +42,7 @@ export default function TopBar({ onMenu, onAuth }) {
           {user ? (
             <>
               <div className="mono dim topbar-id" style={{ fontSize: 11, textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                <div style={{ color: 'var(--accent)', overflow: 'hidden', textOverflow: 'ellipsis' }}>{user.rank} {user.name}</div>
+                <div style={{ color: 'var(--accent)', overflow: 'hidden', textOverflow: 'ellipsis' }}>{rankShort(user.rank)} {user.name}</div>
                 <div>{user.company ? `${user.company}-COY` : 'UNASSIGNED'} · {user.role}</div>
               </div>
               <button className="ghost" onClick={logout}>Sign out</button>

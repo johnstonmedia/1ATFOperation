@@ -25,19 +25,37 @@ export const PHONETIC = {
 
 export const ROLES = ['General', 'RHQ']
 
-// Rank suggestions for the roster editor. Free text is allowed — this list just
-// powers an autocomplete so ranks stay consistent. Adjust to your unit's system.
+// Unit ranks, each with a long and short (abbreviated) form. The roster stores
+// the short code; helpers below resolve either form for display.
 export const RANKS = [
-  'Cadet Recruit',
-  'Cadet',
-  'Able Cadet',
-  'Leading Cadet',
-  'Cadet Petty Officer',
-  'Cadet Chief Petty Officer',
-  'Cadet Warrant Officer',
-  'Instructor',
-  'Officer',
+  { long: 'Recruit', short: 'Rec' },
+  { long: 'Cadet', short: 'Cdt' },
+  { long: 'Lance Corporal', short: 'LCpl' },
+  { long: 'Corporal', short: 'Cpl' },
+  { long: 'Sergeant', short: 'Sgt' },
+  { long: 'Warrant Officer Class 2', short: 'WO2' },
+  { long: 'Warrant Officer Class 1', short: 'WO1' },
+  { long: 'Cadet Under Officer', short: 'CUO' },
+  { long: 'Staff', short: 'Staff' },
 ]
+
+const findRank = (v) => {
+  const s = String(v || '').trim().toLowerCase()
+  if (!s) return null
+  return RANKS.find((r) => r.short.toLowerCase() === s || r.long.toLowerCase() === s) || null
+}
+// Short/long form of a stored rank value (falls back to the raw value if it's
+// not a known rank, so nothing is ever lost).
+export const rankShort = (v) => findRank(v)?.short || String(v || '').trim()
+export const rankLong = (v) => findRank(v)?.long || String(v || '').trim()
+// Canonical value to store (short code when recognised, else the trimmed input).
+export const normalizeRank = (v) => findRank(v)?.short || String(v || '').trim()
+
+// Last word of a full name, used to address members as "Rank Surname".
+export const surnameOf = (name) => {
+  const parts = String(name || '').trim().split(/\s+/).filter(Boolean)
+  return parts.length ? parts[parts.length - 1] : ''
+}
 
 // Map zones. Each zone is a rough polygon over Australia with an occupant.
 // Occupants: company name, 'Meridian' (hostile, rendered red), or 'Contested'.

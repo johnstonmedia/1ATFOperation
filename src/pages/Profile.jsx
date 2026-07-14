@@ -1,6 +1,6 @@
 import RequireAuth from '../components/RequireAuth'
 import { useAuth } from '../context/AuthContext'
-import { PHONETIC } from '../firebase/seed'
+import { PHONETIC, rankShort, rankLong } from '../firebase/seed'
 
 export default function Profile() {
   return (
@@ -16,10 +16,10 @@ function Inner() {
 
   const fields = [
     ['Name', user.name],
-    ['Rank', user.rank],
+    ['Rank', rankLong(user.rank) || '—'],
     ['Company', `${company}${user.company ? ` (${user.company})` : ''}`],
     ['Role', user.role],
-    ['Service / ID', user.idNumber || '—'],
+    ['Student ID', user.idNumber || '—'],
     ['Email', user.email],
     ['Roster link', user.linked ? 'CONFIRMED' : 'PENDING — contact RHQ'],
   ]
@@ -38,8 +38,8 @@ function Inner() {
             {(user.name || '?').split(' ').map((s) => s[0]).slice(-2).join('')}
           </div>
           <div>
-            <div className="head" style={{ fontSize: 18, color: '#fff' }}>{user.name}</div>
-            <div className="mono accent" style={{ fontSize: 12 }}>{user.rank} · {company} Company</div>
+            <div className="head" style={{ fontSize: 18, color: '#fff' }}>{[rankShort(user.rank), user.name].filter(Boolean).join(' ')}</div>
+            <div className="mono accent" style={{ fontSize: 12 }}>{[rankLong(user.rank), `${company} Company`].filter(Boolean).join(' · ')}</div>
           </div>
         </div>
         <div className="divider" />

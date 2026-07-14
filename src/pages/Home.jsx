@@ -2,7 +2,7 @@ import { useState } from 'react'
 import AustraliaMap from '../components/AustraliaMap'
 import { useData } from '../context/DataContext'
 import { useAuth } from '../context/AuthContext'
-import { COMPANIES } from '../firebase/seed'
+import { COMPANIES, rankShort, surnameOf } from '../firebase/seed'
 import { formatUpdated } from '../components/LastUpdated'
 import VideoEmbed from '../components/VideoEmbed'
 
@@ -25,6 +25,11 @@ export default function Home() {
       <div className="panel panel-pad" style={{ marginBottom: 20 }}>
         <div className="row between wrap" style={{ gap: 16 }}>
           <div>
+            {user && (
+              <div className="mono accent" style={{ fontSize: 14, marginBottom: 8 }}>
+                Welcome, {[rankShort(user.rank), surnameOf(user.name)].filter(Boolean).join(' ')}
+              </div>
+            )}
             <div className="tag live blink">● LIVE OPERATIONAL PICTURE</div>
             <h1 style={{ margin: '10px 0 4px', fontSize: 30, color: '#fff' }}>
               {n.shortName} <span className="dim" style={{ fontSize: 18 }}>{n.unitName}</span>
