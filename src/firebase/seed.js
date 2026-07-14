@@ -11,6 +11,7 @@ export const COMPANIES = [
   { letter: 'D', name: 'Delta', accent: '#8e54c4' },
   { letter: 'E', name: 'Echo', accent: '#d1632e' },
   { letter: 'S', name: 'Support', accent: '#5b6f8c' },
+  { letter: 'R', name: 'RHQ', accent: '#f39c12' },
 ]
 
 // Phonetic-letter -> company name (used when interpreting the roster).
@@ -21,6 +22,7 @@ export const PHONETIC = {
   D: 'Delta',
   E: 'Echo',
   S: 'Support',
+  R: 'RHQ',
 }
 
 export const ROLES = ['General', 'RHQ']

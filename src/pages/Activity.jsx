@@ -18,7 +18,8 @@ function Inner() {
   const companyName = PHONETIC[user.company]
 
   const movements = state.activity.filter((a) => a.company === companyName)
-  const myTasks = state.tasks.filter((t) => t.distributed && t.audience === user.company)
+  const inAudience = (t) => (t.audiences || (t.audience ? [t.audience] : [])).includes(user.company)
+  const myTasks = state.tasks.filter((t) => t.distributed && inAudience(t))
 
   return (
     <div className="container" style={{ padding: '24px 20px' }}>

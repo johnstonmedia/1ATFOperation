@@ -64,6 +64,13 @@ export function parseTextToQuestions(text) {
   return questions
 }
 
+// Extract the document's readable text AND parsed questions in one pass, so the
+// original briefing/instructions can be kept alongside the interactive items.
+export async function interpretDocument(file) {
+  const text = await extractText(file)
+  return { content: text.trim(), questions: parseTextToQuestions(text) }
+}
+
 // Best-effort text extraction from an uploaded file.
 export async function extractText(file) {
   const name = (file.name || '').toLowerCase()
