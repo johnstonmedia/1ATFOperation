@@ -13,6 +13,31 @@
 const SERVICE = import.meta.env.VITE_EMAILJS_SERVICE || 'service_nj1li97'
 const TEMPLATE = import.meta.env.VITE_EMAILJS_TEMPLATE || 'template_w2o8ugi'
 const PUBLIC_KEY = import.meta.env.VITE_EMAILJS_PUBLIC_KEY || 'ua4RkBmLGO4gIKsOU'
+// Template used to email individual members (e.g. their temp password). It MUST
+// be configured in EmailJS with "To Email" = {{to_email}}. Defaults to the main
+// template; set VITE_EMAILJS_MEMBER_TEMPLATE if you use a dedicated one.
+const MEMBER_TEMPLATE = import.meta.env.VITE_EMAILJS_MEMBER_TEMPLATE || TEMPLATE
+
+// Send one email to a specific recipient. Returns true on success. The EmailJS
+// template must send to {{to_email}} and render {{subject}} / {{message}}.
+export async function sendMemberEmail({ toEmail, toName, subject, message }) {
+  if (!SERVICE || !MEMBER_TEMPLATE || !PUBLIC_KEY || !toEmail) return false
+  try {
+    const res = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        service_id: SERVICE,
+        template_id: MEMBER_TEMPLATE,
+        user_id: PUBLIC_KEY,
+        template_params: { to_email: toEmail, to_name: toName || '', subject, message },
+      }),
+    })
+    return res.ok
+  } catch {
+    return false
+  }
+}
 
 export async function notifyAdmin(subject, message) {
   if (!SERVICE || !TEMPLATE || !PUBLIC_KEY) return false

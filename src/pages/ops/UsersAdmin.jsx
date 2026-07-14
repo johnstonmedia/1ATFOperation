@@ -8,9 +8,10 @@ import { useAudit } from '../../hooks/useAudit'
 import { useDialog } from '../../hooks/useDialog'
 import { OpsHeader } from './OperationsCentre'
 import { Field } from './NarrativeEditor'
-import { COMPANIES, ROLES, PHONETIC } from '../../firebase/seed'
+import { COMPANIES, ROLES, RANKS, PHONETIC } from '../../firebase/seed'
 import { genTempPassword } from '../../lib/passwords'
 import { getAuthVersion, setAuthVersion } from '../../lib/store'
+import { sendMemberEmail } from '../../lib/notify'
 import { FIREBASE_ENABLED, db } from '../../firebase/config'
 
 const cleanId = (s) => String(s).trim().toLowerCase().replace(/[^a-z0-9]/g, '')
@@ -189,6 +190,44 @@ export default function UsersAdmin() {
 
   const hasTemps = roster.some((r) => r.tempPassword && !isUsed(r))
 
+  // Email each member (with an address and an unused temp) their login details.
+  const [emailing, setEmailing] = useState(false)
+  const emailTargets = roster.filter((r) => r.email && r.tempPassword && !isUsed(r))
+  const emailTempPasswords = async () => {
+    if (!emailTargets.length) return
+    const ok = await confirm({
+      title: 'Email temporary passwords',
+      message: `Send login details to ${emailTargets.length} member${emailTargets.length === 1 ? '' : 's'} with an email address and an unused temporary password? Each person receives their own Student ID and temporary password.`,
+      confirmLabel: `Email ${emailTargets.length}`,
+    })
+    if (!ok) return
+    setEmailing(true)
+    const link = `${location.origin}${import.meta.env.BASE_URL}Classified`
+    let sent = 0
+    let failed = 0
+    for (const r of emailTargets) {
+      const message = [
+        `Hello ${[r.rank, r.name].filter(Boolean).join(' ') || 'Cadet'},`,
+        '',
+        'Your 1ATF Operational Portal access:',
+        `  Student ID: ${r.idNumber}`,
+        `  Temporary password: ${r.tempPassword}`,
+        '',
+        'To log in:',
+        `  1. Go to: ${link}`,
+        '  2. Click Continue and enter your Student ID number.',
+        '  3. Enter the temporary password above, then choose your own password.',
+        '',
+        'Keep this private — do not share it. — RHQ',
+      ].join('\n')
+      const okOne = await sendMemberEmail({ toEmail: r.email, toName: r.name, subject: '1ATF Operational Portal — your access details', message })
+      okOne ? sent++ : failed++
+    }
+    setEmailing(false)
+    push(`Emailed ${sent} member${sent === 1 ? '' : 's'}${failed ? `, ${failed} failed` : ''}`, { type: failed ? 'error' : 'success' })
+    audit('Emailed temporary passwords', `${sent} sent${failed ? `, ${failed} failed` : ''}`)
+  }
+
   return (
     <div>
       <OpsHeader title="Users" sub={`ADMIN // ROSTER (${roster.length})`}>
@@ -197,6 +236,11 @@ export default function UsersAdmin() {
           <input type="file" accept=".xlsx,.xls,.csv" onChange={onSpreadsheet} style={{ display: 'none' }} />
         </label>
         {hasTemps && <button onClick={downloadTempPasswords}>Download temp passwords</button>}
+        {emailTargets.length > 0 && (
+          <button onClick={emailTempPasswords} disabled={emailing}>
+            {emailing ? 'Emailing…' : `Email temp passwords (${emailTargets.length})`}
+          </button>
+        )}
         <EmulateMenu />
         <button className="primary" onClick={() => setEditing(newUser(makeId))}>+ New user</button>
       </OpsHeader>
@@ -248,7 +292,7 @@ export default function UsersAdmin() {
                   <input type="checkbox" aria-label={`Select ${r.name || r.idNumber}`} checked={selected.has(r._id)} onChange={() => toggleOne(r._id)} style={{ width: 'auto' }} />
                 </td>
                 <td style={cell} className="mono">{r.idNumber}</td>
-                <td style={cell}>{r.name}</td>
+                <td style={cell}>{r.rank ? <span className="dim">{r.rank} </span> : ''}{r.name}</td>
                 <td style={cell}>{PHONETIC[r.company] || '—'} {r.company && `(${r.company})`}</td>
                 <td style={cell}><span className={r.role === 'RHQ' ? 'tag hostile' : 'tag'}>{r.role}</span></td>
                 <td style={cell} className="mono dim">{r.email}</td>
@@ -325,7 +369,13 @@ function UserModal({ rec, onClose, onSave, onDelete, used }) {
       <div ref={dialogRef} className="panel panel-pad col" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={rec.name ? 'Edit user' : 'New user'} style={{ width: 420, maxWidth: '100%' }}>
         <h2 className="accent" style={{ margin: 0, fontSize: 18 }}>{rec.name ? 'Edit User' : 'New User'}</h2>
         <Field label="Name"><input value={u.name} onChange={set('name')} /></Field>
-        <Field label="Student ID number"><input value={u.idNumber} onChange={set('idNumber')} placeholder="e.g. 183271" /></Field>
+        <div className="row" style={{ gap: 10 }}>
+          <Field label="Rank">
+            <input list="rank-options" value={u.rank || ''} onChange={set('rank')} placeholder="e.g. Cadet" />
+            <datalist id="rank-options">{RANKS.map((r) => <option key={r} value={r} />)}</datalist>
+          </Field>
+          <Field label="Student ID number"><input value={u.idNumber} onChange={set('idNumber')} placeholder="e.g. 183271" /></Field>
+        </div>
         <Field label="Email"><input value={u.email} onChange={set('email')} /></Field>
         <div className="row" style={{ gap: 10 }}>
           <Field label="Company">
@@ -370,10 +420,11 @@ function UserModal({ rec, onClose, onSave, onDelete, used }) {
 // and email; a random temporary password is issued. Header matching is fuzzy —
 // adjust COLUMN_HINTS once the real spreadsheet's headers are confirmed.
 const COLUMN_HINTS = {
-  idNumber: ['id', 'idnumber', 'id number', 'service', 'service number', 'regimental', 'number', 'no'],
+  idNumber: ['id', 'idnumber', 'id number', 'student id', 'student', 'service', 'service number', 'regimental', 'number', 'no'],
   name: ['name', 'full name', 'fullname', 'cadet', 'surname'],
   email: ['email', 'e-mail', 'mail'],
   company: ['company', 'coy', 'coy letter', 'unit', 'sub-unit', 'phonetic'],
+  rank: ['rank', 'grade', 'rate'],
 }
 function findKey(row, hints) {
   const keys = Object.keys(row)
@@ -405,7 +456,7 @@ function mapRow(row, makeId) {
     email: get('email'),
     company: COMPANIES.some((c) => c.letter === company) ? company : '',
     role: 'General',
-    rank: '',
+    rank: get('rank'),
     tempPassword: genTempPassword(),
     tempIssuedAt: Date.now(),
   }

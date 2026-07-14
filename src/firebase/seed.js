@@ -25,6 +25,20 @@ export const PHONETIC = {
 
 export const ROLES = ['General', 'RHQ']
 
+// Rank suggestions for the roster editor. Free text is allowed — this list just
+// powers an autocomplete so ranks stay consistent. Adjust to your unit's system.
+export const RANKS = [
+  'Cadet Recruit',
+  'Cadet',
+  'Able Cadet',
+  'Leading Cadet',
+  'Cadet Petty Officer',
+  'Cadet Chief Petty Officer',
+  'Cadet Warrant Officer',
+  'Instructor',
+  'Officer',
+]
+
 // Map zones. Each zone is a rough polygon over Australia with an occupant.
 // Occupants: company name, 'Meridian' (hostile, rendered red), or 'Contested'.
 export const DEFAULT_ZONES = [
