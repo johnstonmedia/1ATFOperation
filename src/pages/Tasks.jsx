@@ -3,6 +3,7 @@ import RequireAuth from '../components/RequireAuth'
 import { PageTitle } from './Profile'
 import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
+import DocEmbed from '../components/DocEmbed'
 
 const audiencesOf = (t) => t.audiences || (t.audience ? [t.audience] : [])
 const forCompany = (t, company) => audiencesOf(t).includes(company)
@@ -86,6 +87,7 @@ function TaskRunner({ task, onBack }) {
         <div className="panel panel-pad grow" style={{ minWidth: 320 }}>
           <h1 style={{ marginTop: 0, fontSize: 22 }}>{task.title}</h1>
           {task.brief && <p className="dim">{task.brief}</p>}
+          {task.docUrl && <div style={{ margin: '12px 0' }}><DocEmbed url={task.docUrl} /></div>}
           {task.content && (
             <div className="mono" style={{ whiteSpace: 'pre-wrap', fontSize: 13, lineHeight: 1.6, background: 'rgba(0,0,0,0.25)', border: '1px solid var(--line)', borderRadius: 'var(--radius)', padding: 12, margin: '10px 0' }}>
               {task.content}

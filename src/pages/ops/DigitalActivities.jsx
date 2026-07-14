@@ -4,6 +4,7 @@ import { useConfirm } from '../../context/ConfirmContext'
 import { useToast } from '../../context/ToastContext'
 import { useAudit } from '../../hooks/useAudit'
 import SchedulePicker from '../../components/SchedulePicker'
+import DocEmbed from '../../components/DocEmbed'
 import { OpsHeader } from './OperationsCentre'
 import { Field } from './NarrativeEditor'
 import { COMPANIES } from '../../firebase/seed'
@@ -45,7 +46,7 @@ export default function DigitalActivities() {
     push('Activity deleted')
   }
 
-  const blank = () => ({ id: makeId(), title: '', brief: '', audiences: ['A'], content: '', resources: [], questions: [], distributed: false, scheduledFor: null })
+  const blank = () => ({ id: makeId(), title: '', brief: '', audiences: ['A'], docUrl: '', content: '', resources: [], questions: [], distributed: false, scheduledFor: null })
 
   if (editing) {
     return <Builder task={editing} onCancel={() => setEditing(null)} onSave={(t) => { upsert(t); setEditing(null) }} />
@@ -92,13 +93,13 @@ export default function DigitalActivities() {
 }
 
 function Builder({ task, onCancel, onSave }) {
-  const [t, setT] = useState({ ...task, audiences: audiencesOf(task), content: task.content || '', resources: task.resources || [] })
+  const [t, setT] = useState({ ...task, audiences: audiencesOf(task), docUrl: task.docUrl || '', content: task.content || '', resources: task.resources || [] })
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const [scheduling, setScheduling] = useState(false)
   const set = (k, v) => setT((p) => ({ ...p, [k]: v }))
 
-  const hasContent = t.questions.length > 0 || t.content.trim() !== ''
+  const hasContent = t.questions.length > 0 || t.content.trim() !== '' || t.docUrl.trim() !== ''
   const ready = t.title.trim() !== '' && hasContent && t.audiences.length > 0
   const requireReady = () => {
     if (!t.title.trim()) { setErr('Give the activity a title before distributing.'); return false }
@@ -178,6 +179,23 @@ function Builder({ task, onCancel, onSave }) {
         <div className="mono dim" style={{ fontSize: 10 }}>
           Tip: lines ending in “?” become questions; “A)/B)” lines become options; “*” marks the correct option; “Q:” makes a short-answer item. Everything else is kept as reference text.
         </div>
+      </div>
+
+      <div className="panel panel-pad col" style={{ marginBottom: 16 }}>
+        <Field label="Embedded document (shown in the page)">
+          <input value={t.docUrl} onChange={(e) => set('docUrl', e.target.value)} placeholder="docs/brief.pdf  ·  https://…/file.pdf  ·  Google Drive share link" />
+        </Field>
+        <div className="mono dim" style={{ fontSize: 10, lineHeight: 1.5 }}>
+          Paste a direct PDF/image link or a Google Drive share link (set to “Anyone with the link can view”), or commit the file to
+          <span className="accent"> public/docs/</span> in the repo and reference it as <span className="accent">docs/yourfile.pdf</span>.
+          It displays inline on the activity.
+        </div>
+        {t.docUrl.trim() && (
+          <div style={{ marginTop: 8 }}>
+            <div className="mono dim" style={{ fontSize: 10, letterSpacing: 2, marginBottom: 6 }}>PREVIEW</div>
+            <DocEmbed url={t.docUrl} height={360} />
+          </div>
+        )}
       </div>
 
       <Field label="Document content shown to members (kept from the upload — editable)">
