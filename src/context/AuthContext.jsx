@@ -262,14 +262,24 @@ export function AuthProvider({ children }) {
     setEmulation(null)
   }, [])
 
+  // Keep the displayed profile in step with the roster: RHQ can set/change a
+  // member's rank (and name/company) after they registered, and the roster is
+  // the source of truth for those, so fold them into the live user object.
+  const rosterRec = user
+    ? (state?.roster || []).find((r) => String(r.idNumber).trim() === String(user.idNumber).trim())
+    : null
+  const enrichedUser = user
+    ? { ...user, rank: rosterRec?.rank || user.rank || '', name: rosterRec?.name || user.name, company: rosterRec?.company || user.company }
+    : null
+
   // Only a real RHQ session may emulate; otherwise the overlay is ignored.
-  const realIsRHQ = user?.role === 'RHQ'
+  const realIsRHQ = enrichedUser?.role === 'RHQ'
   const emulated = emulation && realIsRHQ ? emulatedUser(emulation) : null
-  const effUser = emulated || user
+  const effUser = emulated || enrichedUser
 
   const value = {
     user: effUser,
-    realUser: user,
+    realUser: enrichedUser,
     emulating: Boolean(emulated),
     exitEmulation,
     ready,

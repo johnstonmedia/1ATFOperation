@@ -104,7 +104,7 @@ export default function AustraliaMap({
         center={AU_CENTER}
         zoom={4}
         minZoom={4}
-        maxZoom={9}
+        maxZoom={14}
         maxBounds={AU_BOUNDS}
         maxBoundsViscosity={1.0}
         style={{ height: '100%', width: '100%' }}
@@ -112,6 +112,7 @@ export default function AustraliaMap({
         <TileLayer
           url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
           attribution="&copy; OpenStreetMap &copy; CARTO"
+          maxZoom={20}
           noWrap
         />
 
