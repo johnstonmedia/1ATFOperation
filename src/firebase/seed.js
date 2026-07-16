@@ -132,6 +132,21 @@ export const DEFAULT_ZONES = [
 // 'current' (solid, movement under way).
 export const DEFAULT_ARROWS = []
 
+// HQ / point markers RHQ can drop on the map. { id, name, lat, lng, occupant }.
+export const DEFAULT_MARKERS = []
+
+// Australian capital cities, shown as reference dots on the map.
+export const CAPITALS = [
+  { name: 'Canberra', lat: -35.28, lng: 149.13 },
+  { name: 'Sydney', lat: -33.87, lng: 151.21 },
+  { name: 'Melbourne', lat: -37.81, lng: 144.96 },
+  { name: 'Brisbane', lat: -27.47, lng: 153.03 },
+  { name: 'Adelaide', lat: -34.93, lng: 138.60 },
+  { name: 'Perth', lat: -31.95, lng: 115.86 },
+  { name: 'Hobart', lat: -42.88, lng: 147.33 },
+  { name: 'Darwin', lat: -12.46, lng: 130.84 },
+]
+
 export const DEFAULT_NARRATIVE = {
   unitName: '1st Australian Task Force',
   shortName: '1ATF',

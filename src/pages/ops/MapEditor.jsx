@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useData } from '../../context/DataContext'
 import { useConfirm } from '../../context/ConfirmContext'
 import { useAudit } from '../../hooks/useAudit'
@@ -22,16 +22,35 @@ export default function MapEditor() {
   const { state, updateSlice, makeId } = useData()
   const [zones, setZones] = useState(state.zones)
   const [arrows, setArrows] = useState(state.arrows || [])
+  const [markers, setMarkers] = useState(state.markers || [])
   const [selId, setSelId] = useState(zones[0]?.id || null)
   const [saved, flash] = useSaved()
   const confirm = useConfirm()
   const audit = useAudit()
+  const mapRef = useRef(null)
 
   const save = () => {
     updateSlice('zones', zones)
     updateSlice('arrows', arrows)
-    audit('Updated operational map', `${zones.length} zones, ${arrows.length} movement lines`)
+    updateSlice('markers', markers)
+    audit('Updated operational map', `${zones.length} zones, ${arrows.length} lines, ${markers.length} HQs`)
     flash()
+  }
+
+  // A new shape appears centred on whatever the user is currently looking at,
+  // sized to a fraction of the visible area, so it's easy to place.
+  const viewCenter = () => {
+    const m = mapRef.current
+    return m ? m.getCenter() : { lat: -25, lng: 134 }
+  }
+  const rectAtView = () => {
+    const m = mapRef.current
+    if (!m) return rectAt()
+    const c = m.getCenter()
+    const b = m.getBounds()
+    const dLat = Math.max(0.4, (b.getNorth() - b.getSouth()) * 0.18)
+    const dLng = Math.max(0.4, (b.getEast() - b.getWest()) * 0.18)
+    return rectAt(c.lat, c.lng, dLat, dLng)
   }
 
   const setZone = (id, patch) => setZones((zs) => zs.map((z) => (z.id === id ? { ...z, ...patch } : z)))
@@ -56,10 +75,10 @@ export default function MapEditor() {
     setArrows((as) => as.filter((x) => x.id !== a.id))
   }
 
-  // A custom zone starts life as a rectangle and is freely reshaped.
+  // A custom zone starts as a rectangle where the user is looking.
   const addCustom = () => {
     const id = makeId()
-    setZones((zs) => [...zs, { id, name: 'New Zone', occupant: 'Contested', shape: 'custom', coords: rectAt() }])
+    setZones((zs) => [...zs, { id, name: 'New Zone', occupant: 'Contested', shape: 'custom', coords: rectAtView() }])
     setSelId(id)
   }
   // A state zone snaps to the borders of the selected state(s).
@@ -68,6 +87,14 @@ export default function MapEditor() {
     setZones((zs) => [...zs, { id, name: 'New State Zone', occupant: 'Contested', shape: 'state', states: [] }])
     setSelId(id)
   }
+  // An HQ marker dropped at the current view centre.
+  const addHQ = () => {
+    const c = viewCenter()
+    setMarkers((ms) => [...ms, { id: makeId(), name: 'New HQ', occupant: 'RHQ', lat: c.lat, lng: c.lng }])
+  }
+  const setMarker = (id, patch) => setMarkers((ms) => ms.map((m) => (m.id === id ? { ...m, ...patch } : m)))
+  const moveMarker = (id, lat, lng) => setMarker(id, { lat, lng })
+  const removeMarker = (id) => setMarkers((ms) => ms.filter((m) => m.id !== id))
 
   const sel = zones.find((z) => z.id === selId)
   const isCustom = (z) => z && z.shape !== 'state' && Array.isArray(z.coords)
@@ -90,19 +117,43 @@ export default function MapEditor() {
   return (
     <div>
       <OpsHeader title="Operational Map" sub="EDIT // ZONES & MOVEMENTS" updatedAt={state.contentMeta?.zones?.updatedAt}>
-        <button className="ghost" onClick={addCustom}>+ Custom</button>
+        <button className="ghost" onClick={addCustom}>+ Custom box</button>
         <button className="ghost" onClick={addState}>+ State(s)</button>
+        <button className="ghost" onClick={addHQ}>+ HQ</button>
         <button className="primary" onClick={save}>{saved ? 'Saved ✓' : 'Save map'}</button>
       </OpsHeader>
 
       <div className="mono dim" style={{ fontSize: 11, marginBottom: 10 }}>
-        Custom zones start as a rectangle — drag the ✥ handle to move the whole shape, or the round handles to reshape it.
-        State zones snap to the selected borders. Fills hug the coastline and never overlap; same-occupant zones share one border.
+        Zoom/pan to where you want it, then <span className="accent">+ Custom box</span> drops a box right there — drag the ✥ to move it, the round handles to resize.
+        <span className="accent"> + State(s)</span> snaps to real state borders. <span className="accent">+ HQ</span> drops a headquarters marker you can drag. Capital cities are marked automatically.
       </div>
 
       <div className="panel" style={{ marginBottom: 18 }}>
-        <AustraliaMap zones={zones} arrows={arrows} height={420} editId={selId} onEditChange={onEditChange} onZoneClick={(z) => setSelId(z.id)} />
+        <AustraliaMap zones={zones} arrows={arrows} markers={markers} height={420} editId={selId} onEditChange={onEditChange} onZoneClick={(z) => setSelId(z.id)} onMarkerMove={moveMarker} onMap={(m) => { mapRef.current = m }} />
       </div>
+
+      {/* HQ markers */}
+      {markers.length > 0 && (
+        <div className="panel panel-pad col" style={{ gap: 8, marginBottom: 18 }}>
+          <strong className="head" style={{ fontSize: 14 }}>HQ markers</strong>
+          {markers.map((m) => (
+            <div key={m.id} className="row wrap" style={{ gap: 10, alignItems: 'flex-end' }}>
+              <div className="grow" style={{ minWidth: 140 }}>
+                <Field label="Name"><input value={m.name} onChange={(e) => setMarker(m.id, { name: e.target.value })} /></Field>
+              </div>
+              <div style={{ minWidth: 140 }}>
+                <Field label="Occupant">
+                  <select value={m.occupant} onChange={(e) => setMarker(m.id, { occupant: e.target.value })}>
+                    {OCCUPANTS.map((o) => <option key={o} value={o}>{o}</option>)}
+                  </select>
+                </Field>
+              </div>
+              <span className="mono dim" style={{ fontSize: 10 }}>drag the marker on the map to move it</span>
+              <button className="danger ghost" onClick={() => removeMarker(m.id)}>Remove</button>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Zone list / editor */}
       <div className="col" style={{ gap: 10, marginBottom: 22 }}>

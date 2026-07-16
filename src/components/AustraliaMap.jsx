@@ -1,8 +1,33 @@
-import { Fragment, useMemo, useRef } from 'react'
-import { MapContainer, TileLayer, Polygon, Polyline, Marker, Tooltip } from 'react-leaflet'
+import { Fragment, useMemo, useRef, useEffect } from 'react'
+import { MapContainer, TileLayer, Polygon, Polyline, Marker, Tooltip, useMap } from 'react-leaflet'
 import L from 'leaflet'
-import { COMPANIES } from '../firebase/seed'
+import { COMPANIES, CAPITALS } from '../firebase/seed'
 import { composeZones, mpToLatLng, zoneBaseMP, zoneCenter, arrowEndpoints } from '../lib/zoneGeometry'
+
+// Exposes the Leaflet map instance to the parent (so the editor can add a zone
+// centred on whatever the user is currently looking at).
+function MapRef({ onMap }) {
+  const map = useMap()
+  useEffect(() => { if (onMap) onMap(map) }, [map, onMap])
+  return null
+}
+
+function capitalIcon(name) {
+  return L.divIcon({
+    className: 'capital-dot',
+    html: `<div style="display:flex;align-items:center;gap:4px;white-space:nowrap"><span style="width:6px;height:6px;border-radius:50%;background:#fff;box-shadow:0 0 5px #fff;display:inline-block"></span><span style="color:#dff;font:600 10px 'JetBrains Mono',monospace;text-shadow:0 1px 3px #000">${name}</span></div>`,
+    iconSize: [0, 0],
+    iconAnchor: [3, 3],
+  })
+}
+function hqIcon(name, color) {
+  return L.divIcon({
+    className: 'hq-marker',
+    html: `<div style="display:flex;align-items:center;gap:5px;white-space:nowrap"><span style="width:14px;height:14px;background:${color};border:2px solid #04121b;transform:rotate(45deg);box-shadow:0 0 7px ${color};display:inline-block"></span><span style="color:#fff;font:700 11px 'JetBrains Mono',monospace;text-shadow:0 1px 3px #000">HQ · ${name}</span></div>`,
+    iconSize: [0, 0],
+    iconAnchor: [7, 7],
+  })
+}
 
 // Bounds clamp the viewport to the Australian continent.
 const AU_BOUNDS = [
@@ -67,10 +92,13 @@ function conquestBadge(text, color) {
 export default function AustraliaMap({
   zones = [],
   arrows = [],
+  markers = [],
   height = 520,
   onZoneClick,
   editId = null,
   onEditChange,
+  onMarkerMove,
+  onMap,
 }) {
   const zoneById = (id) => zones.find((z) => z.id === id)
   const dragRef = useRef(null) // live state for the move handle
@@ -138,6 +166,12 @@ export default function AustraliaMap({
           maxZoom={20}
           noWrap
         />
+        <MapRef onMap={onMap} />
+
+        {/* Capital-city reference dots. */}
+        {CAPITALS.map((c) => (
+          <Marker key={c.name} position={[c.lat, c.lng]} icon={capitalIcon(c.name)} interactive={false} />
+        ))}
 
         {/* Zone fills — overlaps already resolved; no per-zone border (seams
             between same-occupant zones are removed by the occupant outline). */}
@@ -215,6 +249,17 @@ export default function AustraliaMap({
             </Fragment>
           )
         })}
+
+        {/* HQ / point markers — draggable to reposition while editing. */}
+        {markers.map((m) => (
+          <Marker
+            key={m.id}
+            position={[m.lat, m.lng]}
+            icon={hqIcon(m.name || 'HQ', colorFor(m.occupant))}
+            draggable={Boolean(onMarkerMove)}
+            eventHandlers={onMarkerMove ? { dragend: (e) => { const p = e.target.getLatLng(); onMarkerMove(m.id, p.lat, p.lng) } } : undefined}
+          />
+        ))}
 
         {/* Editing handles — only custom zones are reshaped here; state zones
             take fixed borders, so they expose no handles. */}

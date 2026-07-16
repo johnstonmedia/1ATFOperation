@@ -60,7 +60,7 @@ export default function Home() {
       <div className="row wrap" style={{ gap: 20, alignItems: 'flex-start' }}>
         {/* Map */}
         <div className="grow" style={{ minWidth: 320 }}>
-          <AustraliaMap zones={zones} arrows={state.arrows} height={540} onZoneClick={setSelected} />
+          <AustraliaMap zones={zones} arrows={state.arrows} markers={state.markers} height={540} onZoneClick={setSelected} />
           <Legend />
           {selected && (
             <div className="panel panel-pad" style={{ marginTop: 12 }}>
