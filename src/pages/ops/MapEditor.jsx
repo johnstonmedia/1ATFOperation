@@ -49,6 +49,13 @@ export default function MapEditor() {
     setArrows((as) => as.filter((a) => a.from !== id && a.to !== id))
     if (selId === id) setSelId(null)
   }
+  // Finalise a conquest: the target zone becomes the attacker's occupant.
+  const conquer = (a) => {
+    const fromZone = zones.find((z) => z.id === a.from)
+    if (fromZone) setZone(a.to, { occupant: fromZone.occupant })
+    setArrows((as) => as.filter((x) => x.id !== a.id))
+  }
+
   // A custom zone starts life as a rectangle and is freely reshaped.
   const addCustom = () => {
     const id = makeId()
@@ -152,32 +159,35 @@ export default function MapEditor() {
       </div>
 
       {/* Arrows / movements */}
-      <ArrowsEditor zones={zones} arrows={arrows} setArrows={setArrows} makeId={makeId} />
+      <ArrowsEditor zones={zones} arrows={arrows} setArrows={setArrows} makeId={makeId} onConquer={conquer} />
     </div>
   )
 }
 
-function ArrowsEditor({ zones, arrows, setArrows, makeId }) {
-  const [draft, setDraft] = useState({ from: '', to: '', type: 'current' })
+function ArrowsEditor({ zones, arrows, setArrows, makeId, onConquer }) {
+  const [draft, setDraft] = useState({ from: '', to: '' })
   const nameOf = (id) => zones.find((z) => z.id === id)?.name || '—'
 
   const add = () => {
     if (!draft.from || !draft.to || draft.from === draft.to) return
-    setArrows([...arrows, { id: makeId(), ...draft }])
-    setDraft({ from: '', to: '', type: 'current' })
+    setArrows([...arrows, { id: makeId(), from: draft.from, to: draft.to, type: 'planned', progress: 0 }])
+    setDraft({ from: '', to: '' })
   }
   const remove = (id) => setArrows(arrows.filter((a) => a.id !== id))
+  // Raising progress above 0 turns a planned line (dotted) into an advance (solid).
+  const setProgress = (id, val) =>
+    setArrows(arrows.map((a) => (a.id === id ? { ...a, progress: val, type: val > 0 ? 'current' : 'planned' } : a)))
 
   return (
     <div className="panel panel-pad col" style={{ gap: 12 }}>
       <div className="row between center wrap" style={{ gap: 8 }}>
-        <strong className="head">Movement Lines</strong>
-        <span className="mono dim" style={{ fontSize: 11 }}>dotted = planned · solid = current</span>
+        <strong className="head">Movement &amp; Conquest</strong>
+        <span className="mono dim" style={{ fontSize: 11 }}>0% = planned (dotted) · progress = advancing (solid) · 100% = ready to take</span>
       </div>
 
       <div className="row wrap" style={{ gap: 10, alignItems: 'flex-end' }}>
         <div style={{ minWidth: 150 }}>
-          <Field label="From zone">
+          <Field label="From (attacker)">
             <select value={draft.from} onChange={(e) => setDraft({ ...draft, from: e.target.value })}>
               <option value="">—</option>
               {zones.map((z) => <option key={z.id} value={z.id}>{z.name}</option>)}
@@ -185,35 +195,39 @@ function ArrowsEditor({ zones, arrows, setArrows, makeId }) {
           </Field>
         </div>
         <div style={{ minWidth: 150 }}>
-          <Field label="To zone">
+          <Field label="To (target)">
             <select value={draft.to} onChange={(e) => setDraft({ ...draft, to: e.target.value })}>
               <option value="">—</option>
               {zones.map((z) => <option key={z.id} value={z.id}>{z.name}</option>)}
             </select>
           </Field>
         </div>
-        <div style={{ minWidth: 150 }}>
-          <Field label="Type">
-            <select value={draft.type} onChange={(e) => setDraft({ ...draft, type: e.target.value })}>
-              <option value="current">Current (solid)</option>
-              <option value="planned">Planned (dotted)</option>
-            </select>
-          </Field>
-        </div>
         <button className="ghost" onClick={add}>+ Add line</button>
       </div>
 
-      <div className="col" style={{ gap: 6 }}>
+      <div className="col" style={{ gap: 10 }}>
         {arrows.length === 0 && <div className="mono dim" style={{ fontSize: 12 }}>No movement lines yet.</div>}
-        {arrows.map((a) => (
-          <div key={a.id} className="row between center" style={{ padding: '6px 0', borderBottom: '1px solid var(--line)' }}>
-            <span className="mono" style={{ fontSize: 13 }}>
-              {nameOf(a.from)} <span className="accent">→</span> {nameOf(a.to)}
-              <span className="dim"> · {a.type === 'planned' ? 'planned' : 'current'}</span>
-            </span>
-            <button className="danger ghost" onClick={() => remove(a.id)} style={{ padding: '4px 10px' }}>Remove</button>
-          </div>
-        ))}
+        {arrows.map((a) => {
+          const p = a.progress || 0
+          return (
+            <div key={a.id} className="col" style={{ gap: 6, padding: '8px 0', borderBottom: '1px solid var(--line)' }}>
+              <div className="row between center wrap" style={{ gap: 8 }}>
+                <span className="mono" style={{ fontSize: 13 }}>
+                  {nameOf(a.from)} <span className="accent">→</span> {nameOf(a.to)}
+                  <span className="dim"> · {p > 0 ? `advancing ${p}%` : 'planned'}</span>
+                </span>
+                <div className="row" style={{ gap: 8 }}>
+                  {p >= 100 && <button className="primary" onClick={() => onConquer(a)} style={{ padding: '4px 10px' }}>Complete conquest</button>}
+                  <button className="danger ghost" onClick={() => remove(a.id)} style={{ padding: '4px 10px' }}>Remove</button>
+                </div>
+              </div>
+              <div className="row center" style={{ gap: 10 }}>
+                <input type="range" min="0" max="100" step="5" value={p} onChange={(e) => setProgress(a.id, Number(e.target.value))} style={{ flex: 1 }} />
+                <span className="mono accent" style={{ fontSize: 12, width: 42, textAlign: 'right' }}>{p}%</span>
+              </div>
+            </div>
+          )
+        })}
       </div>
     </div>
   )

@@ -2,7 +2,7 @@ import { Fragment, useMemo, useRef } from 'react'
 import { MapContainer, TileLayer, Polygon, Polyline, Marker, Tooltip } from 'react-leaflet'
 import L from 'leaflet'
 import { COMPANIES } from '../firebase/seed'
-import { composeZones, mpToLatLng, zoneBaseMP, arrowEndpoints } from '../lib/zoneGeometry'
+import { composeZones, mpToLatLng, zoneBaseMP, zoneCenter, arrowEndpoints } from '../lib/zoneGeometry'
 
 // Bounds clamp the viewport to the Australian continent.
 const AU_BOUNDS = [
@@ -55,6 +55,14 @@ function arrowHeadIcon(angle, color) {
     iconAnchor: [7, 8],
   })
 }
+function conquestBadge(text, color) {
+  return L.divIcon({
+    className: 'conquest-badge',
+    html: `<div style="background:${color};color:#04121b;font:700 10px 'JetBrains Mono',monospace;padding:2px 7px;border-radius:10px;white-space:nowrap;border:1px solid rgba(0,0,0,0.45);box-shadow:0 1px 4px rgba(0,0,0,0.5)">${text}</div>`,
+    iconSize: [10, 10],
+    iconAnchor: [0, 0],
+  })
+}
 
 export default function AustraliaMap({
   zones = [],
@@ -85,6 +93,21 @@ export default function AustraliaMap({
         return seg ? { ar, from, seg } : null
       })
       .filter(Boolean)
+  }, [arrows, zones])
+
+  // Gradual conquest: a target zone tinted toward the attacker's colour by the
+  // line's progress. If several lines target one zone, the furthest wins.
+  const conquests = useMemo(() => {
+    const m = {}
+    for (const ar of arrows) {
+      const p = ar.progress || 0
+      if (p <= 0) continue
+      const from = zones.find((z) => z.id === ar.from)
+      const to = zones.find((z) => z.id === ar.to)
+      if (!from || !to) continue
+      if (!m[ar.to] || p > m[ar.to].progress) m[ar.to] = { toId: ar.to, occupant: from.occupant, progress: p }
+    }
+    return Object.values(m)
   }, [arrows, zones])
 
   return (
@@ -158,11 +181,27 @@ export default function AustraliaMap({
           />
         ))}
 
+        {/* Gradual conquest tint on target zones. */}
+        {conquests.map((c) => {
+          const z = zones.find((x) => x.id === c.toId)
+          const mp = z && zoneBaseMP(z)
+          const center = z && zoneCenter(z)
+          if (!mp) return null
+          const col = colorFor(c.occupant)
+          return (
+            <Fragment key={`cq-${c.toId}`}>
+              <Polygon positions={mpToLatLng(mp)} interactive={false} pathOptions={{ stroke: false, fillColor: col, fillOpacity: 0.55 * (c.progress / 100) }} />
+              {center && <Marker position={center} icon={conquestBadge(`${c.occupant} ${c.progress}%`, col)} interactive={false} />}
+            </Fragment>
+          )
+        })}
+
         {/* Movement arrows — each hugs the border it crosses so many attackers on
-            one target fan out instead of converging on a single point. */}
+            one target fan out instead of converging on a single point. Dotted
+            while planned; solid once advancing (progress > 0). */}
         {arrowSegs.map(({ ar, from, seg }) => {
           const { a, b } = seg
-          const planned = ar.type === 'planned'
+          const advancing = (ar.progress || 0) > 0 || ar.type === 'current'
           // Line colour follows the occupant of the zone being advanced FROM, so
           // an Alpha-held zone pushing outward draws an Alpha-blue line.
           const color = colorFor(from.occupant)
@@ -170,7 +209,7 @@ export default function AustraliaMap({
             <Fragment key={ar.id}>
               <Polyline
                 positions={[a, b]}
-                pathOptions={{ color, weight: 3, dashArray: planned ? '6 10' : null, opacity: 0.9 }}
+                pathOptions={{ color, weight: 3, dashArray: advancing ? null : '6 10', opacity: 0.9 }}
               />
               <Marker position={b} icon={arrowHeadIcon(bearingDeg(a, b), color)} interactive={false} />
             </Fragment>
