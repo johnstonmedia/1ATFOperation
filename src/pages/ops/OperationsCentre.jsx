@@ -6,26 +6,22 @@ import Logo from '../../components/Logo'
 import LastUpdated from '../../components/LastUpdated'
 import NarrativeEditor from './NarrativeEditor'
 import MapEditor from './MapEditor'
-import VideoEditor from './VideoEditor'
+import BriefingsEditor from './BriefingsEditor'
 import ClassifiedEditor from './ClassifiedEditor'
 import BrandingEditor from './BrandingEditor'
-import DigitalActivities from './DigitalActivities'
 import IntelEditor from './IntelEditor'
-import CompanyEditor from './CompanyEditor'
 import UsersAdmin from './UsersAdmin'
 import HelpAdmin from './HelpAdmin'
 import AuditLog from './AuditLog'
 import LoginModal from '../../components/LoginModal'
 
 const SECTIONS = [
-  { id: 'narrative', label: 'Main Narrative', group: 'CONTENT' },
-  { id: 'map', label: 'Operational Map', group: 'CONTENT' },
-  { id: 'video', label: 'Home Video', group: 'CONTENT' },
-  { id: 'classified', label: 'Classified Page', group: 'CONTENT' },
+  { id: 'narrative', label: 'Map: Narrative', group: 'MAP PAGE' },
+  { id: 'map', label: 'Map: Territory', group: 'MAP PAGE' },
+  { id: 'intel', label: 'Intercepted Intelligence', group: 'CONTENT' },
+  { id: 'briefings', label: 'Briefings', group: 'CONTENT' },
+  { id: 'classified', label: 'Welcome Page', group: 'CONTENT' },
   { id: 'branding', label: 'Branding & Assets', group: 'CONTENT' },
-  { id: 'intel', label: 'Intel', group: 'TASKING' },
-  { id: 'activities', label: 'Activities (legacy)', group: 'TASKING' },
-  { id: 'company', label: 'Company Pages', group: 'TASKING' },
   { id: 'users', label: 'Users', group: 'ADMIN' },
   { id: 'help', label: 'Help', group: 'ADMIN' },
   { id: 'audit', label: 'Audit Log', group: 'ADMIN' },
@@ -100,12 +96,10 @@ export default function OperationsCentre() {
       <div className="ops-work">
         {section === 'narrative' && <NarrativeEditor />}
         {section === 'map' && <MapEditor />}
-        {section === 'video' && <VideoEditor />}
+        {section === 'briefings' && <BriefingsEditor />}
         {section === 'classified' && <ClassifiedEditor />}
         {section === 'branding' && <BrandingEditor />}
         {section === 'intel' && <IntelEditor />}
-        {section === 'activities' && <DigitalActivities />}
-        {section === 'company' && <CompanyEditor />}
         {section === 'users' && <UsersAdmin />}
         {section === 'help' && <HelpAdmin />}
         {section === 'audit' && <AuditLog />}

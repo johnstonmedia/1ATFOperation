@@ -135,9 +135,47 @@ export const DEFAULT_ARROWS = []
 // HQ / point markers RHQ can drop on the map. { id, name, lat, lng, occupant }.
 export const DEFAULT_MARKERS = []
 
-// Intel fragments cadets decrypt (per company). Public read; RHQ/COY write.
-// { id, company, title, prompt, answer, reveal, resources, docUrl, ts }
+// Intel fragments cadets decrypt. company: a letter, or 'ALL' for unit-wide RHQ
+// intelligence. { id, company, title, prompt, answer, reveal, resources, docUrl }
 export const DEFAULT_INTEL = []
+
+// Editable intro shown atop the Intercepted Intelligence tab.
+export const DEFAULT_INTEL_INTRO = {
+  show: true,
+  title: 'Intercepted Intelligence',
+  text: 'Meridian transmissions are being intercepted across the network. Decrypt the fragments below to uncover their intent and your next tasking.',
+}
+
+// Briefings tab: a video and a free content area (filled in later).
+export const DEFAULT_BRIEFINGS = { video: '', content: '' }
+
+// Pixel-grid territory over the NSW map. cells is a cols*rows string of colour
+// codes (see lib/territory.js). Default territory sits on the three camp areas.
+const T_COLS = 128
+const T_ROWS = 80
+function buildTerritoryCells() {
+  const g = new Array(T_COLS * T_ROWS).fill('.')
+  const blob = (cx, cy, w, h, code) => {
+    for (let y = cy; y < cy + h; y++) for (let x = cx; x < cx + w; x++) {
+      if (x >= 0 && x < T_COLS && y >= 0 && y < T_ROWS) g[y * T_COLS + x] = code
+    }
+  }
+  blob(74, 42, 8, 6, 'M') // North Sydney
+  blob(21, 33, 8, 6, 'M') // Marrangaroo
+  blob(64, 6, 8, 6, 'M')  // Singleton
+  return g.join('')
+}
+export const DEFAULT_TERRITORY = {
+  cols: T_COLS,
+  rows: T_ROWS,
+  showRHQ: false,
+  cells: buildTerritoryCells(),
+  places: [
+    { id: 'pl1', name: 'North Sydney', x: 78, y: 45 },
+    { id: 'pl2', name: 'Marrangaroo', x: 25, y: 36 },
+    { id: 'pl3', name: 'Singleton', x: 68, y: 9 },
+  ],
+}
 
 // Reference location dots for the NSW operating area (Lithgow/Blue Mountains
 // across Sydney to the Hunter). Positions are approximate over the map image.
@@ -174,6 +212,8 @@ export const DEFAULT_NARRATIVE = {
   meridian: {
     title: 'MERIDIAN // HOSTILE',
     threatLevel: 'SEVERE',
+    motiveHeading: 'MOTIVE',
+    whyHeading: 'WHY WE STOP THEM',
     motive:
       'The Meridian seeks to draw a hard line across the continent and claim ' +
       'everything beyond it. They exploit contested interior ground, spreading ' +

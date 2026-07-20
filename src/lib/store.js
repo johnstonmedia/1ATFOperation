@@ -6,35 +6,35 @@
 import { FIREBASE_ENABLED, db } from '../firebase/config'
 import {
   DEFAULT_NARRATIVE,
-  DEFAULT_ZONES,
-  DEFAULT_ARROWS,
   DEFAULT_CLASSIFIED,
   DEFAULT_BRANDING,
   DEFAULT_COMPANY_PAGES,
   DEFAULT_VIDEO,
-  DEFAULT_MARKERS,
   DEFAULT_INTEL,
+  DEFAULT_INTEL_INTRO,
+  DEFAULT_BRIEFINGS,
+  DEFAULT_TERRITORY,
   DEMO_ROSTER,
   DEFAULT_ACTIVITY,
 } from '../firebase/seed'
 
 const LS_KEY = '1atf-state-v1'
 const LS_AUTHIDX = '1atf-authindex'
-const SINGLE_SLICES = ['narrative', 'zones', 'arrows', 'markers', 'classified', 'branding', 'companyPages', 'video', 'intel']
+const SINGLE_SLICES = ['narrative', 'territory', 'classified', 'branding', 'companyPages', 'video', 'intel', 'intelIntro', 'briefings']
 const COLLECTION_SLICES = ['roster', 'tasks', 'activity', 'support', 'resetRequests', 'audit']
 
 export const isContentSlice = (slice) => SINGLE_SLICES.includes(slice)
 
 const DEFAULT_STATE = {
   narrative: DEFAULT_NARRATIVE,
-  zones: DEFAULT_ZONES,
-  arrows: DEFAULT_ARROWS,
+  territory: DEFAULT_TERRITORY,
   classified: DEFAULT_CLASSIFIED,
   branding: DEFAULT_BRANDING,
   companyPages: DEFAULT_COMPANY_PAGES,
   video: DEFAULT_VIDEO,
-  markers: DEFAULT_MARKERS,
   intel: DEFAULT_INTEL,
+  intelIntro: DEFAULT_INTEL_INTRO,
+  briefings: DEFAULT_BRIEFINGS,
   roster: FIREBASE_ENABLED ? [] : DEMO_ROSTER,
   tasks: [],
   activity: FIREBASE_ENABLED ? [] : DEFAULT_ACTIVITY,
@@ -68,29 +68,6 @@ function saveLocal(state) {
 
 /* ---------------------------- FIREBASE MODE ---------------------------- */
 
-// Firestore does not allow an array element to itself be an array, so zone
-// polygons (coords: [[lat,lng], …]) cannot be stored as-is. Encode each point
-// as a {lat,lng} map on write and turn it back into a [lat,lng] pair on read.
-// Both directions tolerate the opposite shape so old/new data interoperate.
-function encodeSlice(slice, value) {
-  if (slice !== 'zones' || !Array.isArray(value)) return value
-  return value.map((z) => ({
-    ...z,
-    coords: Array.isArray(z.coords)
-      ? z.coords.map((p) => (Array.isArray(p) ? { lat: p[0], lng: p[1] } : p))
-      : z.coords,
-  }))
-}
-function decodeSlice(slice, value) {
-  if (slice !== 'zones' || !Array.isArray(value)) return value
-  return value.map((z) => ({
-    ...z,
-    coords: Array.isArray(z.coords)
-      ? z.coords.map((p) => (Array.isArray(p) ? p : [p.lat, p.lng]))
-      : z.coords,
-  }))
-}
-
 async function loadFirebase() {
   const { doc, getDoc, collection, getDocs } = await import('firebase/firestore')
   const out = structuredClone(DEFAULT_STATE)
@@ -99,7 +76,7 @@ async function loadFirebase() {
       try {
         const snap = await getDoc(doc(db, 'content', slice))
         if (snap.exists()) {
-          out[slice] = decodeSlice(slice, snap.data().value)
+          out[slice] = snap.data().value
           out.contentMeta[slice] = { updatedAt: snap.data().updatedAt || null }
         }
       } catch {
@@ -120,7 +97,7 @@ async function loadFirebase() {
 
 async function saveFirebaseSlice(slice, value) {
   const { doc, setDoc } = await import('firebase/firestore')
-  await setDoc(doc(db, 'content', slice), { value: encodeSlice(slice, value), updatedAt: Date.now() })
+  await setDoc(doc(db, 'content', slice), { value, updatedAt: Date.now() })
 }
 
 async function persistCollection(coll, rows) {

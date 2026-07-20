@@ -14,7 +14,7 @@ export default function ClassifiedEditor() {
 
   return (
     <div>
-      <OpsHeader title="Classified Page" sub="EDIT // /CLASSIFIED" updatedAt={state.contentMeta?.classified?.updatedAt}>
+      <OpsHeader title="Welcome Page" sub="EDIT // ENTRANCE (/Classified)" updatedAt={state.contentMeta?.classified?.updatedAt}>
         <button className="primary" onClick={() => { updateSlice('classified', c); audit('Updated Classified page'); flash() }}>
           {saved ? 'Saved ✓' : 'Save'}
         </button>

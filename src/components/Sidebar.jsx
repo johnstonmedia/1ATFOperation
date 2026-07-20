@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useCompany } from '../context/CompanyContext'
-import { COMPANIES, PHONETIC } from '../firebase/seed'
+import { COMPANIES } from '../firebase/seed'
 import SupportModal from './SupportModal'
 
 // Left-hand hamburger menu. No member login — cadets pick their company and
@@ -25,8 +25,6 @@ export default function Sidebar({ open, onClose, onAuth }) {
     onClose()
     navigate(path)
   }
-
-  const companyName = company ? PHONETIC[company] : null
 
   return (
     <>
@@ -60,18 +58,16 @@ export default function Sidebar({ open, onClose, onAuth }) {
           <button className="ghost" onClick={onClose} aria-label="Close menu" style={{ padding: '4px 10px' }}>✕</button>
         </div>
 
-        <MenuItem label="Command Map" sub="Operational overview" onClick={() => go('/')} />
-        <MenuItem label="Intel" sub="Decrypt your company's fragments" onClick={() => go('/intel')} />
+        <div className="mono dim" style={{ fontSize: 10, letterSpacing: 2, margin: '2px 0 4px' }}>YOUR COMPANY</div>
+        <select value={company} onChange={(e) => setCompany(e.target.value)} style={{ marginBottom: 8 }}>
+          <option value="">— Select your company —</option>
+          {COMPANIES.filter((c) => c.letter !== 'R').map((c) => <option key={c.letter} value={c.letter}>{c.name}</option>)}
+        </select>
 
         <div className="divider" />
-        <div className="mono dim" style={{ fontSize: 10, letterSpacing: 2, margin: '4px 0' }}>YOUR COMPANY</div>
-        <select value={company} onChange={(e) => setCompany(e.target.value)} style={{ marginBottom: 6 }}>
-          <option value="">— Select your company —</option>
-          {COMPANIES.map((c) => <option key={c.letter} value={c.letter}>{c.name}</option>)}
-        </select>
-        {companyName && (
-          <MenuItem label={`${companyName} Company`} sub="Your company page" onClick={() => go(`/company/${company}`)} />
-        )}
+        <MenuItem label="Command Map" sub="Operational overview" onClick={() => go('/')} />
+        <MenuItem label="Intercepted Intelligence" sub="Decrypt Meridian transmissions" onClick={() => go('/intel')} />
+        <MenuItem label="Briefings" sub="Unit briefings" onClick={() => go('/briefings')} />
 
         <div className="grow" />
         <button className="ghost" onClick={() => setSupport(true)}>Help &amp; Support</button>

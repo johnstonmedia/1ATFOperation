@@ -8,6 +8,7 @@ import DocEmbed from '../../components/DocEmbed'
 import { COMPANIES, PHONETIC } from '../../firebase/seed'
 
 const rid = () => Math.random().toString(36).slice(2, 10)
+const audLabel = (code) => (code === 'ALL' ? 'Unit-wide (RHQ)' : PHONETIC[code] || code)
 
 // RHQ / COY manage the decryptable intel fragments cadets see per company.
 export default function IntelEditor() {
@@ -22,7 +23,7 @@ export default function IntelEditor() {
   const upsert = (f) => {
     const exists = intel.some((x) => x.id === f.id)
     updateSlice('intel', exists ? intel.map((x) => (x.id === f.id ? f : x)) : [...intel, f])
-    audit('Saved intel fragment', `${PHONETIC[f.company] || f.company}: “${f.title || 'untitled'}”`)
+    audit('Saved intel fragment', `${audLabel(f.company)}: “${f.title || 'untitled'}”`)
     setEditing(null)
   }
   const remove = async (id) => {
@@ -35,11 +36,14 @@ export default function IntelEditor() {
 
   return (
     <div>
-      <OpsHeader title="Intel" sub="TASKING // DECRYPTABLE FRAGMENTS" updatedAt={state.contentMeta?.intel?.updatedAt}>
+      <OpsHeader title="Intercepted Intelligence" sub="TASKING // DECRYPTABLE FRAGMENTS" updatedAt={state.contentMeta?.intel?.updatedAt}>
         <button className="primary" onClick={() => setEditing(blank())}>+ New fragment</button>
       </OpsHeader>
+
+      <IntroEditor />
+
       <div className="mono dim" style={{ fontSize: 11, marginBottom: 14 }}>
-        Each fragment is a coded message a cadet decrypts to reveal camp info. They pick their company on the public Intel page; no login.
+        Each fragment is a coded message a cadet decrypts. Set the audience to a company, or <span className="accent">Entire unit</span> for the RHQ intelligence section. No login — cadets pick their company on the site.
       </div>
 
       {intel.length === 0 && <div className="panel panel-pad mono dim" style={{ fontSize: 13 }}>No intel fragments yet.</div>}
@@ -48,7 +52,7 @@ export default function IntelEditor() {
           <div key={f.id} className="panel panel-pad row between center wrap" style={{ gap: 12 }}>
             <div>
               <div className="head" style={{ fontSize: 15 }}>{f.title || 'Untitled fragment'}</div>
-              <div className="mono dim" style={{ fontSize: 11 }}>{PHONETIC[f.company] || f.company} · solution: <span className="accent">{f.answer || '—'}</span></div>
+              <div className="mono dim" style={{ fontSize: 11 }}>{audLabel(f.company)} · solution: <span className="accent">{f.answer || '—'}</span></div>
             </div>
             <div className="row" style={{ gap: 8 }}>
               <button className="ghost" onClick={() => setEditing(f)}>Edit</button>
@@ -57,6 +61,28 @@ export default function IntelEditor() {
           </div>
         ))}
       </div>
+    </div>
+  )
+}
+
+// Editable intro (title + paragraph) shown atop the recruit Intelligence tab,
+// with a checkbox to show or hide it.
+function IntroEditor() {
+  const { state, updateSlice } = useData()
+  const [saved, flash] = useSaved()
+  const [intro, setIntro] = useState(state.intelIntro || { show: true, title: '', text: '' })
+  const set = (k) => (e) => setIntro({ ...intro, [k]: e.target.value })
+  return (
+    <div className="panel panel-pad col" style={{ marginBottom: 16, maxWidth: 720 }}>
+      <div className="row between center">
+        <strong className="head" style={{ fontSize: 14 }}>Intro text (top of the tab)</strong>
+        <label className="row center" style={{ gap: 6, fontSize: 11 }}>
+          <input type="checkbox" checked={!!intro.show} onChange={(e) => setIntro({ ...intro, show: e.target.checked })} style={{ width: 'auto' }} /> Show on site
+        </label>
+      </div>
+      <Field label="Title"><input value={intro.title || ''} onChange={set('title')} /></Field>
+      <Field label="Paragraph"><textarea rows={3} value={intro.text || ''} onChange={set('text')} /></Field>
+      <button className="ghost" style={{ alignSelf: 'flex-start' }} onClick={() => { updateSlice('intelIntro', intro); flash() }}>{saved ? 'Saved ✓' : 'Save intro'}</button>
     </div>
   )
 }
@@ -92,9 +118,10 @@ function Builder({ fragment, onCancel, onSave }) {
 
       <div className="panel panel-pad col" style={{ marginBottom: 16, maxWidth: 720 }}>
         <div className="row" style={{ gap: 10 }}>
-          <Field label="Company">
+          <Field label="Audience">
             <select value={f.company} onChange={(e) => set('company', e.target.value)}>
-              {COMPANIES.map((c) => <option key={c.letter} value={c.letter}>{c.name} ({c.letter})</option>)}
+              <option value="ALL">Entire unit (RHQ intelligence)</option>
+              {COMPANIES.filter((c) => c.letter !== 'R').map((c) => <option key={c.letter} value={c.letter}>{c.name} ({c.letter})</option>)}
             </select>
           </Field>
           <div className="grow"><Field label="Title"><input value={f.title} onChange={(e) => set('title', e.target.value)} /></Field></div>

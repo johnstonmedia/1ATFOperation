@@ -25,7 +25,7 @@ export default function NarrativeEditor() {
 
   return (
     <div>
-      <OpsHeader title="Main Narrative" sub="EDIT // PUBLIC HOME CONTENT" updatedAt={state.contentMeta?.narrative?.updatedAt}>
+      <OpsHeader title="Map: Narrative" sub="EDIT // COMMAND MAP TEXT" updatedAt={state.contentMeta?.narrative?.updatedAt}>
         <button className="primary" onClick={save}>{saved ? 'Saved ✓' : 'Save changes'}</button>
       </OpsHeader>
 
@@ -52,9 +52,14 @@ export default function NarrativeEditor() {
         <h3 className="hostile" style={{ margin: 0 }}>Meridian Brief</h3>
         <Field label="Section title"><input value={n.meridian.title} onChange={meridian('title')} /></Field>
         <Field label="Threat level"><input value={n.meridian.threatLevel} onChange={meridian('threatLevel')} /></Field>
-        <Field label="Motive"><textarea rows={3} value={n.meridian.motive} onChange={meridian('motive')} /></Field>
-        <Field label="Objective"><textarea rows={3} value={n.meridian.objective} onChange={meridian('objective')} /></Field>
-        <Field label="Why we stop them"><textarea rows={3} value={n.meridian.whyStop} onChange={meridian('whyStop')} /></Field>
+        <div className="row" style={{ gap: 10 }}>
+          <div style={{ width: 180 }}><Field label="Box 1 heading"><input value={n.meridian.motiveHeading || ''} onChange={meridian('motiveHeading')} /></Field></div>
+          <div className="grow"><Field label="Box 1 content"><textarea rows={3} value={n.meridian.motive} onChange={meridian('motive')} /></Field></div>
+        </div>
+        <div className="row" style={{ gap: 10 }}>
+          <div style={{ width: 180 }}><Field label="Box 2 heading"><input value={n.meridian.whyHeading || ''} onChange={meridian('whyHeading')} /></Field></div>
+          <div className="grow"><Field label="Box 2 content"><textarea rows={3} value={n.meridian.whyStop} onChange={meridian('whyStop')} /></Field></div>
+        </div>
       </div>
     </div>
   )

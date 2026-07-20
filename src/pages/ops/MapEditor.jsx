@@ -1,284 +1,88 @@
-import { useState, useRef } from 'react'
+import { useState } from 'react'
 import { useData } from '../../context/DataContext'
-import { useConfirm } from '../../context/ConfirmContext'
 import { useAudit } from '../../hooks/useAudit'
 import { OpsHeader, useSaved } from './OperationsCentre'
-import { Field } from './NarrativeEditor'
-import AustraliaMap, { centroid } from '../../components/AustraliaMap'
-import { COMPANIES } from '../../firebase/seed'
-import { AU_STATE_NAMES } from '../../lib/australiaStates'
+import PixelMap from '../../components/PixelMap'
+import { PAINT, RHQ_PAINT, colorOf } from '../../lib/territory'
 
-const OCCUPANTS = [...COMPANIES.map((c) => c.name), 'Meridian', 'Contested']
+const rid = () => Math.random().toString(36).slice(2, 9)
 
-// Build a default shape centred on the continent.
-function rectAt(lat = -25, lng = 134, dLat = 3, dLng = 4) {
-  return [[lat + dLat, lng - dLng], [lat + dLat, lng + dLng], [lat - dLat, lng + dLng], [lat - dLat, lng - dLng]]
-}
-
-// Drag zones to position them, drag the corner handles to reshape. Zones are
-// either rectangles (corner drag keeps them square) or custom polygons. Arrows
-// connect zones: dotted = intended plan, solid = current movement.
+// Pixel-grid territory editor. Pick a colour state, paint cells on the map.
 export default function MapEditor() {
-  const { state, updateSlice, makeId } = useData()
-  const [zones, setZones] = useState(state.zones)
-  const [arrows, setArrows] = useState(state.arrows || [])
-  const [markers, setMarkers] = useState(state.markers || [])
-  const [selId, setSelId] = useState(zones[0]?.id || null)
-  const [saved, flash] = useSaved()
-  const confirm = useConfirm()
+  const { state, updateSlice } = useData()
   const audit = useAudit()
-  const mapRef = useRef(null)
+  const [saved, flash] = useSaved()
+  const [terr, setTerr] = useState(() => ({ ...state.territory, places: state.territory.places || [] }))
+  const [brush, setBrush] = useState('M')
+  const [size, setSize] = useState(2)
 
-  const save = () => {
-    updateSlice('zones', zones)
-    updateSlice('arrows', arrows)
-    updateSlice('markers', markers)
-    audit('Updated operational map', `${zones.length} zones, ${arrows.length} lines, ${markers.length} HQs`)
-    flash()
-  }
+  const { cols, rows } = terr
 
-  // A new shape appears centred on whatever the user is currently looking at,
-  // sized to a fraction of the visible area, so it's easy to place.
-  const viewCenter = () => {
-    const m = mapRef.current
-    return m ? m.getCenter() : { lat: -25, lng: 134 }
-  }
-  const rectAtView = () => {
-    const m = mapRef.current
-    if (!m) return rectAt()
-    const c = m.getCenter()
-    const b = m.getBounds()
-    const dLat = Math.max(0.4, (b.getNorth() - b.getSouth()) * 0.18)
-    const dLng = Math.max(0.4, (b.getEast() - b.getWest()) * 0.18)
-    return rectAt(c.lat, c.lng, dLat, dLng)
-  }
-
-  const setZone = (id, patch) => setZones((zs) => zs.map((z) => (z.id === id ? { ...z, ...patch } : z)))
-  const onEditChange = (updated) => setZones((zs) => zs.map((z) => (z.id === updated.id ? updated : z)))
-  const removeZone = async (id) => {
-    const z = zones.find((x) => x.id === id)
-    const ok = await confirm({
-      title: 'Remove zone',
-      message: `Remove “${z?.name || 'this zone'}” and any movement lines using it? This applies when you next save the map.`,
-      danger: true,
-      confirmLabel: 'Remove',
+  const paint = (x, y, code, sz) => {
+    setTerr((t) => {
+      const arr = t.cells.split('')
+      const r = Math.floor((sz - 1) / 2)
+      for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+        const nx = x + dx, ny = y + dy
+        if (nx >= 0 && nx < cols && ny >= 0 && ny < rows) arr[ny * cols + nx] = code
+      }
+      return { ...t, cells: arr.join('') }
     })
-    if (!ok) return
-    setZones((zs) => zs.filter((x) => x.id !== id))
-    setArrows((as) => as.filter((a) => a.from !== id && a.to !== id))
-    if (selId === id) setSelId(null)
   }
-  // Finalise a conquest: the target zone becomes the attacker's occupant.
-  const conquer = (a) => {
-    const fromZone = zones.find((z) => z.id === a.from)
-    if (fromZone) setZone(a.to, { occupant: fromZone.occupant })
-    setArrows((as) => as.filter((x) => x.id !== a.id))
-  }
+  const movePlace = (id, x, y) => setTerr((t) => ({ ...t, places: t.places.map((p) => (p.id === id ? { ...p, x, y } : p)) }))
+  const addPlace = () => setTerr((t) => ({ ...t, places: [...t.places, { id: rid(), name: 'New place', x: Math.round(cols / 2), y: Math.round(rows / 2) }] }))
+  const setPlace = (id, patch) => setTerr((t) => ({ ...t, places: t.places.map((p) => (p.id === id ? { ...p, ...patch } : p)) }))
+  const delPlace = (id) => setTerr((t) => ({ ...t, places: t.places.filter((p) => p.id !== id) }))
+  const clearAll = () => setTerr((t) => ({ ...t, cells: '.'.repeat(cols * rows) }))
 
-  // A custom zone starts as a rectangle where the user is looking.
-  const addCustom = () => {
-    const id = makeId()
-    setZones((zs) => [...zs, { id, name: 'New Zone', occupant: 'Contested', shape: 'custom', coords: rectAtView() }])
-    setSelId(id)
-  }
-  // A state zone snaps to the borders of the selected state(s).
-  const addState = () => {
-    const id = makeId()
-    setZones((zs) => [...zs, { id, name: 'New State Zone', occupant: 'Contested', shape: 'state', states: [] }])
-    setSelId(id)
-  }
-  // An HQ marker dropped at the current view centre.
-  const addHQ = () => {
-    const c = viewCenter()
-    setMarkers((ms) => [...ms, { id: makeId(), name: 'New HQ', occupant: 'RHQ', lat: c.lat, lng: c.lng }])
-  }
-  const setMarker = (id, patch) => setMarkers((ms) => ms.map((m) => (m.id === id ? { ...m, ...patch } : m)))
-  const moveMarker = (id, lat, lng) => setMarker(id, { lat, lng })
-  const removeMarker = (id) => setMarkers((ms) => ms.filter((m) => m.id !== id))
+  const save = () => { updateSlice('territory', terr); audit('Updated map territory'); flash() }
 
-  const sel = zones.find((z) => z.id === selId)
-  const isCustom = (z) => z && z.shape !== 'state' && Array.isArray(z.coords)
-  const toggleState = (z, name) => {
-    const have = z.states || []
-    setZone(z.id, { states: have.includes(name) ? have.filter((s) => s !== name) : [...have, name] })
-  }
-
-  // custom-polygon vertex add/remove
-  const addVertex = () => {
-    if (!isCustom(sel)) return
-    const c = centroid(sel.coords)
-    setZone(sel.id, { coords: [...sel.coords, [c[0] - 1, c[1] + 1]] })
-  }
-  const removeVertex = () => {
-    if (!isCustom(sel) || sel.coords.length <= 3) return
-    setZone(sel.id, { coords: sel.coords.slice(0, -1) })
-  }
+  const swatches = [...PAINT, ...(terr.showRHQ ? [RHQ_PAINT] : [])]
 
   return (
     <div>
-      <OpsHeader title="Operational Map" sub="EDIT // ZONES & MOVEMENTS" updatedAt={state.contentMeta?.zones?.updatedAt}>
-        <button className="ghost" onClick={addCustom}>+ Custom box</button>
-        <button className="ghost" onClick={addState}>+ State(s)</button>
-        <button className="ghost" onClick={addHQ}>+ HQ</button>
+      <OpsHeader title="Map: Territory" sub="EDIT // PIXEL TERRITORY" updatedAt={state.contentMeta?.territory?.updatedAt}>
+        <label className="row center" style={{ gap: 6, fontSize: 11 }}>
+          <input type="checkbox" checked={!!terr.showRHQ} onChange={(e) => setTerr((t) => ({ ...t, showRHQ: e.target.checked }))} style={{ width: 'auto' }} /> Show RHQ on map
+        </label>
         <button className="primary" onClick={save}>{saved ? 'Saved ✓' : 'Save map'}</button>
       </OpsHeader>
 
       <div className="mono dim" style={{ fontSize: 11, marginBottom: 10 }}>
-        Zoom/pan to where you want it, then <span className="accent">+ Custom box</span> drops a box right there — drag the ✥ to move it, the round handles to resize.
-        <span className="accent"> + State(s)</span> snaps to real state borders. <span className="accent">+ HQ</span> drops a headquarters marker you can drag. Capital cities are marked automatically.
+        Pick a colour, then paint on the map. The top row of each pair is solid (firmly held); the “·” one is the lighter, newly-gained/loosely-held variant. Erase removes.
       </div>
 
-      <div className="panel" style={{ marginBottom: 18 }}>
-        <AustraliaMap zones={zones} arrows={arrows} markers={markers} height={420} editId={selId} onEditChange={onEditChange} onZoneClick={(z) => setSelId(z.id)} onMarkerMove={moveMarker} onMap={(m) => { mapRef.current = m }} />
-      </div>
-
-      {/* HQ markers */}
-      {markers.length > 0 && (
-        <div className="panel panel-pad col" style={{ gap: 8, marginBottom: 18 }}>
-          <strong className="head" style={{ fontSize: 14 }}>HQ markers</strong>
-          {markers.map((m) => (
-            <div key={m.id} className="row wrap" style={{ gap: 10, alignItems: 'flex-end' }}>
-              <div className="grow" style={{ minWidth: 140 }}>
-                <Field label="Name"><input value={m.name} onChange={(e) => setMarker(m.id, { name: e.target.value })} /></Field>
-              </div>
-              <div style={{ minWidth: 140 }}>
-                <Field label="Occupant">
-                  <select value={m.occupant} onChange={(e) => setMarker(m.id, { occupant: e.target.value })}>
-                    {OCCUPANTS.map((o) => <option key={o} value={o}>{o}</option>)}
-                  </select>
-                </Field>
-              </div>
-              <span className="mono dim" style={{ fontSize: 10 }}>drag the marker on the map to move it</span>
-              <button className="danger ghost" onClick={() => removeMarker(m.id)}>Remove</button>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Zone list / editor */}
-      <div className="col" style={{ gap: 10, marginBottom: 22 }}>
-        {zones.map((z) => (
-          <div
-            key={z.id}
-            className="panel panel-pad row wrap"
-            style={{ gap: 12, alignItems: 'flex-end', borderColor: z.id === selId ? 'var(--accent)' : 'var(--line)' }}
-          >
-            <button className={z.id === selId ? 'primary' : 'ghost'} onClick={() => setSelId(z.id)} style={{ alignSelf: 'center' }}>
-              {z.id === selId ? 'Editing' : 'Select'}
+      <div className="row wrap" style={{ gap: 6, marginBottom: 8 }}>
+        {swatches.flatMap((p) => [p.code, p.code.toLowerCase()].map((code) => {
+          const active = brush === code
+          const light = code === code.toLowerCase()
+          return (
+            <button key={code} onClick={() => setBrush(code)} title={`${p.label}${light ? ' (light)' : ''}`}
+              style={{ padding: '6px 9px', border: active ? '2px solid #fff' : '1px solid var(--line)', background: colorOf(code), color: '#04121b', fontSize: 11, fontFamily: 'var(--mono)', borderRadius: 4, cursor: 'pointer' }}>
+              {p.code}{light ? '·' : ''}
             </button>
-            <div className="grow" style={{ minWidth: 160 }}>
-              <Field label="Zone name"><input value={z.name} onChange={(e) => setZone(z.id, { name: e.target.value })} /></Field>
-            </div>
-            <div style={{ minWidth: 150 }}>
-              <Field label="Occupant">
-                <select value={z.occupant} onChange={(e) => setZone(z.id, { occupant: e.target.value })}
-                  style={{ color: z.occupant === 'Meridian' ? 'var(--hostile)' : 'var(--text)' }}>
-                  {OCCUPANTS.map((o) => <option key={o} value={o}>{o}</option>)}
-                </select>
-              </Field>
-            </div>
-            <span className="tag">{z.shape === 'state' ? 'STATE(S)' : 'CUSTOM'}</span>
-            <button className="danger ghost" onClick={() => removeZone(z.id)}>Remove</button>
-            {z.shape === 'state' && (
-              <div className="col" style={{ gap: 4, flexBasis: '100%' }}>
-                <label className="mono dim" style={{ fontSize: 10 }}>States / territories</label>
-                <div className="row wrap" style={{ gap: 6 }}>
-                  {AU_STATE_NAMES.map((s) => {
-                    const on = (z.states || []).includes(s)
-                    return (
-                      <button
-                        key={s}
-                        className={on ? 'primary' : 'ghost'}
-                        onClick={() => toggleState(z, s)}
-                        style={{ padding: '4px 9px', fontSize: 11 }}
-                      >
-                        {s}
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-            )}
+          )
+        }))}
+        <button onClick={() => setBrush('.')} style={{ padding: '6px 12px', border: brush === '.' ? '2px solid #fff' : '1px solid var(--line)', background: 'transparent', color: 'var(--text)', fontSize: 11, borderRadius: 4, cursor: 'pointer' }}>Erase</button>
+      </div>
+      <div className="row center" style={{ gap: 8, marginBottom: 12 }}>
+        <span className="mono dim" style={{ fontSize: 11 }}>Brush size</span>
+        {[1, 2, 3, 5].map((s) => <button key={s} className={size === s ? 'primary' : 'ghost'} onClick={() => setSize(s)} style={{ padding: '3px 9px' }}>{s}</button>)}
+        <button className="danger ghost" onClick={clearAll} style={{ marginLeft: 'auto' }}>Clear all</button>
+      </div>
+
+      <PixelMap territory={terr} edit brush={brush} brushSize={size} onPaint={paint} onMovePlace={movePlace} height={460} />
+
+      <div className="panel panel-pad col" style={{ gap: 8, marginTop: 14 }}>
+        <div className="row between center"><strong className="head" style={{ fontSize: 14 }}>Place names</strong><button className="ghost" onClick={addPlace}>+ Add place</button></div>
+        {terr.places.length === 0 && <div className="mono dim" style={{ fontSize: 12 }}>No place labels.</div>}
+        {terr.places.map((p) => (
+          <div key={p.id} className="row center" style={{ gap: 8 }}>
+            <input value={p.name} onChange={(e) => setPlace(p.id, { name: e.target.value })} />
+            <span className="mono dim" style={{ fontSize: 10 }}>drag its dot on the map</span>
+            <button className="danger ghost" onClick={() => delPlace(p.id)}>Remove</button>
           </div>
         ))}
-        {isCustom(sel) && (
-          <div className="row" style={{ gap: 8 }}>
-            <button className="ghost" onClick={addVertex}>+ Add corner to “{sel.name}”</button>
-            <button className="ghost" onClick={removeVertex} disabled={sel.coords.length <= 3}>− Remove corner</button>
-          </div>
-        )}
-      </div>
-
-      {/* Arrows / movements */}
-      <ArrowsEditor zones={zones} arrows={arrows} setArrows={setArrows} makeId={makeId} onConquer={conquer} />
-    </div>
-  )
-}
-
-function ArrowsEditor({ zones, arrows, setArrows, makeId, onConquer }) {
-  const [draft, setDraft] = useState({ from: '', to: '' })
-  const nameOf = (id) => zones.find((z) => z.id === id)?.name || '—'
-
-  const add = () => {
-    if (!draft.from || !draft.to || draft.from === draft.to) return
-    setArrows([...arrows, { id: makeId(), from: draft.from, to: draft.to, type: 'planned', progress: 0 }])
-    setDraft({ from: '', to: '' })
-  }
-  const remove = (id) => setArrows(arrows.filter((a) => a.id !== id))
-  // Raising progress above 0 turns a planned line (dotted) into an advance (solid).
-  const setProgress = (id, val) =>
-    setArrows(arrows.map((a) => (a.id === id ? { ...a, progress: val, type: val > 0 ? 'current' : 'planned' } : a)))
-
-  return (
-    <div className="panel panel-pad col" style={{ gap: 12 }}>
-      <div className="row between center wrap" style={{ gap: 8 }}>
-        <strong className="head">Movement &amp; Conquest</strong>
-        <span className="mono dim" style={{ fontSize: 11 }}>0% = planned (dotted) · progress = advancing (solid) · 100% = ready to take</span>
-      </div>
-
-      <div className="row wrap" style={{ gap: 10, alignItems: 'flex-end' }}>
-        <div style={{ minWidth: 150 }}>
-          <Field label="From (attacker)">
-            <select value={draft.from} onChange={(e) => setDraft({ ...draft, from: e.target.value })}>
-              <option value="">—</option>
-              {zones.map((z) => <option key={z.id} value={z.id}>{z.name}</option>)}
-            </select>
-          </Field>
-        </div>
-        <div style={{ minWidth: 150 }}>
-          <Field label="To (target)">
-            <select value={draft.to} onChange={(e) => setDraft({ ...draft, to: e.target.value })}>
-              <option value="">—</option>
-              {zones.map((z) => <option key={z.id} value={z.id}>{z.name}</option>)}
-            </select>
-          </Field>
-        </div>
-        <button className="ghost" onClick={add}>+ Add line</button>
-      </div>
-
-      <div className="col" style={{ gap: 10 }}>
-        {arrows.length === 0 && <div className="mono dim" style={{ fontSize: 12 }}>No movement lines yet.</div>}
-        {arrows.map((a) => {
-          const p = a.progress || 0
-          return (
-            <div key={a.id} className="col" style={{ gap: 6, padding: '8px 0', borderBottom: '1px solid var(--line)' }}>
-              <div className="row between center wrap" style={{ gap: 8 }}>
-                <span className="mono" style={{ fontSize: 13 }}>
-                  {nameOf(a.from)} <span className="accent">→</span> {nameOf(a.to)}
-                  <span className="dim"> · {p > 0 ? `advancing ${p}%` : 'planned'}</span>
-                </span>
-                <div className="row" style={{ gap: 8 }}>
-                  {p >= 100 && <button className="primary" onClick={() => onConquer(a)} style={{ padding: '4px 10px' }}>Complete conquest</button>}
-                  <button className="danger ghost" onClick={() => remove(a.id)} style={{ padding: '4px 10px' }}>Remove</button>
-                </div>
-              </div>
-              <div className="row center" style={{ gap: 10 }}>
-                <input type="range" min="0" max="100" step="5" value={p} onChange={(e) => setProgress(a.id, Number(e.target.value))} style={{ flex: 1 }} />
-                <span className="mono accent" style={{ fontSize: 12, width: 42, textAlign: 'right' }}>{p}%</span>
-              </div>
-            </div>
-          )
-        })}
       </div>
     </div>
   )
