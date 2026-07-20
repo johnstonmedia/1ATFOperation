@@ -1,5 +1,4 @@
 import polygonClipping from 'polygon-clipping'
-import { AUSTRALIA_LAND } from './australiaOutline'
 import { AU_STATES } from './australiaStates'
 
 // Geometry helpers for the operational map. Zones come in two kinds:
@@ -51,15 +50,11 @@ export function zoneBaseMP(zone) {
       return null
     }
   }
-  // custom (default) — a polygon clipped to the Australian coastline.
+  // custom (default) — a free polygon, used as drawn (no coastline clipping on
+  // the local NSW map).
   const coords = zone.coords
   if (!Array.isArray(coords) || coords.length < 3) return null
-  try {
-    const r = polygonClipping.intersection([coords.map(toXY)], AUSTRALIA_LAND)
-    return r && r.length ? r : null
-  } catch {
-    return null
-  }
+  return [[coords.map(toXY)]]
 }
 
 export function zoneCenter(zone) {

@@ -1,5 +1,5 @@
 import { Fragment, useMemo, useRef, useEffect } from 'react'
-import { MapContainer, TileLayer, Polygon, Polyline, Marker, Tooltip, useMap } from 'react-leaflet'
+import { MapContainer, ImageOverlay, Polygon, Polyline, Marker, Tooltip, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import { COMPANIES, CAPITALS } from '../firebase/seed'
 import { composeZones, mpToLatLng, zoneBaseMP, zoneCenter, arrowEndpoints } from '../lib/zoneGeometry'
@@ -29,12 +29,15 @@ function hqIcon(name, color) {
   })
 }
 
-// Bounds clamp the viewport to the Australian continent.
+// Operating area: a slice of NSW (Lithgow/Blue Mountains across Sydney to the
+// Hunter). The map is a fixed terrain image over these bounds — swap the image
+// at public/map/nsw-terrain.jpg and nudge these bounds so landmarks line up.
 const AU_BOUNDS = [
-  [-44.5, 112.0],
-  [-9.5, 154.5],
+  [-34.95, 149.55],
+  [-32.35, 152.15],
 ]
-const AU_CENTER = [-25.6, 134.4]
+const AU_CENTER = [-33.7, 150.9]
+const MAP_IMAGE = import.meta.env.BASE_URL + 'map/nsw-terrain.jpg'
 
 const OCCUPANT_COLORS = {
   Meridian: '#ff3b46',
@@ -47,6 +50,18 @@ function colorFor(occupant) {
 
 const clampLat = (v) => Math.max(AU_BOUNDS[0][0], Math.min(AU_BOUNDS[1][0], v))
 const clampLng = (v) => Math.max(AU_BOUNDS[0][1], Math.min(AU_BOUNDS[1][1], v))
+
+// Fits the view to the region on load and forbids zooming out past it.
+function LockToRegion() {
+  const map = useMap()
+  useEffect(() => {
+    const b = L.latLngBounds(AU_BOUNDS)
+    map.fitBounds(b)
+    map.setMinZoom(map.getBoundsZoom(b))
+    map.setMaxBounds(b.pad(0.03))
+  }, [map])
+  return null
+}
 
 export function centroid(coords) {
   const n = coords.length || 1
@@ -141,7 +156,7 @@ export default function AustraliaMap({
   return (
     <div
       role="region"
-      aria-label="Operational map of Australia"
+      aria-label="Operational map (NSW area)"
       style={{
         height,
         border: '1px solid var(--line)',
@@ -153,19 +168,14 @@ export default function AustraliaMap({
     >
       <MapContainer
         center={AU_CENTER}
-        zoom={4}
-        minZoom={4}
-        maxZoom={14}
+        zoom={9}
+        maxZoom={15}
         maxBounds={AU_BOUNDS}
         maxBoundsViscosity={1.0}
-        style={{ height: '100%', width: '100%' }}
+        style={{ height: '100%', width: '100%', background: '#0a0f1a' }}
       >
-        <TileLayer
-          url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-          attribution="&copy; OpenStreetMap &copy; CARTO"
-          maxZoom={20}
-          noWrap
-        />
+        <ImageOverlay url={MAP_IMAGE} bounds={AU_BOUNDS} />
+        <LockToRegion />
         <MapRef onMap={onMap} />
 
         {/* Capital-city reference dots. */}
