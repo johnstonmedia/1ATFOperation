@@ -1,13 +1,15 @@
 import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { PHONETIC } from '../firebase/seed'
+import { useCompany } from '../context/CompanyContext'
+import { COMPANIES, PHONETIC } from '../firebase/seed'
 import SupportModal from './SupportModal'
 
-// Left-hand hamburger menu. Profile / Activity / Tasks / Company tabs require a
-// signed-in account; the user's company tab is derived from their profile.
+// Left-hand hamburger menu. No member login — cadets pick their company and
+// read that company's intel / page. RHQ can still sign in for the ops centre.
 export default function Sidebar({ open, onClose, onAuth }) {
-  const { user } = useAuth()
+  const { isRHQ } = useAuth()
+  const { company, setCompany } = useCompany()
   const navigate = useNavigate()
   const [support, setSupport] = useState(false)
 
@@ -24,13 +26,7 @@ export default function Sidebar({ open, onClose, onAuth }) {
     navigate(path)
   }
 
-  const needAuth = (path) => {
-    onClose()
-    if (user) navigate(path)
-    else onAuth()
-  }
-
-  const companyName = user?.company ? PHONETIC[user.company] : null
+  const companyName = company ? PHONETIC[company] : null
 
   return (
     <>
@@ -64,30 +60,24 @@ export default function Sidebar({ open, onClose, onAuth }) {
           <button className="ghost" onClick={onClose} aria-label="Close menu" style={{ padding: '4px 10px' }}>✕</button>
         </div>
 
-        <MenuItem label="Command Map" sub="Public overview" onClick={() => go('/')} />
+        <MenuItem label="Command Map" sub="Operational overview" onClick={() => go('/')} />
+        <MenuItem label="Intel" sub="Decrypt your company's fragments" onClick={() => go('/intel')} />
 
         <div className="divider" />
-        <div className="mono dim" style={{ fontSize: 10, letterSpacing: 2, margin: '4px 0' }}>
-          PERSONNEL {user ? '' : '· LOGIN REQUIRED'}
-        </div>
-
-        <MenuItem label="Profile" sub="Rank · company · details" locked={!user} onClick={() => needAuth('/profile')} />
-        <MenuItem label="Your Activity" sub="Recent company movements" locked={!user} onClick={() => needAuth('/activity')} />
-        <MenuItem label="Your Tasks" sub="Tasks distributed by RHQ" locked={!user} onClick={() => needAuth('/tasks')} />
-
-        {user && companyName && (
-          <MenuItem
-            label={`${companyName} Company`}
-            sub={`${user.company}-COY tasks & role`}
-            onClick={() => go(`/company/${user.company}`)}
-          />
+        <div className="mono dim" style={{ fontSize: 10, letterSpacing: 2, margin: '4px 0' }}>YOUR COMPANY</div>
+        <select value={company} onChange={(e) => setCompany(e.target.value)} style={{ marginBottom: 6 }}>
+          <option value="">— Select your company —</option>
+          {COMPANIES.map((c) => <option key={c.letter} value={c.letter}>{c.name}</option>)}
+        </select>
+        {companyName && (
+          <MenuItem label={`${companyName} Company`} sub="Your company page" onClick={() => go(`/company/${company}`)} />
         )}
 
         <div className="grow" />
-        {!user && (
-          <button className="primary" onClick={() => { onClose(); onAuth() }}>Access Portal</button>
-        )}
         <button className="ghost" onClick={() => setSupport(true)}>Help &amp; Support</button>
+        {isRHQ
+          ? <button className="ghost" onClick={() => go('/operations-centre')}>Operations Centre</button>
+          : <button className="ghost" onClick={() => { onClose(); onAuth() }} style={{ fontSize: 11 }}>RHQ sign in</button>}
         <Link to="/" onClick={onClose} className="mono dim" style={{ fontSize: 10, marginTop: 10 }}>
           LUCET PER MINISTERIUM
         </Link>

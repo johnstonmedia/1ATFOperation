@@ -1,12 +1,15 @@
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import Logo from './Logo'
 import { useData } from '../context/DataContext'
 import { useAuth } from '../context/AuthContext'
-import { rankShort } from '../firebase/seed'
+import { useCompany } from '../context/CompanyContext'
+import { COMPANIES } from '../firebase/seed'
 
 export default function TopBar({ onMenu, onAuth }) {
   const { state } = useData()
-  const { user, logout } = useAuth()
+  const { isRHQ, logout } = useAuth()
+  const { company, setCompany } = useCompany()
+  const navigate = useNavigate()
   const n = state.narrative
 
   return (
@@ -39,16 +42,17 @@ export default function TopBar({ onMenu, onAuth }) {
         </div>
 
         <div className="row center" style={{ gap: 10 }}>
-          {user ? (
+          <select value={company} onChange={(e) => setCompany(e.target.value)} aria-label="Your company" style={{ width: 'auto', fontSize: 12, padding: '6px 8px' }}>
+            <option value="">Company…</option>
+            {COMPANIES.map((c) => <option key={c.letter} value={c.letter}>{c.name}</option>)}
+          </select>
+          {isRHQ ? (
             <>
-              <div className="mono dim topbar-id" style={{ fontSize: 11, textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                <div style={{ color: 'var(--accent)', overflow: 'hidden', textOverflow: 'ellipsis' }}>{rankShort(user.rank)} {user.name}</div>
-                <div>{user.company ? `${user.company}-COY` : 'UNASSIGNED'} · {user.role}</div>
-              </div>
+              <button className="ghost hide-sm" onClick={() => navigate('/operations-centre')}>Ops Centre</button>
               <button className="ghost" onClick={logout}>Sign out</button>
             </>
           ) : (
-            <button className="primary" onClick={onAuth}>Access</button>
+            <button className="ghost hide-sm" onClick={onAuth}>RHQ</button>
           )}
         </div>
       </div>

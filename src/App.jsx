@@ -5,6 +5,7 @@ import Home from './pages/Home'
 import Profile from './pages/Profile'
 import Activity from './pages/Activity'
 import Tasks from './pages/Tasks'
+import Intel from './pages/Intel'
 import CompanyPage from './pages/CompanyPage'
 import Classified from './pages/Classified'
 import OperationsCentre from './pages/ops/OperationsCentre'
@@ -24,6 +25,7 @@ export default function App() {
       {/* Main app shell with top bar + hamburger */}
       <Route element={<Layout />}>
         <Route path="/" element={<Home />} />
+        <Route path="/intel" element={<Intel />} />
         <Route path="/profile" element={<Profile />} />
         <Route path="/activity" element={<Activity />} />
         <Route path="/tasks" element={<Tasks />} />

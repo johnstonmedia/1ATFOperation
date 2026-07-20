@@ -1,14 +1,14 @@
 import { useState } from 'react'
 import AustraliaMap from '../components/AustraliaMap'
 import { useData } from '../context/DataContext'
-import { useAuth } from '../context/AuthContext'
-import { COMPANIES, rankShort, surnameOf } from '../firebase/seed'
+import { useCompany } from '../context/CompanyContext'
+import { COMPANIES, PHONETIC } from '../firebase/seed'
 import { formatUpdated } from '../components/LastUpdated'
 import VideoEmbed from '../components/VideoEmbed'
 
 export default function Home() {
   const { state } = useData()
-  const { user } = useAuth()
+  const { company } = useCompany()
   const n = state.narrative
   const [tab, setTab] = useState('1ATF')
   const [selected, setSelected] = useState(null)
@@ -25,9 +25,9 @@ export default function Home() {
       <div className="panel panel-pad" style={{ marginBottom: 20 }}>
         <div className="row between wrap" style={{ gap: 16 }}>
           <div>
-            {user && (
+            {company && (
               <div className="mono accent" style={{ fontSize: 14, marginBottom: 8 }}>
-                Welcome, {[rankShort(user.rank), surnameOf(user.name)].filter(Boolean).join(' ')}
+                Welcome, {PHONETIC[company] || company} Company
               </div>
             )}
             <div className="tag live blink">● LIVE OPERATIONAL PICTURE</div>
@@ -76,7 +76,7 @@ export default function Home() {
 
         {/* Briefing column */}
         <div style={{ width: 420, maxWidth: '100%' }}>
-          {tab === '1ATF' ? <OneATFBrief n={n} authed={Boolean(user)} /> : <MeridianBrief n={n} />}
+          {tab === '1ATF' ? <OneATFBrief n={n} authed /> : <MeridianBrief n={n} />}
         </div>
       </div>
 

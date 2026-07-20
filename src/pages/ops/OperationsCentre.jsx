@@ -10,6 +10,7 @@ import VideoEditor from './VideoEditor'
 import ClassifiedEditor from './ClassifiedEditor'
 import BrandingEditor from './BrandingEditor'
 import DigitalActivities from './DigitalActivities'
+import IntelEditor from './IntelEditor'
 import CompanyEditor from './CompanyEditor'
 import UsersAdmin from './UsersAdmin'
 import HelpAdmin from './HelpAdmin'
@@ -22,7 +23,8 @@ const SECTIONS = [
   { id: 'video', label: 'Home Video', group: 'CONTENT' },
   { id: 'classified', label: 'Classified Page', group: 'CONTENT' },
   { id: 'branding', label: 'Branding & Assets', group: 'CONTENT' },
-  { id: 'activities', label: 'Digital Activities', group: 'TASKING' },
+  { id: 'intel', label: 'Intel', group: 'TASKING' },
+  { id: 'activities', label: 'Activities (legacy)', group: 'TASKING' },
   { id: 'company', label: 'Company Pages', group: 'TASKING' },
   { id: 'users', label: 'Users', group: 'ADMIN' },
   { id: 'help', label: 'Help', group: 'ADMIN' },
@@ -101,6 +103,7 @@ export default function OperationsCentre() {
         {section === 'video' && <VideoEditor />}
         {section === 'classified' && <ClassifiedEditor />}
         {section === 'branding' && <BrandingEditor />}
+        {section === 'intel' && <IntelEditor />}
         {section === 'activities' && <DigitalActivities />}
         {section === 'company' && <CompanyEditor />}
         {section === 'users' && <UsersAdmin />}

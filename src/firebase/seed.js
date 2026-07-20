@@ -135,6 +135,10 @@ export const DEFAULT_ARROWS = []
 // HQ / point markers RHQ can drop on the map. { id, name, lat, lng, occupant }.
 export const DEFAULT_MARKERS = []
 
+// Intel fragments cadets decrypt (per company). Public read; RHQ/COY write.
+// { id, company, title, prompt, answer, reveal, resources, docUrl, ts }
+export const DEFAULT_INTEL = []
+
 // Reference location dots for the NSW operating area (Lithgow/Blue Mountains
 // across Sydney to the Hunter). Positions are approximate over the map image.
 export const CAPITALS = [
