@@ -33,11 +33,11 @@ function hqIcon(name, color) {
 // Hunter). The map is a fixed terrain image over these bounds — swap the image
 // at public/map/nsw-terrain.jpg and nudge these bounds so landmarks line up.
 const AU_BOUNDS = [
-  [-34.95, 149.55],
-  [-32.35, 152.15],
+  [-34.70, 148.90],
+  [-32.55, 152.50],
 ]
-const AU_CENTER = [-33.7, 150.9]
-const MAP_IMAGE = import.meta.env.BASE_URL + 'map/nsw-terrain.jpg'
+const AU_CENTER = [-33.6, 150.7]
+const MAP_IMAGE = import.meta.env.BASE_URL + 'map/nsw-terrain.jpeg'
 
 const OCCUPANT_COLORS = {
   Meridian: '#ff3b46',
