@@ -1,91 +1,94 @@
-# 1ATF Operational Portal — project context & handoff
+# 1ATF Cadet Portal — project context & handoff
 
-Futuristic, intelligence-agency–styled portal for the **Shore Cadet Unit / 1st
-Australian Task Force (1ATF)**. Tracks the operation to regain territory from the
-hostile **Meridian** across an interactive map of Australia.
+Cadet-campaign website. Read this fully before coding. **This file is the source
+of truth; it supersedes any older description of an "all-Australia map / member
+login" version — that has been replaced.**
 
-This file is the running context for any Claude/Claude Code session. Read it
-first.
+## Stack & deploy
+- Vite + React + React Router, Firebase (Auth + Firestore). **Leaflet was removed.**
+- Hosted on GitHub Pages via `.github/workflows/deploy.yml` (builds `dist/`,
+  deploys on push to `main`; Pages Source = GitHub Actions).
+- Firebase project `atf-operations`; web config is public by design in
+  `src/firebase/config.js`. LOCAL MODE (localStorage) only if keys are absent.
 
-## Stack & deployment
-- **Vite + React + React Router**, **react-leaflet** (Leaflet) map, **Firebase**
-  (Auth + Firestore) backend, **xlsx** for spreadsheet import, **EmailJS** for
-  admin notifications.
-- Hosted on **GitHub Pages** via `.github/workflows/deploy.yml` (builds with
-  `VITE_BASE=/<repo>/`, deploys `dist/`). Pages Source must be **GitHub Actions**.
-- SPA deep links handled by `public/404.html` + a restore snippet in `index.html`.
-- Runs in **LOCAL MODE** (localStorage) if Firebase keys are absent; otherwise
-  live. Firebase web config is embedded in `src/firebase/config.js` (keys are
-  public by design; security is via Firestore rules).
+## Git / deploy rules
+- Develop on branch `claude/atf-privacy-hardening-me8r8b`; deploy by pushing to
+  `main`. Direct push works. Keep `main` and the feature branch in sync.
+- ⚠️ **DEPLOY GOTCHA:** the workflow uses concurrency `cancel-in-progress: true`.
+  Rapid successive pushes **cancel each other's deploys**, so the live site
+  silently stays on an old build. Push ONE commit and let the run finish. Verify
+  the deploy.yml run conclusion = `success` (not `cancelled`).
 
-## Auth model (`src/context/AuthContext.jsx`)
-- Members log in with their **ID number** (not email). Firebase Auth uses a
-  synthesised email `id-<id>[.v<version>]@1atf.unit`.
-- **First-time / post-reset:** "Log in with temporary password" — ID + issued
-  temp password + a new password they choose. `register()` validates the temp
-  password against the roster.
-- **Returning:** ID + password via `signIn()`.
-- **Password reset:** RHQ bumps a per-ID **credential epoch** (`authIndex`, see
-  `lib/store.js getAuthVersion/setAuthVersion`); the versioned email makes the
-  member re-register with a fresh temp password. (No Firebase Admin SDK needed.)
-- **Bootstrap admin: ID `190990`** is RHQ and can always sign in, even before any
-  roster exists; it is also written into the roster so it shows in Users.
-- Roles: **RHQ** and **General** (chosen in Users admin, not from the sheet).
-- Companies (phonetic letters): A Alpha, B Bravo, C Charlie, D Delta, E Echo,
-  S Support. Meridian is the hostile force (red on the map).
+## Current architecture (post-pivot v2)
+- **No member login.** Cadets pick a company via a dropdown → `src/context/
+  CompanyContext.jsx` (localStorage). No accounts / no member PII.
+- **RHQ** logs in via Firebase Auth (bootstrap admin = ID `190990`) to reach the
+  URL-only `/operations-centre`. See `src/context/AuthContext.jsx`.
+- Three recruit tabs: **Command Map** (`/`), **Intercepted Intelligence**
+  (`/intel`), **Briefings** (`/briefings`). Routes in `src/App.jsx`; nav in
+  `src/components/Sidebar.jsx` + `TopBar.jsx` (company select at top of the nav).
 
-## Data model
-- Firestore single-value docs under `content/{slice}`: `narrative`, `zones`,
-  `arrows`, `classified`, `branding`, `companyPages` (public read, RHQ write).
-- Collections: `roster`, `tasks`, `activity` (signed-in read, RHQ write);
-  `support`, `resetRequests` (anyone create, RHQ read); `users/{uid}` profiles;
-  `authIndex/{id}` (public read, RHQ write — just `pwVersion`).
-- Data layer in `src/lib/store.js` (mode-agnostic). `DataContext` provides
-  `updateSlice`, `replaceRoster`, `append`, `reportError`, `reload`.
+## The map — pixel-grid territory system (the core rebuild)
+- `src/components/PixelMap.jsx`: renders a fixed terrain image
+  (`public/map/nsw-terrain.jpeg`) with `image-rendering: pixelated`, plus a
+  `<canvas>` overlay. **Zoom in only** (min = fit). Pointer painting when the
+  `edit` prop is set. Place-name dots.
+- `src/lib/territory.js`: colour states + helpers. Grid **128×80**. Codes:
+  `'.'`=empty, `A B C D E S`=companies, `M`=Meridian, `R`=RHQ (shown only when
+  `territory.showRHQ`), lowercase = lighter "loosely-held" variant. Exports
+  `colorOf`, `PAINT`, `RHQ_PAINT`, `MAP_IMAGE`, `MAP_ASPECT`.
+- Data model = one cheap content slice `territory` =
+  `{ cols, rows, showRHQ, cells (a cols*rows string), places:[{id,name,x,y}] }`.
+  Render: 0.4-alpha tint fill + solid company-colour edge wherever a cell borders
+  a different code.
+- Editor: `src/pages/ops/MapEditor.jsx` ("Map: Territory") — palette (solid +
+  light per colour + erase), brush size, RHQ show/hide toggle, place-name editor.
+- Default territory seeded on **Marrangaroo, Singleton, North Sydney**
+  (`DEFAULT_TERRITORY` in `src/firebase/seed.js`); positions are approximate on
+  the image — repaint/drag to taste. A true pixel-art PNG can replace
+  `public/map/nsw-terrain.jpeg` (same filename) anytime.
 
-## Features
-- Public: Australia-locked map (zones by occupant; movement **arrows** dotted =
-  planned / solid = current), 1ATF & Meridian briefs. Company role text gated
-  behind login.
-- Hamburger: Profile, Your Activity, Your Tasks, own Company page. **A member
-  only ever sees their own company's tasks** (no broadcast).
-- `/Classified` URL-only landing page (Continue → temp-password registration).
-- `/operations-centre` RHQ-only console: Narrative, Operational Map (drag to
-  move zones, drag corners; Rectangle vs Custom; arrows editor), Classified,
-  Branding (logo via `public/scu-logo.png`, no Storage), Digital Activities
-  (doc→quiz, company-targeted), Company Pages, **Users** (spreadsheet import =
-  merge that leaves existing IDs untouched; issues temp passwords; download
-  temp-password sheet; search), **Help** (Support / Reset Password / Account
-  Issues).
-- **Error reporting** (`src/lib/errors.js`): technical faults auto-file a Help
-  request with an internal code (ATF-NET/AUTH/CFG/DATA/INP/UNK-*) + device/page
-  detail and email RHQ; user-input errors are shown but not reported. Offline
-  reports are queued and resent.
-- **Email** via EmailJS (`src/lib/notify.js`) to the unit admin.
+## Data model (Firestore `content/{slice}`: public read, RHQ write — NO rules change needed for new slices)
+- Active content slices: `narrative`, `territory`, `classified` (the recruit
+  "Welcome Page"), `branding`, `intel`, `intelIntro`, `briefings`.
+- Legacy/unused-but-present: `companyPages`, `video`.
+- Collections: `roster`/`tasks`/`activity` (legacy), `support`, `resetRequests`,
+  `audit`, `users/{uid}`, `authIndex/{id}`.
+- Data layer: `src/lib/store.js` (`SINGLE_SLICES`, `loadFirebase`/
+  `saveFirebaseSlice`). Defaults in `src/firebase/seed.js`.
 
-## Spreadsheet import
-Captures only **name, ID number, company, email** (fuzzy `COLUMN_HINTS` in
-`src/pages/ops/UsersAdmin.jsx`). Company accepts a letter or phonetic name.
-Import MERGES: existing IDs are kept unchanged, only new IDs added.
+## Intel & Briefings
+- Intel = "Intercepted Intelligence". `src/pages/Intel.jsx` shows **RHQ**
+  (fragments with `company==='ALL'`) + **Company** (`company===selected`)
+  sections + an editable intro (`intelIntro` slice `{show,title,text}`). Cipher
+  decrypt = per-word boxes + "Enter intel".
+- Editor `src/pages/ops/IntelEditor.jsx`: audience dropdown includes "Entire
+  unit" (`'ALL'`); intro editor with show/hide checkbox.
+- Briefings: `src/pages/Briefings.jsx` (video + content). Editor
+  `src/pages/ops/BriefingsEditor.jsx`. Slice `briefings` = `{video, content}`.
 
-## Firebase setup checklist (console)
-1. Authentication → enable **Email/Password**.
-2. Firestore → create DB → publish `firestore.rules`.
-3. Storage is **not used** (logo is a repo file).
+## Ops centre (`src/pages/ops/OperationsCentre.jsx`, RHQ-only)
+Sections: Map: Narrative (NarrativeEditor), Map: Territory (MapEditor),
+Intercepted Intelligence (IntelEditor), Briefings (BriefingsEditor), Welcome Page
+(ClassifiedEditor), Branding, Users (legacy roster/temp-passwords), Help, Audit.
 
-## Known privacy gaps / TODO (discussed, not yet done)
-- ⚠️ `roster` and `users` are readable by **any signed-in member** (rules use
-  `isSignedIn()`), so a technical user could read all names/IDs/emails and the
-  **plain-text temp passwords**. Tighten to RHQ-only — but registration reads the
-  roster to verify the temp password, so this needs a rework (e.g. a minimal
-  public claim-check or a Cloud Function).
-- ⚠️ Temp passwords are stored **plain text** in `roster`. Consider hashing and
-  only revealing at generation/download time.
-- No member-facing privacy notice yet (relevant — likely minors in a cadet unit).
+## OUTSTANDING / user actions still pending
+1. **Publish `firestore.rules`** (Console → Firestore → Rules → paste → Publish).
+   Recurring blocker — needed for audit log, RHQ `users/{uid}` + `authIndex`
+   writes, and legacy help/reset flows. Public content slices work without it.
+2. Enable **Email/Password** sign-in in Firebase Auth (for the 190990 RHQ login).
+3. **EmailJS** delivery was never verified (the dev sandbox blocks
+   api.emailjs.com). Mostly legacy now.
+4. Recruit Welcome Page (`src/pages/Classified.jsx`) keeps a vestigial
+   "Continue → temp password" flow — harmless; left per brief.
+5. Legacy files remain but are unlinked: `Profile.jsx` (**KEEP** — exports
+   `PageTitle` used by Intel/Briefings), `Activity.jsx`, `Tasks.jsx`,
+   `SchedulePicker.jsx`.
 
-## Working constraints (important)
-- The repo dev branch is `claude/vigilant-cerf-i22f9f`.
-- Earlier web sessions had a **read-only** GitHub token, so changes were moved
-  via `git bundle`. If this session has write access, commit/push directly.
-- Do NOT put the model identifier or these notes' "Claude-Session" lines into
-  anything beyond commit metadata as already configured.
+## Build / preview
+- `npm run build` must pass. Local preview: `npm run dev` (port 5173) or GitHub
+  Codespaces. **github.dev cannot run it** (editor only, no terminal).
+
+## Working constraints
+- Do NOT put the model identifier or these notes into anything beyond commit
+  metadata as already configured. Do not open PRs unless asked.
