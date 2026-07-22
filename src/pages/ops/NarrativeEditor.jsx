@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { useData } from '../../context/DataContext'
 import { useAudit } from '../../hooks/useAudit'
 import { OpsHeader, useSaved } from './OperationsCentre'
-import { COMPANIES } from '../../firebase/seed'
 
 // Edits the main public narrative: unit identity, quote, 1ATF mission,
 // per-company roles, and the Meridian threat brief.
@@ -41,11 +40,15 @@ export default function NarrativeEditor() {
         <Field label="Mission"><textarea rows={4} value={n.oneatf.mission} onChange={oneatf('mission')} /></Field>
         <div className="divider" />
         <div className="mono dim" style={{ fontSize: 10, letterSpacing: 2 }}>COMPANY ROLES</div>
-        {COMPANIES.map((c) => (
-          <Field key={c.letter} label={`${c.name} (${c.letter})`}>
-            <textarea rows={2} value={n.oneatf.companies[c.name] || ''} onChange={company(c.name)} />
-          </Field>
-        ))}
+        <Field label="Recruit companies (A/B/C/D) — shared role">
+          <textarea rows={2} value={n.oneatf.recruitRole || ''} onChange={oneatf('recruitRole')} />
+        </Field>
+        <Field label="Echo">
+          <textarea rows={2} value={n.oneatf.companies.Echo || ''} onChange={company('Echo')} />
+        </Field>
+        <Field label="Support">
+          <textarea rows={2} value={n.oneatf.companies.Support || ''} onChange={company('Support')} />
+        </Field>
       </div>
 
       <div className="panel panel-pad col" style={{ borderColor: 'var(--hostile)' }}>
@@ -57,8 +60,12 @@ export default function NarrativeEditor() {
           <div className="grow"><Field label="Box 1 content"><textarea rows={3} value={n.meridian.motive} onChange={meridian('motive')} /></Field></div>
         </div>
         <div className="row" style={{ gap: 10 }}>
-          <div style={{ width: 180 }}><Field label="Box 2 heading"><input value={n.meridian.whyHeading || ''} onChange={meridian('whyHeading')} /></Field></div>
-          <div className="grow"><Field label="Box 2 content"><textarea rows={3} value={n.meridian.whyStop} onChange={meridian('whyStop')} /></Field></div>
+          <div style={{ width: 180 }}><Field label="Box 2 heading"><input value={n.meridian.objectiveHeading || ''} onChange={meridian('objectiveHeading')} /></Field></div>
+          <div className="grow"><Field label="Box 2 content"><textarea rows={3} value={n.meridian.objective} onChange={meridian('objective')} /></Field></div>
+        </div>
+        <div className="row" style={{ gap: 10 }}>
+          <div style={{ width: 180 }}><Field label="Box 3 heading"><input value={n.meridian.whyHeading || ''} onChange={meridian('whyHeading')} /></Field></div>
+          <div className="grow"><Field label="Box 3 content"><textarea rows={3} value={n.meridian.whyStop} onChange={meridian('whyStop')} /></Field></div>
         </div>
       </div>
     </div>

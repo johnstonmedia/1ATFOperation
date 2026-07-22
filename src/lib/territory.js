@@ -7,10 +7,20 @@ import { COMPANIES } from '../firebase/seed'
 //   M              Meridian
 //   R              RHQ (optional — only shown when the map's showRHQ is on)
 //   lowercase      the "lighter" variant: newly gained / loosely held
-export const TERR_COLS = 128
-export const TERR_ROWS = 80
-export const MAP_IMAGE = import.meta.env.BASE_URL + 'map/nsw-terrain.jpeg'
-export const MAP_ASPECT = 550 / 359 // the base image's aspect ratio
+//
+// Grid is sized so each cell maps to an exact 3x3 block of source-image
+// pixels (648x336 / 3 = 216x112) — keeps the colourable grid pixel-aligned
+// to the actual map art instead of an arbitrary overlay resolution.
+export const TERR_COLS = 216
+export const TERR_ROWS = 112
+export const MAP_IMAGE = import.meta.env.BASE_URL + 'map/nsw-terrain.png'
+export const MAP_ASPECT = 648 / 336 // the base image's aspect ratio
+export const MAP_PIXEL_WIDTH = 648
+export const MAP_PIXEL_HEIGHT = 336
+
+// Solid ocean fill colour in the source image — cells that sample as
+// majority-ocean can't be painted (see lib/oceanMask.js).
+export const OCEAN_COLOR = '#3c82b4'
 
 const MERIDIAN_COLOR = '#ff3b46'
 const RHQ_COLOR = COMPANIES.find((c) => c.letter === 'R')?.accent || '#f39c12'

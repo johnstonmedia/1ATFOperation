@@ -10,7 +10,7 @@ export const COMPANIES = [
   { letter: 'C', name: 'Charlie', accent: '#c9a227' },
   { letter: 'D', name: 'Delta', accent: '#8e54c4' },
   { letter: 'E', name: 'Echo', accent: '#d1632e' },
-  { letter: 'S', name: 'Support', accent: '#5b6f8c' },
+  { letter: 'S', name: 'Support', accent: '#c9528a' },
   { letter: 'R', name: 'RHQ', accent: '#f39c12' },
 ]
 
@@ -146,13 +146,43 @@ export const DEFAULT_INTEL_INTRO = {
   text: 'Meridian transmissions are being intercepted across the network. Decrypt the fragments below to uncover their intent and your next tasking.',
 }
 
-// Briefings tab: a video and a free content area (filled in later).
-export const DEFAULT_BRIEFINGS = { video: '', content: '' }
+// Briefings tab: a video plus the numbered briefing sections (title/body per
+// section, editable from Ops Centre → Briefings). `highlight` is an optional
+// bold callout rendered above a section's body — used for the mission
+// statement, but any section can carry one.
+export const DEFAULT_BRIEFINGS = {
+  video: '',
+  sections: [
+    {
+      heading: '01 — Situation',
+      body: 'Over the past eighteen months, a hostile expansionist power known as THE MERIDIAN has systematically taken over sovereign territory across the world. The Meridian does not use conventional military force, instead operating through economic coercion, infrastructure seizure, and the suppression of local governance.\n\nAt the time of this briefing, The Meridian controls the majority of Australia. In New South Wales, they have concentrated their power in Singleton and Marrangaroo Training Areas, controlling Army land and supply chains. From these hubs, their control spreads out into the surrounding regions, leaving independent resistance from local units disorganised and ineffective.\n\nThe North Sydney area is among the last territory in the state still free of Meridian control: not a single Meridian operative was sighted during the Term 2 period. However, intelligence suggests that The Meridian has identified North Sydney as its next objective, with preliminary movements detected by Independent Recon Platoon at the end of last week.',
+    },
+    {
+      heading: '02 — The Unit',
+      body: 'In response, the six Companies of the SCU have formed the 1st Australian Task Force (1ATF). Together, they represent the last organised resistance capable of reclaiming what has been lost to The Meridian.',
+    },
+    {
+      heading: '03 — The Mission',
+      highlight: '1ATF will conduct sustained operations against The Meridian across New South Wales, reclaiming sovereign territory and restoring independent governance to occupied regions. The mission ends when no NSW ground remains under Meridian control.',
+      body: "Routine operations and training will be conducted over the coming Mondays, building the skills necessary to launch a sustained resistance. In doing so, the loosely held territory of regional NSW will be gradually reclaimed. Meridian encounters will be rare, but Companies must remain ready to react should North Sydney or other secured areas come under threat.\n\nThe campaign builds towards 1ATF's deployment to Singleton Military Training Area for BIVOUAC. There, the Meridian presence will be at its strongest, dug in to defend the supply lines that feed their entire operation. But if their hub at Singleton can be dismantled, Meridian influence across the state will begin to collapse, and the path to Marrangaroo, their stronghold, will be open. Plans for AFX are conditional on 1ATF successfully liberating this region.",
+    },
+    {
+      heading: '04 — The Progress Map',
+      body: "The Unit Progress Map is a live operational display maintained by RHQ. It shows the territory regained by all six Companies and the remaining Meridian-held ground, updating after each Monday session and each major camp phase. Every operation you complete or training you receive improves 1ATF's footing.\n\nThe map also carries intercepted Meridian material: encoded intelligence fragments recovered during operations. Decoding them is left to you, but those who do will be uniquely aware of what is ahead.",
+    },
+    {
+      heading: '05 — Your Directive',
+      body: 'Standby for further tasking through your chain of command. And remember, The Meridian is counting on us to fragment and forget — all six Companies fight the same enemy. You cannot let that happen. One Unit. One mission. One outcome.\n\nOur response begins now.',
+    },
+  ],
+  closingQuote: 'One unit, one culture — everyone belongs, everyone contributes, and together we succeed.',
+}
 
 // Pixel-grid territory over the NSW map. cells is a cols*rows string of colour
 // codes (see lib/territory.js). Default territory sits on the three camp areas.
-const T_COLS = 128
-const T_ROWS = 80
+// 216x112 = one cell per exact 3x3 block of the 648x336 source image.
+const T_COLS = 216
+const T_ROWS = 112
 function buildTerritoryCells() {
   const g = new Array(T_COLS * T_ROWS).fill('.')
   const blob = (cx, cy, w, h, code) => {
@@ -160,9 +190,9 @@ function buildTerritoryCells() {
       if (x >= 0 && x < T_COLS && y >= 0 && y < T_ROWS) g[y * T_COLS + x] = code
     }
   }
-  blob(74, 42, 8, 6, 'M') // North Sydney
-  blob(21, 33, 8, 6, 'M') // Marrangaroo
-  blob(64, 6, 8, 6, 'M')  // Singleton
+  blob(125, 59, 14, 8, 'M') // North Sydney
+  blob(35, 46, 14, 8, 'M')  // Marrangaroo
+  blob(108, 8, 14, 8, 'M')  // Singleton
   return g.join('')
 }
 export const DEFAULT_TERRITORY = {
@@ -171,9 +201,9 @@ export const DEFAULT_TERRITORY = {
   showRHQ: false,
   cells: buildTerritoryCells(),
   places: [
-    { id: 'pl1', name: 'North Sydney', x: 78, y: 45 },
-    { id: 'pl2', name: 'Marrangaroo', x: 25, y: 36 },
-    { id: 'pl3', name: 'Singleton', x: 68, y: 9 },
+    { id: 'pl1', name: 'North Sydney', x: 132, y: 63 },
+    { id: 'pl2', name: 'Marrangaroo', x: 42, y: 50 },
+    { id: 'pl3', name: 'Singleton', x: 115, y: 13 },
   ],
 }
 
@@ -200,11 +230,11 @@ export const DEFAULT_NARRATIVE = {
       'Regain and hold sovereign territory from the Meridian incursion. ' +
       '1ATF coordinates six companies across the continent to fix, isolate ' +
       'and reduce Meridian-held zones until the line holds nothing hostile.',
+    // Shared role text for the four recruit companies (A/B/C/D) — they don't
+    // have individual specialisations, so one line covers all of them. Echo
+    // and Support keep their own distinct roles below.
+    recruitRole: 'Frontline recruit element. Holds assigned ground, screens approaches, and feeds contact reports to RHQ.',
     companies: {
-      Alpha: 'Spearhead element. Holds the Northern Approach and leads forward assaults.',
-      Bravo: 'Reconnaissance and screening across the Cape Sector.',
-      Charlie: 'Holds the Western Reach; counter-infiltration and coastal denial.',
-      Delta: 'Heavy element securing the Eastern Seaboard population centres.',
       Echo: 'Holds the Southern Line; rapid response and reinforcement.',
       Support: 'Logistics, signals and sustainment from the Logistics Hub.',
     },
@@ -213,6 +243,7 @@ export const DEFAULT_NARRATIVE = {
     title: 'MERIDIAN // HOSTILE',
     threatLevel: 'SEVERE',
     motiveHeading: 'MOTIVE',
+    objectiveHeading: 'OBJECTIVE',
     whyHeading: 'WHY WE STOP THEM',
     motive:
       'The Meridian seeks to draw a hard line across the continent and claim ' +
@@ -258,10 +289,14 @@ export const DEFAULT_BRANDING = {
 
 // Per-company page content shown in the hamburger menu company tab and
 // editable from the Operations Centre.
+const RECRUIT_LETTERS = ['A', 'B', 'C', 'D']
 export const DEFAULT_COMPANY_PAGES = COMPANIES.reduce((acc, c) => {
+  const role = RECRUIT_LETTERS.includes(c.letter)
+    ? DEFAULT_NARRATIVE.oneatf.recruitRole
+    : DEFAULT_NARRATIVE.oneatf.companies[c.name] || ''
   acc[c.letter] = {
     name: c.name,
-    role: DEFAULT_NARRATIVE.oneatf.companies[c.name] || '',
+    role,
     duties: [
       'Maintain readiness within assigned zone.',
       'Report movements to RHQ on schedule.',

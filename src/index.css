@@ -191,6 +191,20 @@ label { font-size: 12px; color: var(--text-dim); text-transform: uppercase; lett
 }
 .blink { animation: pulse 1.6s infinite; }
 
+/* Radar-ping pulse — an expanding, fading ring behind a marker dot (map
+   hostile-stronghold markers), instead of a flat opacity blink. */
+@keyframes ping-ring {
+  0% { transform: scale(0.7); opacity: 0.8; }
+  100% { transform: scale(3); opacity: 0; }
+}
+.ping-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--hostile);
+  animation: ping-ring 1.4s cubic-bezier(0.2, 0.6, 0.35, 1) infinite;
+}
+
 /* ---------------------------------- Operations Centre layout */
 .ops-shell { display: flex; min-height: 100vh; }
 .ops-rail {

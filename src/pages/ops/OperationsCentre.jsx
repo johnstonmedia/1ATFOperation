@@ -29,7 +29,7 @@ const SECTIONS = [
 
 export default function OperationsCentre() {
   const { user, isRHQ, logout } = useAuth()
-  const [section, setSection] = useState('narrative')
+  const [section, setSection] = useState('map')
   const [authOpen, setAuthOpen] = useState(false)
 
   // Gate: RHQ only. URL-only page — not linked from the main navigation.

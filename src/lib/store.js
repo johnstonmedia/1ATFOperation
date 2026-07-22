@@ -17,6 +17,7 @@ import {
   DEMO_ROSTER,
   DEFAULT_ACTIVITY,
 } from '../firebase/seed'
+import { TERR_COLS, TERR_ROWS } from './territory'
 
 const LS_KEY = '1atf-state-v1'
 const LS_AUTHIDX = '1atf-authindex'
@@ -123,8 +124,22 @@ async function persistCollection(coll, rows) {
 
 /* ------------------------------ PUBLIC API ----------------------------- */
 
+// A stored territory grid only fits the map art it was authored for — if its
+// cols/rows don't match the current grid resolution (e.g. persisted data from
+// before a map-image swap), it's not just stale, it's actively unrenderable
+// (cells lose square alignment). Fall back to the fresh default rather than
+// render a broken grid; RHQ re-saving in the map editor persists the fix.
+function normalizeTerritory(state) {
+  const t = state.territory
+  if (!t || t.cols !== TERR_COLS || t.rows !== TERR_ROWS) {
+    state.territory = structuredClone(DEFAULT_TERRITORY)
+  }
+  return state
+}
+
 export async function loadState() {
-  return FIREBASE_ENABLED ? loadFirebase() : loadLocal()
+  const state = await (FIREBASE_ENABLED ? loadFirebase() : loadLocal())
+  return normalizeTerritory(state)
 }
 
 export async function persistSlice(state, slice) {
