@@ -30,7 +30,7 @@ don't repeat or undo recent work.
   note if that changes).
 
 ## App shape (current)
-Three **public, no-login** tabs behind the main shell, plus two chrome-less
+Three **public, no-login** tabs behind the main shell, plus chrome-less
 routes — see [src/App.jsx](src/App.jsx):
 - `/` **Home** — hero + pixel territory map + 1ATF/Meridian brief tabs.
 - `/intel` **Intel** — "Intercepted Intelligence": RHQ-wide fragments plus
@@ -43,6 +43,30 @@ routes — see [src/App.jsx](src/App.jsx):
   cadets are sent to; "Continue" starts temp-password registration.
 - `/operations-centre/*` — **RHQ-only** admin console (see below). URL-only,
   not linked from nav.
+- `/company-command` — **Company Commander-only** "COY Centre"
+  ([src/pages/CommanderPanel.jsx](src/pages/CommanderPanel.jsx)). URL-only;
+  reached via the role-aware **COY CENTRE** button shown once a commander signs
+  in. See "Company Commander & intel approval" below.
+
+## Company Commander & intel approval (v2.1)
+- **Company Commander** is a role (now the **default** at user creation), bound
+  to one company; it may only ever see/act on that company's data. `useAuth()`
+  exposes `isCommander` (suppressed while emulating, like `isRHQ`).
+- Login entry is labelled **"Access"** (TopBar + Sidebar); after sign-in the
+  console button is role-aware — **OPS CENTRE** (RHQ) / **COY CENTRE**
+  (commander). Commanders use the same temp-password auth as everyone else.
+- In the COY Centre a commander drafts/edits **only their own company's** intel
+  fragments. Nothing publishes directly — each change becomes a pending
+  `intelSubmissions` doc (company-scoped Firestore collection; LOCAL MODE uses
+  localStorage). Helpers: [src/lib/submissions.js](src/lib/submissions.js).
+- RHQ approves in the Ops Centre **Approvals** section
+  ([src/pages/ops/SubmissionsEditor.jsx](src/pages/ops/SubmissionsEditor.jsx)):
+  approve as-is, edit-then-approve, or dismiss. Approval writes the live
+  `content/intel` slice; removal requests take a fragment down.
+- **Language compliance:** config-driven `BANNED_TERMS` in
+  [src/lib/language.js](src/lib/language.js) + `<LanguageWarning>` (advisory,
+  non-blocking) in the intel editors / COY Centre. Edit the list to change
+  policy — no UI changes needed.
 
 Member login/auth **still exists** (ID-number sign-in, temp-password
 registration, RHQ role) but it now only gates the **Operations Centre**, not
@@ -68,9 +92,10 @@ assuming a page exists).
   `emulation` state, shown via the banner in [Layout.jsx](src/components/Layout.jsx)).
   Reads still run under the real RHQ session; only a genuine RHQ user can
   trigger it.
-- Roles: **RHQ** and **General**. Companies (phonetic letters): A Alpha,
-  B Bravo, C Charlie, D Delta, E Echo, S Support. Meridian is the hostile force
-  (red on the map).
+- Roles: **Company Commander** (default at creation, company-bound), **RHQ**,
+  and legacy **General** (`ROLES`/`COMMANDER_ROLE` in `src/firebase/seed.js`).
+  Companies (phonetic letters): A Alpha, B Bravo, C Charlie, D Delta, E Echo,
+  S Support. Meridian is the hostile force (red on the map).
 
 ## Data model
 - Firestore single-value docs under `content/{slice}`: `narrative`, `territory`,
@@ -78,7 +103,9 @@ assuming a page exists).
   `briefings` (public read, RHQ write) — see `SINGLE_SLICES` in
   [src/lib/store.js](src/lib/store.js).
 - Collections: `roster`, `tasks`, `activity`, `support`, `resetRequests`, `audit`
-  — see `COLLECTION_SLICES` in the same file.
+  — see `COLLECTION_SLICES` in the same file. Plus `intelSubmissions` (the
+  Company Commander approval queue), managed directly via
+  [src/lib/submissions.js](src/lib/submissions.js), not through `store.js`.
 - Data layer in `src/lib/store.js` (mode-agnostic: same async API over
   Firestore or localStorage). `DataContext` provides `updateSlice`,
   `replaceRoster`, `append`, `reportError`, `reload`, `logAudit`.
@@ -122,10 +149,12 @@ assuming a page exists).
 
 ## Operations Centre (`/operations-centre`, RHQ-only)
 Side-rail sections (see `SECTIONS` in [OperationsCentre.jsx](src/pages/ops/OperationsCentre.jsx)):
-Map: Narrative, Map: Territory, Intercepted Intelligence, Briefings, Welcome
-Page (Classified), Branding & Assets, Users, Help, Audit Log. Every section
-edits exactly one data slice (or the roster/support collections) via
-`updateSlice`/`replaceRoster`, and most log an audit entry via `useAudit()`.
+Map: Narrative, Map: Territory, Intercepted Intelligence, **Approvals (COY
+intel)**, Briefings, Welcome Page (Classified), Branding & Assets, Users, Help,
+Audit Log. Every section edits exactly one data slice (or the
+roster/support/`intelSubmissions` collections) via `updateSlice`/`replaceRoster`,
+and most log an audit entry via `useAudit()`. **Approvals** is the RHQ side of
+the Company Commander workflow (see "Company Commander & intel approval" above).
 
 ### Users / spreadsheet import
 Captures only **name, ID number, company, email** (fuzzy `COLUMN_HINTS` in
@@ -153,6 +182,9 @@ styles — there is no CSS-in-JS or component library.
 ## Firebase setup checklist (console)
 1. Authentication → enable **Email/Password**.
 2. Firestore → create DB → publish [firestore.rules](firestore.rules).
+   ⚠️ **Re-publish after this change** — the rules now include an
+   `intelSubmissions` block (commander read/writes own company only; RHQ all).
+   The COY-intel approval workflow will not work live until they're republished.
 3. Storage is **not used** (logo and map image are repo files under `public/`).
 
 ## Known privacy gaps / TODO (discussed, not yet done)

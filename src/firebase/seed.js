@@ -25,7 +25,11 @@ export const PHONETIC = {
   R: 'RHQ',
 }
 
-export const ROLES = ['General', 'RHQ']
+// Account roles. 'Company Commander' is the default for a new account: it is
+// bound to a single company and may submit intel for that company (subject to
+// RHQ approval). 'RHQ' is full control. 'General' is retained for legacy rows.
+export const ROLES = ['Company Commander', 'RHQ', 'General']
+export const COMMANDER_ROLE = 'Company Commander'
 
 // Unit ranks, each with a long and short (abbreviated) form. The roster stores
 // the short code; helpers below resolve either form for display.

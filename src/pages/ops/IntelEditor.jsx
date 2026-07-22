@@ -5,6 +5,7 @@ import { useAudit } from '../../hooks/useAudit'
 import { OpsHeader, useSaved } from './OperationsCentre'
 import { Field } from './NarrativeEditor'
 import DocEmbed from '../../components/DocEmbed'
+import LanguageWarning from '../../components/LanguageWarning'
 import { COMPANIES, PHONETIC } from '../../firebase/seed'
 
 const rid = () => Math.random().toString(36).slice(2, 10)
@@ -115,6 +116,8 @@ function Builder({ fragment, onCancel, onSave }) {
       <OpsHeader title="Build Intel" sub="INTEL FRAGMENT // EDITOR">
         <button className="ghost" onClick={onCancel}>← Back</button>
       </OpsHeader>
+
+      <LanguageWarning texts={[f.title, f.prompt, f.answer, f.reveal]} style={{ marginBottom: 14, maxWidth: 720 }} />
 
       <div className="panel panel-pad col" style={{ marginBottom: 16, maxWidth: 720 }}>
         <div className="row" style={{ gap: 10 }}>

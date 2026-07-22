@@ -8,7 +8,7 @@ import SupportModal from './SupportModal'
 // Left-hand hamburger menu. No member login — cadets pick their company and
 // read that company's intel / page. RHQ can still sign in for the ops centre.
 export default function Sidebar({ open, onClose, onAuth }) {
-  const { isRHQ } = useAuth()
+  const { isRHQ, isCommander } = useAuth()
   const { company, setCompany } = useCompany()
   const navigate = useNavigate()
   const [support, setSupport] = useState(false)
@@ -72,8 +72,10 @@ export default function Sidebar({ open, onClose, onAuth }) {
         <div className="grow" />
         <button className="ghost" onClick={() => setSupport(true)}>Help &amp; Support</button>
         {isRHQ
-          ? <button className="ghost" onClick={() => go('/operations-centre')}>Operations Centre</button>
-          : <button className="ghost" onClick={() => { onClose(); onAuth() }} style={{ fontSize: 11 }}>RHQ sign in</button>}
+          ? <button className="ghost" onClick={() => go('/operations-centre')}>OPS CENTRE</button>
+          : isCommander
+          ? <button className="ghost" onClick={() => go('/company-command')}>COY CENTRE</button>
+          : <button className="ghost" onClick={() => { onClose(); onAuth() }} style={{ fontSize: 11 }}>Access</button>}
         <Link to="/" onClick={onClose} className="mono dim" style={{ fontSize: 10, marginTop: 10 }}>
           LUCET PER MINISTERIUM
         </Link>

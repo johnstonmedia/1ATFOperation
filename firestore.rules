@@ -30,6 +30,14 @@ service cloud.firestore {
         && exists(userDoc())
         && get(userDoc()).data.role == 'RHQ';
     }
+    // A Company Commander bound to company `coy`. Commanders may only ever act on
+    // their own company's data.
+    function isCommanderOf(coy) {
+      return isSignedIn()
+        && exists(userDoc())
+        && get(userDoc()).data.role == 'Company Commander'
+        && get(userDoc()).data.company == coy;
+    }
     // True when a (possibly missing) field is a string no longer than `max`.
     function strOk(data, key, max) {
       return !(key in data) || (data[key] is string && data[key].size() <= max);
@@ -117,6 +125,21 @@ service cloud.firestore {
       allow write: if isRHQ()
         && request.resource.data.keys().hasOnly(['pwVersion'])
         && request.resource.data.pwVersion is int;
+    }
+
+    // ------------------------------------------- intel approval queue (drafts)
+    // Company Commanders submit intel changes for THEIR company; the change is
+    // not public until RHQ approves it (approval writes content/intel and clears
+    // the submission). A commander may only read/write submissions carrying
+    // their own company code; RHQ manages the whole queue. Commander list
+    // queries must be filtered by company (the app does this) to satisfy read.
+    match /intelSubmissions/{id} {
+      allow read:   if isRHQ() || isCommanderOf(resource.data.company);
+      allow create: if isRHQ() || (isCommanderOf(request.resource.data.company)
+                                   && request.resource.data.status == 'pending');
+      allow update: if isRHQ() || (isCommanderOf(resource.data.company)
+                                   && request.resource.data.company == resource.data.company);
+      allow delete: if isRHQ() || isCommanderOf(resource.data.company);
     }
 
     // ------------------------------------------------------------- default deny

@@ -10,6 +10,7 @@ import BriefingsEditor from './BriefingsEditor'
 import ClassifiedEditor from './ClassifiedEditor'
 import BrandingEditor from './BrandingEditor'
 import IntelEditor from './IntelEditor'
+import SubmissionsEditor from './SubmissionsEditor'
 import UsersAdmin from './UsersAdmin'
 import HelpAdmin from './HelpAdmin'
 import AuditLog from './AuditLog'
@@ -19,6 +20,7 @@ const SECTIONS = [
   { id: 'narrative', label: 'Map: Narrative', group: 'MAP PAGE' },
   { id: 'map', label: 'Map: Territory', group: 'MAP PAGE' },
   { id: 'intel', label: 'Intercepted Intelligence', group: 'CONTENT' },
+  { id: 'approvals', label: 'Approvals (COY intel)', group: 'CONTENT' },
   { id: 'briefings', label: 'Briefings', group: 'CONTENT' },
   { id: 'classified', label: 'Welcome Page', group: 'CONTENT' },
   { id: 'branding', label: 'Branding & Assets', group: 'CONTENT' },
@@ -100,6 +102,7 @@ export default function OperationsCentre() {
         {section === 'classified' && <ClassifiedEditor />}
         {section === 'branding' && <BrandingEditor />}
         {section === 'intel' && <IntelEditor />}
+        {section === 'approvals' && <SubmissionsEditor />}
         {section === 'users' && <UsersAdmin />}
         {section === 'help' && <HelpAdmin />}
         {section === 'audit' && <AuditLog />}

@@ -8,7 +8,7 @@ import { useAudit } from '../../hooks/useAudit'
 import { useDialog } from '../../hooks/useDialog'
 import { OpsHeader } from './OperationsCentre'
 import { Field } from './NarrativeEditor'
-import { COMPANIES, ROLES, RANKS, PHONETIC, rankShort, normalizeRank } from '../../firebase/seed'
+import { COMPANIES, ROLES, COMMANDER_ROLE, RANKS, PHONETIC, rankShort, normalizeRank } from '../../firebase/seed'
 import { genTempPassword } from '../../lib/passwords'
 import { getAuthVersion, setAuthVersion } from '../../lib/store'
 import { sendMemberEmail } from '../../lib/notify'
@@ -345,7 +345,7 @@ function EmulateMenu() {
 }
 
 function newUser(makeId) {
-  return { _id: makeId(), name: '', idNumber: '', email: '', company: 'A', role: 'General', rank: '', tempPassword: genTempPassword(), tempIssuedAt: Date.now() }
+  return { _id: makeId(), name: '', idNumber: '', email: '', company: 'A', role: COMMANDER_ROLE, rank: '', tempPassword: genTempPassword(), tempIssuedAt: Date.now() }
 }
 
 function UserModal({ rec, onClose, onSave, onDelete, used }) {
@@ -457,7 +457,7 @@ function mapRow(row, makeId) {
     name: get('name') || 'Unnamed',
     email: get('email'),
     company: COMPANIES.some((c) => c.letter === company) ? company : '',
-    role: 'General',
+    role: COMMANDER_ROLE,
     rank: normalizeRank(get('rank')),
     tempPassword: genTempPassword(),
     tempIssuedAt: Date.now(),

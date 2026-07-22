@@ -7,7 +7,7 @@ import { COMPANIES } from '../firebase/seed'
 
 export default function TopBar({ onMenu, onAuth }) {
   const { state } = useData()
-  const { isRHQ, logout } = useAuth()
+  const { isRHQ, isCommander, logout } = useAuth()
   const { company, setCompany } = useCompany()
   const navigate = useNavigate()
   const n = state.narrative
@@ -48,11 +48,16 @@ export default function TopBar({ onMenu, onAuth }) {
           </select>
           {isRHQ ? (
             <>
-              <button className="ghost hide-sm" onClick={() => navigate('/operations-centre')}>Ops Centre</button>
+              <button className="ghost hide-sm" onClick={() => navigate('/operations-centre')}>OPS CENTRE</button>
+              <button className="ghost" onClick={logout}>Sign out</button>
+            </>
+          ) : isCommander ? (
+            <>
+              <button className="ghost hide-sm" onClick={() => navigate('/company-command')}>COY CENTRE</button>
               <button className="ghost" onClick={logout}>Sign out</button>
             </>
           ) : (
-            <button className="ghost hide-sm" onClick={onAuth}>RHQ</button>
+            <button className="ghost hide-sm" onClick={onAuth}>Access</button>
           )}
         </div>
       </div>

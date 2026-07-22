@@ -289,6 +289,8 @@ export function AuthProvider({ children }) {
     logout,
     // While emulating, the app must behave as a General member (no RHQ powers).
     isRHQ: !emulated && effUser?.role === 'RHQ',
+    // A Company Commander may reach the COY Centre for their own company only.
+    isCommander: !emulated && effUser?.role === 'Company Commander',
   }
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

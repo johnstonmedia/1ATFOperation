@@ -17,6 +17,51 @@ keep entries short and focused on what a new collaborator needs to know.
 
 ---
 
+## 2026-07-22 — Company Commander role + intel approval workflow + language filter (`d449092`)
+Adds a full draft→approve pipeline so a company's own commander can maintain
+their intel without touching the live site directly, plus a config-driven
+language check for public copy. Built in phases; `npm run build` passes.
+- **New "Company Commander" role** (`seed.js` `ROLES`, new `COMMANDER_ROLE`),
+  now the **default** when RHQ creates a user (both `newUser` and spreadsheet
+  `mapRow` in `UsersAdmin.jsx` — was `'General'`, which stays valid for legacy
+  rows). Bound to one company; may only ever see/act on their own company's
+  data. `AuthContext` exposes `isCommander` (false while emulating, like
+  `isRHQ`).
+- **COY Centre** (`/company-command`, `src/pages/CommanderPanel.jsx`): a
+  deliberately simple, URL-only panel where a commander drafts/edits **only
+  their own company's** intel fragments. Nothing publishes directly — each
+  change becomes a pending submission with clear **LIVE / PENDING** status
+  chips. Commander can edit a live fragment, request its removal, or withdraw a
+  pending change. Company-locked (can't retarget another company).
+- **RHQ Approvals** section in the Ops Centre ("Approvals (COY intel)",
+  `src/pages/ops/SubmissionsEditor.jsx`): RHQ sees every company's pending queue
+  and can **approve as-is**, **review/edit then approve**, or **dismiss**.
+  Approving an edit writes the live `content/intel` slice; approving a removal
+  takes the fragment down. Every action is audit-logged. No reject-with-reason
+  loop by design — RHQ edits or approves, commander resubmits if dismissed.
+- **Draft/pending layer** = new company-scoped Firestore collection
+  `intelSubmissions` (`src/lib/submissions.js`), sitting in front of the
+  published `intel` slice. Managed directly (not via `store.js` slice load) so a
+  commander only ever writes their own company's docs. Works in LOCAL MODE
+  (localStorage) with no Firebase.
+- **Config-driven language check** (`src/lib/language.js` `BANNED_TERMS` +
+  `src/components/LanguageWarning.jsx`): one editable list (e.g. *enemy →
+  opposing force / OPFOR*, plus `review`-level flags like *hostile*) drives a
+  **non-blocking advisory** shown in the RHQ intel editor and the COY Centre.
+  Edit the list to change policy — no UI changes needed. Audit found no literal
+  banned words in active copy; "hostile" (the fictional Meridian OPFOR) is
+  flagged for review, not rewritten.
+- **Nav**: login entry relabelled **"RHQ" → "Access"** (TopBar + Sidebar);
+  post-sign-in console button is role-aware — **OPS CENTRE** (RHQ) /
+  **COY CENTRE** (commander).
+- ⚠️ **`firestore.rules` must be re-published** in the Firebase Console for the
+  approval flow to work on the live site — added an `intelSubmissions` block
+  (commander read/writes own company only via `isCommanderOf(coy)`; RHQ manages
+  all) and a shared `isCommanderOf` helper. Rest of the site + LOCAL MODE work
+  without republishing.
+
+---
+
 ## 2026-07-21 — Map v2: full-bleed pixel-perfect territory map, natural pan/zoom, layout consolidation
 - **New map art**: replaced `public/map/nsw-terrain.jpeg` with a cropped
   `public/map/nsw-terrain.png` (648x336, trimmed from the top/right of a
