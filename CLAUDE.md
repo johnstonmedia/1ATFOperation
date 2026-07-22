@@ -168,6 +168,12 @@ styles — there is no CSS-in-JS or component library.
 
 ## Working constraints (important)
 - Deploy branch is **`main`**; pushes there trigger the Pages build/deploy.
+- ⚠️ **Deploy gotcha**: [.github/workflows/deploy.yml](.github/workflows/deploy.yml)
+  uses `concurrency: { group: pages, cancel-in-progress: true }` — rapid
+  successive pushes **cancel each other's in-flight deploy**, so the live
+  site can silently stay on an old build. Push one commit and let that run
+  finish (check the Actions tab for conclusion = `success`, not `cancelled`)
+  before pushing again.
 - Do NOT put the model identifier or these notes' "Claude-Session" lines into
   anything beyond commit metadata as already configured.
 - Before starting work, skim [CHANGELOG.md](CHANGELOG.md) for the latest
