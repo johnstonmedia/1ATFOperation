@@ -188,14 +188,18 @@ styles — there is no CSS-in-JS or component library.
 3. Storage is **not used** (logo and map image are repo files under `public/`).
 
 ## Known privacy gaps / TODO (discussed, not yet done)
-- ⚠️ `firestore.rules`: `roster`/`tasks`/`activity` are readable by **any
-  signed-in member** (`isSignedIn()`), so a technical user could read all
-  names/IDs/emails and the **plain-text temp passwords**. Tightening to
-  RHQ-only needs a rework of temp-password registration (which currently reads
-  the roster client-side to validate) — e.g. a minimal public claim-check or a
-  Cloud Function.
+- ✅ **Fixed 2026-07-23**: `roster` reads are now RHQ **or own-record only**
+  (via an `isOwnId()` email-pattern check in `firestore.rules`, no app changes
+  needed); `tasks`/`activity` reads are now RHQ-only. See CHANGELOG for the
+  emulator-verified test coverage. ⚠️ Still needs a **rules re-publish** in
+  the Firebase Console to take effect live.
+- ⚠️ Residual, deliberately unsolved by the above: an *unregistered* member who
+  knows their own ID can still register and then read their own record's
+  plain-text `tempPassword` via the same own-record path — inherent to storing
+  temp passwords in plain text.
 - ⚠️ Temp passwords are stored **plain text** in `roster`. Consider hashing and
-  only revealing at generation/download time.
+  only revealing at generation/download time. (Would also close the residual
+  gap above.)
 - No member-facing privacy notice yet (relevant — likely minors in a cadet unit).
 
 ## Working constraints (important)

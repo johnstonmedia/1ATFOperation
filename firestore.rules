@@ -3,9 +3,12 @@ rules_version = '2';
 // Security model for the 1ATF portal.
 //
 //  - Public operational content (content/*) is world-readable; only RHQ writes.
-//  - roster / tasks / activity are readable by any signed-in member (the client
-//    needs the roster query during temporary-password registration, before the
-//    member has a profile that marks them RHQ); only RHQ writes.
+//  - roster: RHQ reads all; a signed-in member may additionally read ONLY their
+//    own record (matched via their auth email against the record's idNumber) —
+//    this is what temporary-password registration relies on, before the member
+//    has a profile that marks them RHQ. Only RHQ writes.
+//  - tasks / activity: RHQ-only reads (their only current readers are legacy,
+//    unlinked pages — see CLAUDE.md). Only RHQ writes.
 //  - users/{uid}: a member may read and update ONLY their own profile, and may
 //    NOT change their own role or ID number (anti-escalation); RHQ manages all.
 //  - support / resetRequests: anyone (incl. signed-out) may submit a single,
@@ -38,6 +41,15 @@ service cloud.firestore {
         && get(userDoc()).data.role == 'Company Commander'
         && get(userDoc()).data.company == coy;
     }
+    // True when the signed-in caller's own auth email corresponds to `idNumber`.
+    // Auth emails are synthesised as id-<idNumber>[.v<epoch>]@1atf.unit (see
+    // idToEmail() in AuthContext.jsx); idNumber is digits-only so no cleaning is
+    // needed to compare it against the email's id- segment.
+    function isOwnId(idNumber) {
+      return isSignedIn()
+        && request.auth.token.email.matches(
+             'id-' + idNumber + '([.]v[0-9]+)?@1atf[.]unit');
+    }
     // True when a (possibly missing) field is a string no longer than `max`.
     function strOk(data, key, max) {
       return !(key in data) || (data[key] is string && data[key].size() <= max);
@@ -51,22 +63,25 @@ service cloud.firestore {
     }
 
     // --------------------------------------------------------------- roster
-    // Read access is required by every signed-in member because temporary-
-    // password registration queries the roster before the member has an RHQ
-    // marker. Writes are RHQ-only. (Tightening reads to RHQ-only would require
-    // a matching change to the registration flow in the app.)
+    // RHQ reads every record. A signed-in member may additionally read ONLY
+    // their own record — this is what temporary-password registration relies
+    // on: it queries where('idNumber','==', id), which returns at most one
+    // doc, so this rule permits exactly that doc and denies everyone else's.
+    // Writes are RHQ-only.
     match /roster/{id} {
-      allow read:  if isSignedIn();
+      allow read:  if isRHQ() || isOwnId(resource.data.idNumber);
       allow write: if isRHQ();
     }
 
     // ------------------------------------------ distributed tasks + activity feed
+    // RHQ-only reads. (Their only current readers are the legacy, unlinked
+    // Tasks.jsx/Activity.jsx pages — see CLAUDE.md.)
     match /tasks/{id} {
-      allow read:  if isSignedIn();
+      allow read:  if isRHQ();
       allow write: if isRHQ();
     }
     match /activity/{id} {
-      allow read:  if isSignedIn();
+      allow read:  if isRHQ();
       allow write: if isRHQ();
     }
 

@@ -17,6 +17,52 @@ keep entries short and focused on what a new collaborator needs to know.
 
 ---
 
+## 2026-07-23 — Roster privacy hardening: RHQ + own-record only reads
+Closes the privacy gap flagged in CLAUDE.md: `roster`/`tasks`/`activity` were
+readable by *any* signed-in member, leaking every member's name/ID/email and
+plain-text temp passwords. `firestore.rules` only — no app code changes.
+- **`roster`**: read now requires RHQ **or** the caller's own record. Added an
+  `isOwnId(idNumber)` helper that matches the caller's Firebase Auth email
+  (`id-<idNumber>[.v<epoch>]@1atf.unit`, see `idToEmail()` in
+  `AuthContext.jsx`) against `resource.data.idNumber`. This exactly matches
+  what temp-password registration already does client-side —
+  `where('idNumber','==', id)` — so the query still returns the caller's own
+  doc and nothing else; everyone else's roster records are now unreadable to
+  non-RHQ members. Writes unchanged (RHQ-only).
+- **`tasks`/`activity`**: reads tightened to RHQ-only (writes were already
+  RHQ-only). Their only current readers are `src/pages/Tasks.jsx` and
+  `Activity.jsx`, which are legacy and **not linked from any route** — see
+  CLAUDE.md "App shape" — so this is safe today. Re-linking those pages later
+  would need a rethink (they'd need to read only the signed-in member's own
+  items, similar to the roster fix).
+- **Verified against the real rules engine**, not just by inspection: ran the
+  `firebase-tools` Firestore emulator + `@firebase/rules-unit-testing`
+  locally (scratch scripts, not committed) covering: owner reads own roster
+  record (incl. after a `.v<n>` password-reset email bump) → allowed; owner
+  reads another member's record → denied; a signed-in stranger → denied on
+  both; RHQ → allowed on everything; `tasks`/`activity` → RHQ-only; the exact
+  `where('idNumber','==', id)` query pattern registration uses → returns only
+  the caller's own doc; the same query filtered to a *different* idNumber →
+  denied (so a member can't just edit the query to fish for someone else's
+  temp password). All 11 checks passed. `npm run build` also passes.
+- Assumption carried over from the original writeup: IDs are digits-only
+  (`LoginModal` strips non-digits before anything touches auth/roster), so
+  `cleanId(id) === idNumber` and the email-pattern match in `isOwnId` is
+  exact — no need to run the value through `cleanId`'s lowercase/strip step
+  in the rule itself.
+- **Known residual gap, intentionally out of scope**: an *unregistered* member
+  who knows their own ID can still sign themselves up and, via this same
+  own-record path, read their own record's plain-text `tempPassword` — that's
+  inherent to storing temp passwords in plain text and is closed by the
+  separate deferred "hash temp passwords" task, not this one.
+- ⚠️ **`firestore.rules` must be re-published** in the Firebase Console for
+  this to take effect on the live site (stacks with the still-pending
+  `intelSubmissions` republish from 2026-07-22 — one republish covers both).
+  LOCAL MODE (localStorage) is unaffected either way, since it never goes
+  through Firestore rules.
+
+---
+
 ## 2026-07-22 — Company Commander role + intel approval workflow + language filter (`d449092`)
 Adds a full draft→approve pipeline so a company's own commander can maintain
 their intel without touching the live site directly, plus a config-driven
