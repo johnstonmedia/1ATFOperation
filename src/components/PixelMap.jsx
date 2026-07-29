@@ -1,5 +1,6 @@
 import { useRef, useEffect, useState, useCallback } from 'react'
-import { MAP_IMAGE, MAP_ASPECT, colorOf, isRHQCode } from '../lib/territory'
+import { MAP_IMAGE, MAP_ASPECT } from '../lib/territory'
+import { renderTerritoryLayer, IMAGE_FILTER } from '../lib/terrainRender'
 import { useOceanOverlayUrl } from '../lib/oceanMask'
 
 const CELL = 8 // fallback canvas pixels per grid cell, used only for the very
@@ -10,26 +11,6 @@ const CELL = 8 // fallback canvas pixels per grid cell, used only for the very
                 // at a non-integer ratio, which aliases the hatch lines into
                 // a denser, uneven wash than the values below actually ask for)
 const ZOOM_SCALE = 2.25
-const IMAGE_FILTER = 'contrast(140%) sepia(60%) brightness(75%) saturate(92%)'
-
-// Territory fill: diagonal hatch per owner colour (not a flat wash) — a flat
-// tint sat over the terrain and washed out detail underneath it, worst under
-// Meridian red on a large holding. Hatch keeps the terrain visible through
-// the gaps while staying legible at any zoom, including when one side holds
-// most of the map. Tuned interactively against the real map art — see
-// CHANGELOG for the comparison process.
-const HATCH_ANGLE = 45 // degrees
-const HATCH_SPACING = 9.6 // px between lines, at the canvas's native (device-pixel) resolution — 20% denser than the original 12px tune
-const HATCH_THICKNESS = 3.1 // px
-const HATCH_OPACITY = 0.48
-const HATCH_DASH = 0 // 0 = solid lines
-
-// Boundary border: one neutral colour for every edge regardless of which two
-// owners meet there — deliberately not per-owner, since two adjacent cells
-// each stroking their own colour let whichever side rasterised later
-// silently overwrite the other's line.
-const BORDER_COLOR = 'rgba(6, 10, 18, 0.6)'
-const BORDER_WIDTH = 3
 
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v))
 
@@ -50,6 +31,9 @@ export default function PixelMap({
   onPaint,
   onMovePlace,
   maxWidth,
+  overlay, // optional node rendered inside the zoom/pan stage, above the
+           // territory canvas — used by the campaign replay to keep its wave
+           // layer and conquest labels aligned with the map under zoom
 }) {
   const { cols, rows, cells, showRHQ } = territory
   const places = territory.places || []
@@ -77,9 +61,6 @@ export default function PixelMap({
     const container = containerRef.current
     if (!cv || !container) return
 
-    const vis = (c) => (isRHQCode(c) && !showRHQ ? '.' : c)
-    const at = (x, y) => (x < 0 || y < 0 || x >= cols || y >= rows ? '.' : vis(cells[y * cols + x]))
-
     function draw() {
       const rect = container.getBoundingClientRect()
       if (!rect.width) return
@@ -91,76 +72,7 @@ export default function PixelMap({
       cv.height = h
       const ctx = cv.getContext('2d')
       ctx.clearRect(0, 0, w, h)
-
-      // One pass over the grid, bucketing each cell into a per-owner-code
-      // mask canvas (not one full grid pass per code).
-      const masks = new Map() // code -> { canvas, ctx }
-      for (let y = 0; y < rows; y++) {
-        for (let x = 0; x < cols; x++) {
-          const code = at(x, y)
-          if (!colorOf(code)) continue
-          let m = masks.get(code)
-          if (!m) {
-            const c = document.createElement('canvas')
-            c.width = w; c.height = h
-            const mctx = c.getContext('2d')
-            mctx.fillStyle = '#000'
-            m = { canvas: c, ctx: mctx }
-            masks.set(code, m)
-          }
-          m.ctx.fillRect(x * cell, y * cell, cell, cell)
-        }
-      }
-
-      // Hatch each owner's region: draw the line pattern across the whole
-      // canvas, then mask it down to just that owner's cells via
-      // destination-in (not a clip() path built from thousands of unioned
-      // per-cell rects — that pathologically complex a clip path produced a
-      // rasteriser seam artifact when tested).
-      const diag = Math.ceil(Math.sqrt(w * w + h * h))
-      for (const [code, m] of masks) {
-        const col = colorOf(code)
-        const layer = document.createElement('canvas')
-        layer.width = w; layer.height = h
-        const lctx = layer.getContext('2d')
-        lctx.save()
-        lctx.translate(w / 2, h / 2)
-        lctx.rotate((HATCH_ANGLE * Math.PI) / 180)
-        lctx.globalAlpha = HATCH_OPACITY
-        lctx.strokeStyle = col
-        lctx.lineWidth = HATCH_THICKNESS
-        if (HATCH_DASH > 0) lctx.setLineDash([HATCH_DASH, HATCH_DASH])
-        lctx.beginPath()
-        for (let d = -diag; d <= diag; d += HATCH_SPACING) {
-          lctx.moveTo(d, -diag)
-          lctx.lineTo(d, diag)
-        }
-        lctx.stroke()
-        lctx.restore()
-        lctx.globalCompositeOperation = 'destination-in'
-        lctx.globalAlpha = 1
-        lctx.drawImage(m.canvas, 0, 0)
-
-        ctx.globalAlpha = 1
-        ctx.drawImage(layer, 0, 0)
-      }
-
-      ctx.globalAlpha = 1
-      ctx.strokeStyle = BORDER_COLOR
-      ctx.lineWidth = BORDER_WIDTH
-      ctx.beginPath()
-      for (let y = 0; y < rows; y++) {
-        for (let x = 0; x < cols; x++) {
-          const code = at(x, y)
-          if (!colorOf(code)) continue
-          const px = x * cell, py = y * cell
-          if (at(x - 1, y) !== code) { ctx.moveTo(px, py); ctx.lineTo(px, py + cell) }
-          if (at(x + 1, y) !== code) { ctx.moveTo(px + cell, py); ctx.lineTo(px + cell, py + cell) }
-          if (at(x, y - 1) !== code) { ctx.moveTo(px, py); ctx.lineTo(px + cell, py) }
-          if (at(x, y + 1) !== code) { ctx.moveTo(px, py + cell); ctx.lineTo(px + cell, py + cell) }
-        }
-      }
-      ctx.stroke()
+      renderTerritoryLayer(ctx, { cells, cols, rows, showRHQ, w, h })
     }
 
     draw()
@@ -281,6 +193,7 @@ export default function PixelMap({
           )}
           <canvas ref={canvasRef} width={cols * CELL} height={rows * CELL}
             style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', imageRendering: 'pixelated', pointerEvents: 'none' }} />
+          {overlay}
           {places.map((p) => {
             const hostile = !!p.hostile
             return (

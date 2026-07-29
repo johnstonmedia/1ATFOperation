@@ -100,8 +100,11 @@ assuming a page exists).
 ## Data model
 - Firestore single-value docs under `content/{slice}`: `narrative`, `territory`,
   `classified`, `branding`, `companyPages`, `video`, `intel`, `intelIntro`,
-  `briefings` (public read, RHQ write) — see `SINGLE_SLICES` in
-  [src/lib/store.js](src/lib/store.js).
+  `briefings`, `campaign` (public read, RHQ write) — see `SINGLE_SLICES` in
+  [src/lib/store.js](src/lib/store.js). `campaign` is the territory replay
+  history: `{ start: { cells, ts }, timeline: [{ ts, diff }] }` with
+  run-length diffs, managed by [src/lib/campaign.js](src/lib/campaign.js)
+  (see "Campaign replay" below).
 - Collections: `roster`, `tasks`, `activity`, `support`, `resetRequests`, `audit`
   — see `COLLECTION_SLICES` in the same file. Plus `intelSubmissions` (the
   Company Commander approval queue), managed directly via
@@ -141,6 +144,23 @@ assuming a page exists).
   ([MapEditor.jsx](src/pages/ops/MapEditor.jsx)) — pick a colour swatch (solid
   or light variant), paint with a sized brush, add/drag/rename place labels,
   toggle RHQ visibility. There is no code-level territory editing path.
+- **Campaign replay** (v2.2): once RHQ presses **Select Start State** in the
+  Map: Territory editor's "Campaign replay" panel, every later "Save map"
+  that changes cells appends a diff move to the `campaign` slice
+  ([src/lib/campaign.js](src/lib/campaign.js) — run-length diffs, oldest
+  moves auto-fold into the start state near Firestore's doc-size cap). The
+  Home map then renders through
+  [CampaignReplayMap](src/components/CampaignReplayMap.jsx): an auto-playing
+  conquest animation (per-owner BFS wave on a cheap flat-tint overlay; the
+  expensive hatch layer commits once per move), company-name flashes at each
+  captured cluster, play/pause/replay/skip controls, resting on the live
+  state. No campaign → plain static PixelMap, exactly as before. The hatch
+  renderer lives in [src/lib/terrainRender.js](src/lib/terrainRender.js),
+  shared with **Export Campaign Replay**
+  ([src/lib/replayExport.js](src/lib/replayExport.js)): offscreen re-render
+  recorded in real time via MediaRecorder to MP4 (WebM on browsers that
+  can't mux MP4). `campaign` is invalidated on grid-resolution change, like
+  `territory`. No firestore.rules impact (it's a `content/*` slice).
 - Changing grid resolution means updating `TERR_COLS`/`TERR_ROWS` **and** the
   seed's `territory.cells` string together (length must equal `cols * rows`).
 - Always reference `MAP_IMAGE` via `import.meta.env.BASE_URL` (as

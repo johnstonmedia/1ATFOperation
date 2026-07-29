@@ -1,10 +1,13 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useData } from '../../context/DataContext'
 import { useAudit } from '../../hooks/useAudit'
+import { useConfirm } from '../../context/ConfirmContext'
 import { OpsHeader, useSaved } from './OperationsCentre'
 import PixelMap from '../../components/PixelMap'
 import { PAINT, RHQ_PAINT, colorOf } from '../../lib/territory'
 import { useOceanMask } from '../../lib/oceanMask'
+import { EMPTY_CAMPAIGN, campaignValid, appendSave } from '../../lib/campaign'
+import { exportCampaignReplay, exportSupported, downloadBlob } from '../../lib/replayExport'
 
 const rid = () => Math.random().toString(36).slice(2, 9)
 
@@ -43,7 +46,21 @@ export default function MapEditor() {
   const delPlace = (id) => setTerr((t) => ({ ...t, places: t.places.filter((p) => p.id !== id) }))
   const clearAll = () => setTerr((t) => ({ ...t, cells: '.'.repeat(cols * rows) }))
 
-  const save = () => { updateSlice('territory', terr); audit('Updated map territory'); flash() }
+  // Saving the map also records the change as a campaign-replay move (when a
+  // start state has been selected and any cells actually changed).
+  const campaign = state.campaign
+  const save = () => {
+    updateSlice('territory', terr)
+    audit('Updated map territory')
+    if (campaignValid(campaign, cols, rows)) {
+      const next = appendSave(campaign, terr.cells)
+      if (next) {
+        updateSlice('campaign', next)
+        audit('Recorded campaign move', `move ${next.timeline.length}`)
+      }
+    }
+    flash()
+  }
 
   const swatches = [...PAINT, ...(terr.showRHQ ? [RHQ_PAINT] : [])]
 
@@ -87,6 +104,8 @@ export default function MapEditor() {
 
       <PixelMap territory={terr} edit brush={brush} brushSize={size} onPaint={paint} onMovePlace={movePlace} />
 
+      <CampaignPanel campaign={campaign} terr={terr} territory={state.territory} />
+
       <div className="panel panel-pad col" style={{ gap: 8, marginTop: 14 }}>
         <div className="row between center wrap" style={{ gap: 8 }}>
           <strong className="head" style={{ fontSize: 14 }}>Place names</strong>
@@ -108,6 +127,112 @@ export default function MapEditor() {
           </div>
         ))}
       </div>
+    </div>
+  )
+}
+
+// Campaign replay controls: select/reset the start state, see how many moves
+// have been recorded, and export the whole replay as a video. Lives with the
+// map editor because every "Save map" is what appends a replay move.
+function CampaignPanel({ campaign, terr, territory }) {
+  const { updateSlice } = useData()
+  const audit = useAudit()
+  const confirm = useConfirm()
+  const { cols, rows } = terr
+  const active = campaignValid(campaign, cols, rows)
+  const moves = active ? campaign.timeline.length : 0
+
+  const [exporting, setExporting] = useState(false)
+  const [exportPct, setExportPct] = useState(0)
+  const [exportErr, setExportErr] = useState('')
+  const job = useRef(null)
+
+  const selectStart = async () => {
+    const ok = await confirm({
+      title: 'Select start state',
+      message: active
+        ? `Set the map AS CURRENTLY PAINTED HERE as the new campaign start state? The existing replay history (${moves} recorded move${moves === 1 ? '' : 's'}) will be erased.`
+        : 'Set the map AS CURRENTLY PAINTED HERE as the campaign start state? Every save from now on becomes a step in the public replay animation.',
+      danger: active,
+      confirmLabel: 'Select start state',
+    })
+    if (!ok) return
+    updateSlice('campaign', { start: { cells: terr.cells, ts: Date.now() }, timeline: [] })
+    audit(active ? 'Reset campaign start state' : 'Selected campaign start state')
+  }
+
+  const clearHistory = async () => {
+    const ok = await confirm({
+      title: 'Clear campaign replay',
+      message: 'Remove the start state and all recorded moves? The public map goes back to showing the current state with no replay animation. This cannot be undone.',
+      danger: true,
+      confirmLabel: 'Clear replay',
+    })
+    if (!ok) return
+    updateSlice('campaign', EMPTY_CAMPAIGN)
+    audit('Cleared campaign replay history')
+  }
+
+  const doExport = async () => {
+    setExportErr('')
+    setExporting(true)
+    setExportPct(0)
+    // Export replays against the SAVED territory (what the public sees), not
+    // unsaved editor strokes.
+    job.current = exportCampaignReplay({ territory, campaign, onProgress: setExportPct })
+    try {
+      const { blob, ext } = await job.current.promise
+      downloadBlob(blob, `campaign-replay.${ext}`)
+      audit('Exported campaign replay', `${moves} moves, .${ext}`)
+    } catch (e) {
+      if (!e?.cancelled) setExportErr(e?.message || 'Export failed.')
+    } finally {
+      setExporting(false)
+      job.current = null
+    }
+  }
+
+  return (
+    <div className="panel panel-pad col" style={{ gap: 8, marginTop: 14 }}>
+      <div className="row between center wrap" style={{ gap: 8 }}>
+        <strong className="head" style={{ fontSize: 14 }}>Campaign replay</strong>
+        {active && (
+          <span className="mono dim" style={{ fontSize: 10 }}>
+            START {new Date(campaign.start.ts).toLocaleDateString()} · {moves} MOVE{moves === 1 ? '' : 'S'} RECORDED
+          </span>
+        )}
+      </div>
+      <div className="mono dim" style={{ fontSize: 11 }}>
+        {active
+          ? 'Replay is live: every "Save map" that changes cells records a move, and visitors watch the conquest animate from the start state when the map loads.'
+          : 'No start state selected. Pick one to start recording campaign history — each later save becomes a step in an animated conquest replay shown to visitors.'}
+      </div>
+      <div className="row wrap center" style={{ gap: 8 }}>
+        <button className="ghost" onClick={selectStart}>{active ? 'Re-select start state' : 'Select Start State'}</button>
+        {active && <button className="danger ghost" onClick={clearHistory}>Clear replay history</button>}
+        {active && !exporting && (
+          <button
+            className="ghost"
+            onClick={doExport}
+            disabled={moves === 0 || !exportSupported()}
+            title={!exportSupported() ? 'This browser cannot record video' : moves === 0 ? 'No moves recorded yet' : 'Render the replay to a video file'}
+          >
+            ⬇ Export Campaign Replay
+          </button>
+        )}
+        {exporting && (
+          <>
+            <span className="mono accent" style={{ fontSize: 11 }}>RENDERING… {Math.round(exportPct * 100)}%</span>
+            <button className="danger ghost" onClick={() => job.current?.cancel()}>Cancel</button>
+          </>
+        )}
+      </div>
+      {exporting && (
+        <div className="mono dim" style={{ fontSize: 10 }}>
+          The video records in real time — keep this tab visible until it finishes. MP4 where the browser supports it, otherwise WebM.
+        </div>
+      )}
+      {exportErr && <div className="mono" style={{ fontSize: 11, color: 'var(--hostile)' }}>{exportErr}</div>}
     </div>
   )
 }

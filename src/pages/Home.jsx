@@ -1,4 +1,4 @@
-import PixelMap from '../components/PixelMap'
+import CampaignReplayMap from '../components/CampaignReplayMap'
 import { useData } from '../context/DataContext'
 import { COMPANIES } from '../firebase/seed'
 
@@ -25,7 +25,9 @@ export default function Home() {
         <div className="mono accent" style={{ fontSize: 13 }}>“{n.quote}”</div>
       </div>
 
-      <PixelMap territory={state.territory} />
+      {/* Animated campaign-history replay; plain static map when no campaign
+          start state has been recorded yet. */}
+      <CampaignReplayMap territory={state.territory} campaign={state.campaign} />
 
       <div style={{ marginTop: 20 }}>
         <OneATFBrief n={n} />

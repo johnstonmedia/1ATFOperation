@@ -17,6 +17,81 @@ keep entries short and focused on what a new collaborator needs to know.
 
 ---
 
+## 2026-07-29 — Campaign Territory Replay: animated conquest history + video export
+The public map can now REPLAY the whole campaign: RHQ picks a start state,
+every later "Save map" records a move, and visitors watch ownership sweep
+across the pixels move-by-move (with the conquering company's name flashing
+over each captured area) before the map settles on the current state.
+`npm run build` passes; logic + UI + export all emulator/browser-verified
+(see below).
+- **Data model** — new `content/campaign` single slice (added to
+  `SINGLE_SLICES` in `store.js`): `{ start: { cells, ts }, timeline: [{ ts,
+  diff }] }`. Timeline entries are **run-length diffs** against the previous
+  frame (`src/lib/campaign.js` `diffCells`/`applyDiff`, `<index36>:<run>`
+  segments), not 24 KB full snapshots — hundreds of saves fit inside
+  Firestore's 1 MiB doc cap. If the doc would still outgrow a 700 KB budget,
+  `appendSave` folds the OLDEST moves into the start state (replay just
+  starts one move later). `normalizeCampaign` in `store.js` discards a
+  campaign recorded against a different grid resolution (same rationale as
+  `normalizeTerritory`).
+- **No firestore.rules change needed** — `campaign` lives under `content/*`,
+  which is already public-read / RHQ-write. Nothing to re-publish for this
+  feature.
+- **Replay renderer** (`src/components/CampaignReplayMap.jsx`, used by
+  `Home.jsx`; falls back to the plain `PixelMap` when no campaign exists —
+  full backward compatibility): auto-plays once on load, then rests on the
+  live state (no loop). Per-move "conquest wave": changed cells are
+  clustered per owner and ripple outward (BFS rank, seeded from the owner's
+  existing front line — `transitionPlan` in `campaign.js`) on a cheap
+  flat-tint overlay canvas; the expensive hatch layer (PixelMap) redraws
+  only ONCE per move when the frame commits, so the animation stays smooth
+  regardless of map/timeline size. Controls: play/pause, replay, skip-to-
+  current, progress bar + move counter. `prefers-reduced-motion` skips
+  straight to the final state. If the live territory has drifted from the
+  last recorded frame, a synthetic final move is appended so the replay
+  always ends on what's actually live.
+- **Conquest name flash**: each conquering cluster (≥6 cells, so tiny
+  touch-ups don't spam) flashes its company name (ALPHA/…/MERIDIAN, owner
+  colour) at the cluster centroid — `.conquest-label` + `conquest-flash`
+  keyframes in `index.css`. Ground lost to nobody sweeps dark, no label.
+- **PixelMap refactor**: the hatch+border drawing moved verbatim into
+  `src/lib/terrainRender.js` (`renderTerritoryLayer`, plus the new
+  `renderWaveLayer`), shared by the on-screen map AND the video exporter so
+  the two can't drift apart. PixelMap also gained an `overlay` prop (node
+  rendered inside the zoom/pan stage) so replay layers track zooming.
+- **Ops Centre → Map: Territory** now has a **Campaign replay** panel
+  (`CampaignPanel` in `MapEditor.jsx`): **Select Start State** (uses the map
+  as currently painted in the editor; re-selecting erases history —
+  confirm-guarded), Clear replay history, move counter, and **Export
+  Campaign Replay**. Saving the map appends a move only when cells actually
+  changed (no-op saves add nothing). All actions audit-logged.
+- **Video export** (`src/lib/replayExport.js`): re-renders the replay
+  offscreen at 1296×672 (2× map art; same shared renderers + ctx.filter for
+  the agency look, incl. place labels and name flashes) and records it in
+  real time via `canvas.captureStream()` + `MediaRecorder` — **MP4 where
+  the browser can mux it (Chrome/Edge/Safari), WebM fallback (Firefox)**,
+  ~8 Mbps. Memory stays flat for any campaign length (only the current
+  hatch layer is cached; chunks stream to the recorder). Cancellable; the
+  tab must stay visible while it renders (rAF-driven real-time capture).
+- **Verified** (Firestore-free, LOCAL MODE + headless Chromium — scratch
+  scripts, not committed): 19 unit checks on the diff codec (random-grid
+  round-trips), timeline append/no-op/folding and wave planning (seed ranks,
+  cluster labels, loss clusters); 11 e2e checks on the Home replay
+  (auto-play, name flash, pause freezes progress, completion → CURRENT
+  STATE, replay/skip); 11 e2e checks on the editor flow (bootstrap-admin
+  login → select start → paint → save records move 1 → no-op save adds
+  nothing → persisted diff); 5 e2e checks on export (real 909 KB MP4
+  downloaded, decodes at 1296×672, frames show wave + MERIDIAN flash +
+  settled hatch).
+- **Assumptions/notes**: replay history tracks CELLS only (place labels
+  always render at their current position, incl. in the export); the
+  Firestore campaign doc is written whole on each save (same pattern as
+  every other content slice); browsers without `MediaRecorder` see a
+  disabled export button with an explanatory tooltip; the on-screen replay
+  compresses long campaigns (~0.75–1.8 s per move, ≤ ~20 s total animation).
+
+---
+
 ## 2026-07-23 — Roster privacy hardening: RHQ + own-record only reads
 Closes the privacy gap flagged in CLAUDE.md: `roster`/`tasks`/`activity` were
 readable by *any* signed-in member, leaking every member's name/ID/email and

@@ -18,10 +18,11 @@ import {
   DEFAULT_ACTIVITY,
 } from '../firebase/seed'
 import { TERR_COLS, TERR_ROWS } from './territory'
+import { EMPTY_CAMPAIGN, campaignValid } from './campaign'
 
 const LS_KEY = '1atf-state-v1'
 const LS_AUTHIDX = '1atf-authindex'
-const SINGLE_SLICES = ['narrative', 'territory', 'classified', 'branding', 'companyPages', 'video', 'intel', 'intelIntro', 'briefings']
+const SINGLE_SLICES = ['narrative', 'territory', 'classified', 'branding', 'companyPages', 'video', 'intel', 'intelIntro', 'briefings', 'campaign']
 const COLLECTION_SLICES = ['roster', 'tasks', 'activity', 'support', 'resetRequests', 'audit']
 
 export const isContentSlice = (slice) => SINGLE_SLICES.includes(slice)
@@ -36,6 +37,7 @@ const DEFAULT_STATE = {
   intel: DEFAULT_INTEL,
   intelIntro: DEFAULT_INTEL_INTRO,
   briefings: DEFAULT_BRIEFINGS,
+  campaign: EMPTY_CAMPAIGN,
   roster: FIREBASE_ENABLED ? [] : DEMO_ROSTER,
   tasks: [],
   activity: FIREBASE_ENABLED ? [] : DEFAULT_ACTIVITY,
@@ -137,9 +139,22 @@ function normalizeTerritory(state) {
   return state
 }
 
+// Same idea for the campaign replay history: a start state recorded against a
+// different grid resolution can't be replayed over the current art. Treat an
+// invalid campaign as "none recorded" — RHQ re-selects a start state in the
+// map editor to begin a fresh history.
+function normalizeCampaign(state) {
+  const c = state.campaign
+  const valid = campaignValid(c, state.territory.cols, state.territory.rows)
+  state.campaign = valid
+    ? { start: c.start, timeline: Array.isArray(c.timeline) ? c.timeline : [] }
+    : structuredClone(EMPTY_CAMPAIGN)
+  return state
+}
+
 export async function loadState() {
   const state = await (FIREBASE_ENABLED ? loadFirebase() : loadLocal())
-  return normalizeTerritory(state)
+  return normalizeCampaign(normalizeTerritory(state))
 }
 
 export async function persistSlice(state, slice) {
