@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Outlet } from 'react-router-dom'
+import { Outlet, Link } from 'react-router-dom'
 import TopBar from './TopBar'
 import Sidebar from './Sidebar'
 import LoginModal from './LoginModal'
@@ -24,6 +24,11 @@ export default function Layout() {
       <main style={{ paddingTop: 8 }}>
         <Outlet />
       </main>
+      <footer className="row center" style={{ justifyContent: 'center', gap: 10, padding: '14px 20px 22px' }}>
+        <span className="mono dim" style={{ fontSize: 10 }}>SHORE CADET UNIT // 1ATF</span>
+        <span className="mono dim" style={{ fontSize: 10 }}>·</span>
+        <Link to="/privacy" className="mono dim" style={{ fontSize: 10 }}>Privacy Notice</Link>
+      </footer>
       {authOpen && <LoginModal onClose={() => setAuthOpen(false)} />}
     </div>
   )

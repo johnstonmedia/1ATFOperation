@@ -17,6 +17,30 @@ keep entries short and focused on what a new collaborator needs to know.
 
 ---
 
+## 2026-07-29 (3) — Privacy notice page + "hostile" → "threat" wording
+- **New `/privacy` page** ([src/pages/Privacy.jsx](src/pages/Privacy.jsx)):
+  small, plain-language member-facing privacy notice (what's collected, why,
+  Firebase storage + own-record-only access, local-storage use, how to get
+  data corrected/removed via Help, parent/guardian line for minors, fiction
+  disclaimer). Static/repo-versioned by design — not an RHQ-editable slice.
+  Linked from a new minimal footer in `Layout.jsx` (shows on all three
+  public tabs). Closes the "no member-facing privacy notice" TODO in
+  CLAUDE.md.
+- **Wording: "hostile" → "threat"** in user-visible copy. Seed defaults:
+  Meridian brief title `MERIDIAN // HOSTILE` → `MERIDIAN // THREAT`, mission
+  line "…until the line holds no threat.", classified body "an expansionist
+  threat known as THE MERIDIAN", demo activity line. `language.js`
+  `BANNED_TERMS` now suggests **threat** for "hostile" (still `review`
+  level), so editors get steered to the approved word. Code identifiers
+  (`--hostile` CSS var, `.hostile` class, `p.hostile` flag) deliberately
+  unchanged — they're invisible to users and renaming them is pure churn.
+  ⚠️ Seed changes only affect fresh installs: the LIVE site's narrative /
+  classified copy lives in Firestore `content/*` docs, so RHQ must edit
+  those in the Ops Centre (the LanguageWarning now flags "hostile" with the
+  "threat" suggestion, which makes the spots easy to find).
+
+---
+
 ## 2026-07-29 (2) — Map editor: smooth, gapless brush strokes
 Fixes the "glitchy" brush in Ops Centre → Map: Territory. Two root causes,
 both in the paint path; rendering output is unchanged (screenshot-compared).

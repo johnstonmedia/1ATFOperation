@@ -5,6 +5,7 @@ import Home from './pages/Home'
 import Intel from './pages/Intel'
 import Briefings from './pages/Briefings'
 import Classified from './pages/Classified'
+import Privacy from './pages/Privacy'
 import OperationsCentre from './pages/ops/OperationsCentre'
 import CommanderPanel from './pages/CommanderPanel'
 import Boot from './components/Boot'
@@ -26,6 +27,7 @@ export default function App() {
         <Route path="/" element={<Home />} />
         <Route path="/intel" element={<Intel />} />
         <Route path="/briefings" element={<Briefings />} />
+        <Route path="/privacy" element={<Privacy />} />
         <Route path="*" element={<Home />} />
       </Route>
     </Routes>

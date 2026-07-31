@@ -39,6 +39,10 @@ routes — see [src/App.jsx](src/App.jsx):
   Fragments are decrypt-style puzzles (fill in redacted words) with optional
   linked docs/images.
 - `/briefings` **Briefings** — a video embed + free text, admin-edited.
+- `/privacy` **Privacy Notice** — small static member-facing privacy policy
+  ([src/pages/Privacy.jsx](src/pages/Privacy.jsx)), linked from the footer in
+  [Layout.jsx](src/components/Layout.jsx). Deliberately repo-versioned, not an
+  RHQ-editable slice.
 - `/Classified` (and `/classified`) — the original standalone landing page
   cadets are sent to; "Continue" starts temp-password registration.
 - `/operations-centre/*` — **RHQ-only** admin console (see below). URL-only,
@@ -220,7 +224,8 @@ styles — there is no CSS-in-JS or component library.
 - ⚠️ Temp passwords are stored **plain text** in `roster`. Consider hashing and
   only revealing at generation/download time. (Would also close the residual
   gap above.)
-- No member-facing privacy notice yet (relevant — likely minors in a cadet unit).
+- ✅ **Fixed 2026-07-29**: member-facing privacy notice now exists at
+  `/privacy` (static page, footer-linked).
 
 ## Working constraints (important)
 - Deploy branch is **`main`**; pushes there trigger the Pages build/deploy.

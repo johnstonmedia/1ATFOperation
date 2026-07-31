@@ -159,7 +159,7 @@ export const DEFAULT_BRIEFINGS = {
   sections: [
     {
       heading: '01 — Situation',
-      body: 'Over the past eighteen months, a hostile expansionist power known as THE MERIDIAN has systematically taken over sovereign territory across the world. The Meridian does not use conventional military force, instead operating through economic coercion, infrastructure seizure, and the suppression of local governance.\n\nAt the time of this briefing, The Meridian controls the majority of Australia. In New South Wales, they have concentrated their power in Singleton and Marrangaroo Training Areas, controlling Army land and supply chains. From these hubs, their control spreads out into the surrounding regions, leaving independent resistance from local units disorganised and ineffective.\n\nThe North Sydney area is among the last territory in the state still free of Meridian control: not a single Meridian operative was sighted during the Term 2 period. However, intelligence suggests that The Meridian has identified North Sydney as its next objective, with preliminary movements detected by Independent Recon Platoon at the end of last week.',
+      body: 'Over the past eighteen months, an expansionist threat known as THE MERIDIAN has systematically taken over sovereign territory across the world. The Meridian does not use conventional military force, instead operating through economic coercion, infrastructure seizure, and the suppression of local governance.\n\nAt the time of this briefing, The Meridian controls the majority of Australia. In New South Wales, they have concentrated their power in Singleton and Marrangaroo Training Areas, controlling Army land and supply chains. From these hubs, their control spreads out into the surrounding regions, leaving independent resistance from local units disorganised and ineffective.\n\nThe North Sydney area is among the last territory in the state still free of Meridian control: not a single Meridian operative was sighted during the Term 2 period. However, intelligence suggests that The Meridian has identified North Sydney as its next objective, with preliminary movements detected by Independent Recon Platoon at the end of last week.',
     },
     {
       heading: '02 — The Unit',
@@ -233,7 +233,7 @@ export const DEFAULT_NARRATIVE = {
     mission:
       'Regain and hold sovereign territory from the Meridian incursion. ' +
       '1ATF coordinates six companies across the continent to fix, isolate ' +
-      'and reduce Meridian-held zones until the line holds nothing hostile.',
+      'and reduce Meridian-held zones until the line holds no threat.',
     // Shared role text for the four recruit companies (A/B/C/D) — they don't
     // have individual specialisations, so one line covers all of them. Echo
     // and Support keep their own distinct roles below.
@@ -244,7 +244,7 @@ export const DEFAULT_NARRATIVE = {
     },
   },
   meridian: {
-    title: 'MERIDIAN // HOSTILE',
+    title: 'MERIDIAN // THREAT',
     threatLevel: 'SEVERE',
     motiveHeading: 'MOTIVE',
     objectiveHeading: 'OBJECTIVE',
@@ -320,5 +320,5 @@ export const DEMO_ROSTER = [
 
 export const DEFAULT_ACTIVITY = [
   { id: 'a1', company: 'Alpha', text: 'Secured Northern Approach grid 130E.', ts: Date.now() - 86400000 },
-  { id: 'a2', company: 'Meridian', text: 'Hostile probe repelled at Red Centre.', ts: Date.now() - 43200000 },
+  { id: 'a2', company: 'Meridian', text: 'Meridian probe repelled at Red Centre.', ts: Date.now() - 43200000 },
 ]

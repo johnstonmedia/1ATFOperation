@@ -26,7 +26,7 @@ export const BANNED_TERMS = [
   { match: 'weapon', suggest: 'equipment / stores', level: 'review' },
   { match: 'ammo', suggest: 'stores', level: 'review' },
   { match: 'ammunition', suggest: 'stores', level: 'review' },
-  { match: 'hostile', suggest: 'opposing force / OPFOR', level: 'review' },
+  { match: 'hostile', suggest: 'threat', level: 'review' },
   { match: 'attack', suggest: 'advance / activity', level: 'review' },
   { match: 'combat', suggest: 'field activity / exercise', level: 'review' },
 ]
