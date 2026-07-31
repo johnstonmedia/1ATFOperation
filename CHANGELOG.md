@@ -17,6 +17,21 @@ keep entries short and focused on what a new collaborator needs to know.
 
 ---
 
+## 2026-07-29 (4) — Custom domain: build for root path
+The user attached a custom domain to GitHub Pages (Settings → Pages), which
+serves the site from the domain ROOT — but the build still targeted the
+`/<repo>/` project-pages subpath, so every asset 404'd (blank page).
+- `deploy.yml`: `VITE_BASE` → `/`. `public/404.html`:
+  `pathSegmentsToKeep` → `0`. Both carry comments on how to revert if the
+  custom domain is ever removed (the github.io/<repo>/ URL now just
+  redirects to the domain, as GitHub does automatically).
+- No CNAME file needed: with Actions-based Pages deploys the custom domain
+  lives in the repo's Pages settings, not in the artifact.
+- ⚠️ Firebase Console → Authentication → Settings → **Authorized domains**
+  must include the custom domain or all sign-ins fail there.
+
+---
+
 ## 2026-07-29 (3) — Privacy notice page + "hostile" → "threat" wording
 - **New `/privacy` page** ([src/pages/Privacy.jsx](src/pages/Privacy.jsx)):
   small, plain-language member-facing privacy notice (what's collected, why,

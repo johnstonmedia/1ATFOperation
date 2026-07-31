@@ -5,13 +5,15 @@
     <title>1ATF // routing…</title>
     <!--
       GitHub Pages has no server-side rewrites, so a direct visit to a deep URL
-      like /1ATFOperation/Classified would 404. This single-page-app redirect
-      (technique by Rafael Pedicini) rewrites the path into a query string and
-      bounces to index.html, where a snippet restores the real URL before the
-      router boots. pathSegmentsToKeep = 1 keeps the /<repo> project-page prefix.
+      like /Classified would 404. This single-page-app redirect (technique by
+      Rafael Pedicini) rewrites the path into a query string and bounces to
+      index.html, where a snippet restores the real URL before the router
+      boots. pathSegmentsToKeep = 0 because the site is served from the ROOT
+      of a custom domain — set it back to 1 if the site ever returns to the
+      <user>.github.io/<repo>/ project-pages subpath.
     -->
     <script>
-      var pathSegmentsToKeep = 1
+      var pathSegmentsToKeep = 0
       var l = window.location
       l.replace(
         l.protocol +

@@ -18,8 +18,12 @@ don't repeat or undo recent work.
   for admin/member email notifications — silent no-op until `VITE_EMAILJS_*`
   keys are set, request is always stored in Firestore regardless.
 - Hosted on **GitHub Pages** via [.github/workflows/deploy.yml](.github/workflows/deploy.yml)
-  (builds with `VITE_BASE=/<repo>/`, deploys `dist/` on every push to **main**).
-  Pages Source must be **GitHub Actions**.
+  (deploys `dist/` on every push to **main**). Pages Source must be **GitHub
+  Actions**. Served from the root of a **custom domain** (set in Settings →
+  Pages), so the build uses `VITE_BASE=/` and `public/404.html` keeps 0 path
+  segments — both must be reverted (to `/<repo>/` and 1) if the custom domain
+  is ever removed. The custom domain must also be in Firebase Auth's
+  **Authorized domains** list or sign-ins fail.
 - SPA deep links handled by `public/404.html` + a restore snippet in `index.html`.
 - **Firebase is enabled by default** — real keys are hard-coded as fallback
   defaults in [src/firebase/config.js](src/firebase/config.js) (they're public

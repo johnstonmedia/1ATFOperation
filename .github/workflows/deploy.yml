@@ -31,12 +31,15 @@ jobs:
 
       - run: npm ci
 
-      # VITE_BASE = /<repo>/ so assets resolve under the project-pages subpath.
-      # github.event.repository.name preserves the repo's canonical casing.
+      # The site is served from the ROOT of a custom domain (set in Settings →
+      # Pages), so assets resolve from /. If the custom domain is ever removed,
+      # this must go back to /${{ github.event.repository.name }}/ (and
+      # public/404.html's pathSegmentsToKeep back to 1) for the
+      # <user>.github.io/<repo>/ subpath to work.
       - name: Build
         run: npm run build
         env:
-          VITE_BASE: /${{ github.event.repository.name }}/
+          VITE_BASE: /
 
       - uses: actions/upload-pages-artifact@v3
         with:
