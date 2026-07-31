@@ -28,7 +28,9 @@ export default function PixelMap({
   edit = false,
   brush = '.',
   brushSize = 1,
-  onPaint,
+  onPaint, // (points: [{x, y}, ...], brush, brushSize) — one call per stroke
+           // segment, points pre-interpolated into a continuous line
+
   onMovePlace,
   maxWidth,
   overlay, // optional node rendered inside the zoom/pan stage, above the
@@ -75,7 +77,11 @@ export default function PixelMap({
       renderTerritoryLayer(ctx, { cells, cols, rows, showRHQ, w, h })
     }
 
-    draw()
+    // Coalesce to at most one full redraw per display frame. While painting,
+    // pointermove events (and therefore cells-prop changes) can outpace the
+    // frame rate — drawing synchronously on every one made brush strokes
+    // stutter.
+    let raf = requestAnimationFrame(draw)
 
     let resizeTimer = null
     const ro = new ResizeObserver(() => {
@@ -83,7 +89,7 @@ export default function PixelMap({
       resizeTimer = setTimeout(draw, 120)
     })
     ro.observe(container)
-    return () => { clearTimeout(resizeTimer); ro.disconnect() }
+    return () => { cancelAnimationFrame(raf); clearTimeout(resizeTimer); ro.disconnect() }
   }, [cells, cols, rows, showRHQ])
 
   const clampPan = useCallback((p, s) => {
@@ -105,12 +111,49 @@ export default function PixelMap({
     return { x, y }
   }, [cols, rows])
 
+  // Painting a stroke: pointer events are SAMPLED, so a fast drag only fires
+  // a handful of moves — stamping just at each event painted a dotted line
+  // with gaps. Instead we remember the last painted cell and walk a Bresenham
+  // line from it to every new sample (including the finer-grained coalesced
+  // events browsers batch between frames), so strokes come out continuous no
+  // matter how fast the pointer moves.
+  const lastPaintCell = useRef(null)
+
+  const strokeTo = useCallback((c, out) => {
+    const from = lastPaintCell.current
+    if (!from) {
+      out.push(c)
+      lastPaintCell.current = c
+      return
+    }
+    if (from.x === c.x && from.y === c.y) return
+    let { x, y } = from
+    const dx = Math.abs(c.x - x), sx = x < c.x ? 1 : -1
+    const dy = -Math.abs(c.y - y), sy = y < c.y ? 1 : -1
+    let err = dx + dy
+    while (x !== c.x || y !== c.y) {
+      const e2 = 2 * err
+      if (e2 >= dy) { err += dy; x += sx }
+      if (e2 <= dx) { err += dx; y += sy }
+      out.push({ x, y })
+    }
+    lastPaintCell.current = c
+  }, [])
+
   const paintAt = useCallback((e) => {
     if (!edit || !onPaint) return
-    const c = cellFromEvent(e)
-    if (!c) return
-    onPaint(c.x, c.y, brush, brushSize)
-  }, [edit, onPaint, cellFromEvent, brush, brushSize])
+    // Coalesced events give the pointer's true path between frames, not just
+    // the last position — finer input for the line interpolation above.
+    const samples = typeof e.getCoalescedEvents === 'function' && e.getCoalescedEvents().length
+      ? e.getCoalescedEvents()
+      : [e]
+    const pts = [] // whole stroke segment batched into ONE onPaint call
+    for (const s of samples) {
+      const c = cellFromEvent(s)
+      if (c) strokeTo(c, pts)
+    }
+    if (pts.length) onPaint(pts, brush, brushSize)
+  }, [edit, onPaint, cellFromEvent, strokeTo, brush, brushSize])
 
   const onPointerDown = (e) => {
     if (dragging.current) return
@@ -118,7 +161,9 @@ export default function PixelMap({
       if (!onPaint) return
       containerRef.current?.setPointerCapture?.(e.pointerId)
       dragOrigin.current = { pointerId: e.pointerId, painting: true }
-      paintAt(e)
+      lastPaintCell.current = null
+      const c = cellFromEvent(e)
+      if (c) { onPaint([c], brush, brushSize); lastPaintCell.current = c }
     } else if (scale > 1) {
       containerRef.current?.setPointerCapture?.(e.pointerId)
       dragOrigin.current = { pointerId: e.pointerId, lastX: e.clientX, lastY: e.clientY }
@@ -146,6 +191,7 @@ export default function PixelMap({
   const endPointer = (e) => {
     if (dragOrigin.current?.pointerId === e.pointerId) dragOrigin.current = null
     dragging.current = null
+    lastPaintCell.current = null
   }
 
   // Only trap touch gestures on the map when there's something to drag

@@ -23,18 +23,23 @@ export default function MapEditor() {
   const { cols, rows } = terr
   const oceanMask = useOceanMask(cols, rows)
 
-  const paint = (x, y, code, sz) => {
+  // `points` is the whole stroke segment since the last pointer event (the
+  // map interpolates a continuous line between samples) — stamped in one
+  // state update so long fast strokes don't rebuild the cell string per cell.
+  const paint = (points, code, sz) => {
     setTerr((t) => {
       const arr = t.cells.split('')
       // NxN brush, e.g. size=2 covers cells [-1,0] relative to (x,y) so a 2x2
       // block actually paints 2x2 (previously floor((sz-1)/2) collapsed even
       // sizes like 2 down to a single cell).
       const half = Math.floor(sz / 2)
-      for (let dy = -half; dy < sz - half; dy++) for (let dx = -half; dx < sz - half; dx++) {
-        const nx = x + dx, ny = y + dy
-        if (nx < 0 || nx >= cols || ny < 0 || ny >= rows) continue
-        if (code !== '.' && oceanMask && oceanMask[ny * cols + nx]) continue // can't paint ocean
-        arr[ny * cols + nx] = code
+      for (const { x, y } of points) {
+        for (let dy = -half; dy < sz - half; dy++) for (let dx = -half; dx < sz - half; dx++) {
+          const nx = x + dx, ny = y + dy
+          if (nx < 0 || nx >= cols || ny < 0 || ny >= rows) continue
+          if (code !== '.' && oceanMask && oceanMask[ny * cols + nx]) continue // can't paint ocean
+          arr[ny * cols + nx] = code
+        }
       }
       return { ...t, cells: arr.join('') }
     })

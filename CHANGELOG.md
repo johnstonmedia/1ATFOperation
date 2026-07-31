@@ -17,6 +17,33 @@ keep entries short and focused on what a new collaborator needs to know.
 
 ---
 
+## 2026-07-29 (2) — Map editor: smooth, gapless brush strokes
+Fixes the "glitchy" brush in Ops Centre → Map: Territory. Two root causes,
+both in the paint path; rendering output is unchanged (screenshot-compared).
+- **Gapless strokes**: pointer events are sampled, so a fast drag only fired
+  a handful of moves and painted a dotted line. `PixelMap` now remembers the
+  last painted cell and walks a Bresenham line to each new sample — including
+  the browser's coalesced pointer events (`getCoalescedEvents`) for the
+  pointer's true path between frames. The whole segment is batched into ONE
+  `onPaint(points[], brush, size)` call (signature changed from per-cell
+  `(x, y, ...)`; `MapEditor.paint` stamps the batch in a single state
+  update). Ocean-mask blocking still applies per cell.
+- **Cheaper redraws**: every painted cell triggers a full territory-layer
+  redraw, which previously re-stroked hundreds of diagonal hatch lines AND
+  allocated two full-size canvases per owner code, per redraw.
+  `terrainRender.js` now caches the hatch pattern per code+size (it doesn't
+  depend on cells) and masks it through one reused scratch canvas via
+  `source-in` — no per-draw allocations. `PixelMap` also coalesces redraws
+  to one per animation frame instead of one per pointer event. Benefits the
+  campaign replay and video export too (same shared renderer).
+- **Verified** (LOCAL MODE + headless Chromium): a 4-event fast drag across
+  ~40% of the map paints the exact same continuous stroke as a 200-event
+  slow drag (holes identical — only ocean-masked water cells); ocean stays
+  unpaintable; full replay e2e suite still passes; hatch render screenshot
+  matches pre-change.
+
+---
+
 ## 2026-07-29 — Campaign Territory Replay: animated conquest history + video export
 The public map can now REPLAY the whole campaign: RHQ picks a start state,
 every later "Save map" records a move, and visitors watch ownership sweep

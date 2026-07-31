@@ -26,6 +26,54 @@ const HATCH_DASH = 0 // 0 = solid lines
 const BORDER_COLOR = 'rgba(6, 10, 18, 0.6)'
 const BORDER_WIDTH = 3
 
+// Full-canvas hatch line patterns don't depend on the cells at all — only on
+// the owner colour and the canvas size — so they're cached across draws.
+// Without this, every repaint re-stroked hundreds of diagonal lines per owner
+// code AND allocated two full-size canvases per code, which is what made the
+// map stutter while the brush was dragging (each painted cell triggers a
+// redraw). The cache is tiny: one canvas per code per canvas size in use.
+const hatchCache = new Map() // `${code}|${w}x${h}` -> canvas
+const HATCH_CACHE_MAX = 48
+
+function hatchFor(code, w, h) {
+  const key = `${code}|${w}x${h}`
+  let cv = hatchCache.get(key)
+  if (cv) return cv
+  if (hatchCache.size >= HATCH_CACHE_MAX) hatchCache.clear() // e.g. after many resizes
+  cv = document.createElement('canvas')
+  cv.width = w; cv.height = h
+  const lctx = cv.getContext('2d')
+  const diag = Math.ceil(Math.sqrt(w * w + h * h))
+  lctx.save()
+  lctx.translate(w / 2, h / 2)
+  lctx.rotate((HATCH_ANGLE * Math.PI) / 180)
+  lctx.globalAlpha = HATCH_OPACITY
+  lctx.strokeStyle = colorOf(code)
+  lctx.lineWidth = HATCH_THICKNESS
+  if (HATCH_DASH > 0) lctx.setLineDash([HATCH_DASH, HATCH_DASH])
+  lctx.beginPath()
+  for (let d = -diag; d <= diag; d += HATCH_SPACING) {
+    lctx.moveTo(d, -diag)
+    lctx.lineTo(d, diag)
+  }
+  lctx.stroke()
+  lctx.restore()
+  hatchCache.set(key, cv)
+  return cv
+}
+
+// One reusable scratch canvas for masking the hatch down to a code's cells
+// (draws are synchronous, so sequential reuse across codes — and across the
+// live map / exporter — is safe). Avoids per-draw canvas allocation churn.
+let scratch = null
+function scratchFor(w, h) {
+  if (!scratch || scratch.width !== w || scratch.height !== h) {
+    scratch = document.createElement('canvas')
+    scratch.width = w; scratch.height = h
+  }
+  return scratch
+}
+
 // Draw hatch fills + a single neutral outline per boundary edge for `cells`
 // onto `ctx`, covering a w x h pixel area. Pure draw — the caller owns canvas
 // sizing/clearing.
@@ -34,57 +82,35 @@ export function renderTerritoryLayer(ctx, { cells, cols, rows, showRHQ, w, h }) 
   const at = (x, y) => (x < 0 || y < 0 || x >= cols || y >= rows ? '.' : vis(cells[y * cols + x]))
   const cell = w / cols
 
-  // One pass over the grid, bucketing each cell into a per-owner-code
-  // mask canvas (not one full grid pass per code).
-  const masks = new Map() // code -> { canvas, ctx }
+  // One pass over the grid, bucketing each code's cells into a rect list.
+  const buckets = new Map() // code -> [x, y, x, y, ...]
   for (let y = 0; y < rows; y++) {
     for (let x = 0; x < cols; x++) {
       const code = at(x, y)
       if (!colorOf(code)) continue
-      let m = masks.get(code)
-      if (!m) {
-        const c = document.createElement('canvas')
-        c.width = w; c.height = h
-        const mctx = c.getContext('2d')
-        mctx.fillStyle = '#000'
-        m = { canvas: c, ctx: mctx }
-        masks.set(code, m)
-      }
-      m.ctx.fillRect(x * cell, y * cell, cell, cell)
+      let b = buckets.get(code)
+      if (!b) { b = []; buckets.set(code, b) }
+      b.push(x, y)
     }
   }
 
-  // Hatch each owner's region: draw the line pattern across the whole
-  // canvas, then mask it down to just that owner's cells via
-  // destination-in (not a clip() path built from thousands of unioned
+  // Hatch each owner's region: fill the code's cells on the scratch canvas,
+  // then source-in the cached full-canvas hatch pattern so it survives only
+  // inside those cells (not a clip() path built from thousands of unioned
   // per-cell rects — that pathologically complex a clip path produced a
   // rasteriser seam artifact when tested).
-  const diag = Math.ceil(Math.sqrt(w * w + h * h))
-  for (const [code, m] of masks) {
-    const col = colorOf(code)
-    const layer = document.createElement('canvas')
-    layer.width = w; layer.height = h
-    const lctx = layer.getContext('2d')
-    lctx.save()
-    lctx.translate(w / 2, h / 2)
-    lctx.rotate((HATCH_ANGLE * Math.PI) / 180)
-    lctx.globalAlpha = HATCH_OPACITY
-    lctx.strokeStyle = col
-    lctx.lineWidth = HATCH_THICKNESS
-    if (HATCH_DASH > 0) lctx.setLineDash([HATCH_DASH, HATCH_DASH])
-    lctx.beginPath()
-    for (let d = -diag; d <= diag; d += HATCH_SPACING) {
-      lctx.moveTo(d, -diag)
-      lctx.lineTo(d, diag)
-    }
-    lctx.stroke()
-    lctx.restore()
-    lctx.globalCompositeOperation = 'destination-in'
-    lctx.globalAlpha = 1
-    lctx.drawImage(m.canvas, 0, 0)
+  const sc = scratchFor(w, h)
+  const sctx = sc.getContext('2d')
+  for (const [code, b] of buckets) {
+    sctx.globalCompositeOperation = 'source-over'
+    sctx.clearRect(0, 0, w, h)
+    sctx.fillStyle = '#000'
+    for (let i = 0; i < b.length; i += 2) sctx.fillRect(b[i] * cell, b[i + 1] * cell, cell, cell)
+    sctx.globalCompositeOperation = 'source-in'
+    sctx.drawImage(hatchFor(code, w, h), 0, 0)
 
     ctx.globalAlpha = 1
-    ctx.drawImage(layer, 0, 0)
+    ctx.drawImage(sc, 0, 0)
   }
 
   ctx.globalAlpha = 1
