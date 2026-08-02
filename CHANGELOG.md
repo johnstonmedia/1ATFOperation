@@ -17,6 +17,39 @@ keep entries short and focused on what a new collaborator needs to know.
 
 ---
 
+## 2026-07-30 — Unread alerts, responsive nav, SMEAC brief
+Four changes, all e2e-tested headless at 1200/800/390px widths (25 checks).
+- **Unread-content banners** ([src/hooks/useUnseen.js](src/hooks/useUnseen.js)):
+  red pulsing banners on Home, just above the map — "NEW INTERCEPTED
+  INTELLIGENCE" / "NEW BRIEFING / TASKING" — shown when the `intel` /
+  `briefings` slice's `updatedAt` is newer than the device-local seen stamp
+  in localStorage. Opening the page (banner links there) marks it read on
+  that device; the stored stamp is the content's own `updatedAt`, so RHQ/
+  member clock skew can't break the comparison. Intel approvals write
+  `content/intel` via `updateSlice`, so approved COY intel triggers the
+  banner too. No auth/server state — "read" is per-device. (`tasks` has no
+  public page/readable collection, so "new task" = the briefings feed.)
+- **Public nav is responsive**: ≥768px the menu is a permanently pinned left
+  rail (`.app-shell`/`.app-rail`, active-page highlight); phones keep the
+  hamburger + slide-in drawer. Both render the same `NavContent`
+  (extracted from Sidebar.jsx); the hamburger button hides on desktop.
+- **Ops Centre inverted for mobile**: ≤820px the side rail is no longer
+  pinned (it previously stacked full-width on top) — it's now an off-canvas
+  drawer opened from a ☰ MENU bar above the work area, closing on backdrop
+  tap or section pick. Desktop unchanged (pinned). CommanderPanel doesn't
+  use ops-shell, unaffected.
+- **Home brief is now SMEAC**: new `narrative.smeac` {situation, mission,
+  execution, admin, command} rendered as an "OPERATION BRIEF // SMEAC"
+  panel with lettered sections (empty sections skipped); company-roles
+  badges + Meridian panel unchanged below it. `smeacOf()` merges older
+  stored narratives — their edited `oneatf.mission` becomes the Mission
+  paragraph and other sections fall back to seed text, so the live doc
+  shows sensible copy before RHQ ever edits it. Narrative editor's Mission
+  field replaced by the five SMEAC fields (old `oneatf.mission` data left
+  intact as the fallback source).
+
+---
+
 ## 2026-07-29 (5) — Gesture zoom, crest favicon
 - **Map zoom is now gesture-driven** — the "+" button is gone. `PixelMap`
   holds a continuous `view {scale, x, y}` (1x–4x): mouse-wheel / trackpad

@@ -1,4 +1,6 @@
+import { useEffect } from 'react'
 import { useData } from '../context/DataContext'
+import { markSeen } from '../hooks/useUnseen'
 import { PageTitle } from './Profile'
 import VideoEmbed from '../components/VideoEmbed'
 import { DEFAULT_BRIEFINGS } from '../firebase/seed'
@@ -12,6 +14,11 @@ export default function Briefings() {
   const b = state.briefings || {}
   const sections = b.sections?.length ? b.sections : DEFAULT_BRIEFINGS.sections
   const closingQuote = b.closingQuote ?? DEFAULT_BRIEFINGS.closingQuote
+
+  // Opening this page counts as "reading" the briefing — clears the
+  // home-page new-briefing banner on this device.
+  const updatedAt = state.contentMeta?.briefings?.updatedAt
+  useEffect(() => { markSeen('briefings', updatedAt) }, [updatedAt])
 
   return (
     <div className="container" style={{ padding: '24px 20px 60px', maxWidth: 900 }}>

@@ -228,6 +228,30 @@ export const DEFAULT_NARRATIVE = {
   unitName: '1st Australian Task Force',
   shortName: '1ATF',
   quote: '1ATF will not stop till the Meridian holds nothing.',
+  // Main operation brief, in SMEAC orders format (rendered on the home page;
+  // see smeacOf() for how older stored narratives without this key merge).
+  smeac: {
+    situation:
+      'The Meridian, an expansionist threat, controls the majority of Australia, ' +
+      'operating from hubs at Singleton and Marrangaroo. The North Sydney area ' +
+      'remains free of Meridian control — intelligence indicates it is their next objective.',
+    mission:
+      'Regain and hold sovereign territory from the Meridian incursion. ' +
+      '1ATF coordinates six companies across the continent to fix, isolate ' +
+      'and reduce Meridian-held zones until the line holds no threat.',
+    execution:
+      'Companies A–D hold assigned ground, screen approaches and feed contact ' +
+      'reports to RHQ. Echo holds the Southern Line as the rapid-response and ' +
+      'reinforcement element. Territory is regained zone by zone and consolidated ' +
+      'before the advance continues.',
+    admin:
+      'Support Company coordinates logistics, signals and sustainment from the ' +
+      'Logistics Hub. Equipment and welfare issues are reported through the chain of command.',
+    command:
+      'RHQ commands the operation; Company Commanders lead their companies and report ' +
+      'to RHQ. Orders and intelligence are distributed through this portal — monitor ' +
+      'Briefings and Intercepted Intelligence for updates.',
+  },
   oneatf: {
     title: '1ATF // FRIENDLY FORCES',
     mission:
@@ -261,6 +285,19 @@ export const DEFAULT_NARRATIVE = {
       'who live on it. If the Meridian line holds, the continent is split. ' +
       '1ATF exists to ensure it holds nothing.',
   },
+}
+
+// Merge a stored narrative's SMEAC brief with the defaults. Narratives saved
+// before the SMEAC format existed have no `smeac` key — their edited mission
+// line (oneatf.mission) is carried into the Mission paragraph so live copy
+// isn't lost, and the other sections fall back to the seed text until RHQ
+// edits them.
+export function smeacOf(narrative) {
+  return {
+    ...DEFAULT_NARRATIVE.smeac,
+    mission: narrative?.oneatf?.mission || DEFAULT_NARRATIVE.smeac.mission,
+    ...(narrative?.smeac || {}),
+  }
 }
 
 export const DEFAULT_CLASSIFIED = {

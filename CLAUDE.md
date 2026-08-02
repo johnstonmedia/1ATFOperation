@@ -36,7 +36,15 @@ don't repeat or undo recent work.
 ## App shape (current)
 Three **public, no-login** tabs behind the main shell, plus chrome-less
 routes — see [src/App.jsx](src/App.jsx):
-- `/` **Home** — hero + pixel territory map + 1ATF/Meridian brief tabs.
+- `/` **Home** — hero + unread-content alert banners (red, above the map —
+  see `useUnseen` below) + pixel territory map + **SMEAC operation brief**
+  (`smeacOf()` in seed.js merges older stored narratives) + company roles +
+  Meridian brief. Public nav is responsive: pinned left rail ≥768px,
+  hamburger drawer below (`NavContent` in Sidebar.jsx is shared by both);
+  the Ops Centre is the inverse — rail pinned on desktop, ☰ MENU drawer
+  ≤820px. Unread tracking: `src/hooks/useUnseen.js` compares each content
+  slice's `updatedAt` against a device-local seen stamp; Intel/Briefings
+  pages mark themselves seen on open.
 - `/intel` **Intel** — "Intercepted Intelligence": RHQ-wide fragments plus
   company-specific ones, gated only by a **company dropdown** (device-local
   preference, no auth — [CompanyContext](src/context/CompanyContext.jsx)).

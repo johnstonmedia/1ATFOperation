@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useData } from '../context/DataContext'
+import { markSeen } from '../hooks/useUnseen'
 import { useCompany } from '../context/CompanyContext'
 import { COMPANIES, PHONETIC } from '../firebase/seed'
 import DocEmbed from '../components/DocEmbed'
@@ -17,6 +18,11 @@ export default function Intel() {
   const all = state.intel || []
   const rhqIntel = all.filter((f) => f.company === 'ALL')
   const coyIntel = all.filter((f) => f.company === company)
+
+  // Opening this page counts as "reading" the intel — clears the home-page
+  // new-intel banner on this device.
+  const updatedAt = state.contentMeta?.intel?.updatedAt
+  useEffect(() => { markSeen('intel', updatedAt) }, [updatedAt])
 
   if (open) return <FragmentView fragment={open} onBack={() => setOpen(null)} />
 

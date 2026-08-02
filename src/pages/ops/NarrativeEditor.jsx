@@ -2,9 +2,10 @@ import { useState } from 'react'
 import { useData } from '../../context/DataContext'
 import { useAudit } from '../../hooks/useAudit'
 import { OpsHeader, useSaved } from './OperationsCentre'
+import { smeacOf } from '../../firebase/seed'
 
-// Edits the main public narrative: unit identity, quote, 1ATF mission,
-// per-company roles, and the Meridian threat brief.
+// Edits the main public narrative: unit identity, quote, the SMEAC operation
+// brief, per-company roles, and the Meridian threat brief.
 export default function NarrativeEditor() {
   const { state, updateSlice } = useData()
   const audit = useAudit()
@@ -21,6 +22,10 @@ export default function NarrativeEditor() {
   const meridian = (k) => (e) => setN({ ...n, meridian: { ...n.meridian, [k]: e.target.value } })
   const company = (name) => (e) =>
     setN({ ...n, oneatf: { ...n.oneatf, companies: { ...n.oneatf.companies, [name]: e.target.value } } })
+  // SMEAC fields edit against the MERGED view (defaults filled in), so the
+  // first edit freezes the whole brief into n.smeac.
+  const sm = smeacOf(n)
+  const smeac = (k) => (e) => setN({ ...n, smeac: { ...sm, [k]: e.target.value } })
 
   return (
     <div>
@@ -35,9 +40,16 @@ export default function NarrativeEditor() {
       </div>
 
       <div className="panel panel-pad col" style={{ marginBottom: 18 }}>
-        <h3 className="accent" style={{ margin: 0 }}>1ATF Brief</h3>
+        <h3 className="accent" style={{ margin: 0 }}>Operation Brief — SMEAC</h3>
+        <div className="mono dim" style={{ fontSize: 11 }}>
+          Shown on the home page under the map. A section left empty is skipped.
+        </div>
         <Field label="Section title"><input value={n.oneatf.title} onChange={oneatf('title')} /></Field>
-        <Field label="Mission"><textarea rows={4} value={n.oneatf.mission} onChange={oneatf('mission')} /></Field>
+        <Field label="Situation"><textarea rows={3} value={sm.situation} onChange={smeac('situation')} /></Field>
+        <Field label="Mission"><textarea rows={3} value={sm.mission} onChange={smeac('mission')} /></Field>
+        <Field label="Execution"><textarea rows={3} value={sm.execution} onChange={smeac('execution')} /></Field>
+        <Field label="Admin & Logistics"><textarea rows={3} value={sm.admin} onChange={smeac('admin')} /></Field>
+        <Field label="Command / Control / Communications"><textarea rows={3} value={sm.command} onChange={smeac('command')} /></Field>
         <div className="divider" />
         <div className="mono dim" style={{ fontSize: 10, letterSpacing: 2 }}>COMPANY ROLES</div>
         <Field label="Recruit companies (A/B/C/D) — shared role">

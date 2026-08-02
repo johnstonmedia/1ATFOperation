@@ -25,7 +25,7 @@ export default function TopBar({ onMenu, onAuth }) {
     >
       <div className="container row center between" style={{ padding: '10px 20px' }}>
         <div className="row center" style={{ gap: 14 }}>
-          <button className="ghost" onClick={onMenu} aria-label="Open menu" style={{ padding: '8px 12px' }}>
+          <button className="ghost nav-burger" onClick={onMenu} aria-label="Open menu" style={{ padding: '8px 12px' }}>
             ☰
           </button>
           <Link to="/" className="row center" style={{ gap: 14, color: 'inherit' }}>

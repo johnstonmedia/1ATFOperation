@@ -1,18 +1,58 @@
 import { useState, useEffect } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useCompany } from '../context/CompanyContext'
 import { COMPANIES } from '../firebase/seed'
 import SupportModal from './SupportModal'
 
-// Left-hand hamburger menu. No member login — cadets pick their company and
-// read that company's intel / page. RHQ can still sign in for the ops centre.
-export default function Sidebar({ open, onClose, onAuth }) {
+// Shared menu body — used by BOTH the mobile slide-in drawer below and the
+// pinned desktop/tablet rail in Layout.jsx. `onNavigate` runs after any
+// navigation/action (the drawer passes its close handler; the pinned rail
+// passes nothing).
+export function NavContent({ onAuth, onNavigate = () => {} }) {
   const { isRHQ, isCommander } = useAuth()
   const { company, setCompany } = useCompany()
   const navigate = useNavigate()
+  const location = useLocation()
   const [support, setSupport] = useState(false)
 
+  const go = (path) => {
+    onNavigate()
+    navigate(path)
+  }
+  const active = (path) => location.pathname === path
+
+  return (
+    <>
+      <div className="mono dim" style={{ fontSize: 10, letterSpacing: 2, margin: '2px 0 4px' }}>YOUR COMPANY</div>
+      <select value={company} onChange={(e) => setCompany(e.target.value)} style={{ marginBottom: 8 }}>
+        <option value="">— Select your company —</option>
+        {COMPANIES.filter((c) => c.letter !== 'R').map((c) => <option key={c.letter} value={c.letter}>{c.name}</option>)}
+      </select>
+
+      <div className="divider" />
+      <MenuItem label="Command Map" sub="Operational overview" active={active('/')} onClick={() => go('/')} />
+      <MenuItem label="Intercepted Intelligence" sub="Decrypt Meridian transmissions" active={active('/intel')} onClick={() => go('/intel')} />
+      <MenuItem label="Briefings" sub="Unit briefings" active={active('/briefings')} onClick={() => go('/briefings')} />
+
+      <div className="grow" />
+      <button className="ghost" onClick={() => setSupport(true)}>Help &amp; Support</button>
+      {isRHQ
+        ? <button className="ghost" onClick={() => go('/operations-centre')}>OPS CENTRE</button>
+        : isCommander
+        ? <button className="ghost" onClick={() => go('/company-command')}>COY CENTRE</button>
+        : <button className="ghost" onClick={() => { onNavigate(); onAuth() }} style={{ fontSize: 11 }}>Access</button>}
+      <Link to="/" onClick={onNavigate} className="mono dim" style={{ fontSize: 10, marginTop: 10 }}>
+        LUCET PER MINISTERIUM
+      </Link>
+      {support && <SupportModal onClose={() => setSupport(false)} />}
+    </>
+  )
+}
+
+// Mobile slide-in hamburger drawer (desktop/tablet gets the pinned rail in
+// Layout.jsx instead — the hamburger button itself is hidden there).
+export default function Sidebar({ open, onClose, onAuth }) {
   // Close the drawer on Escape while it is open.
   useEffect(() => {
     if (!open) return
@@ -20,11 +60,6 @@ export default function Sidebar({ open, onClose, onAuth }) {
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
   }, [open, onClose])
-
-  const go = (path) => {
-    onClose()
-    navigate(path)
-  }
 
   return (
     <>
@@ -57,35 +92,13 @@ export default function Sidebar({ open, onClose, onAuth }) {
           <span className="head accent" style={{ fontSize: 14 }}>NAVIGATION</span>
           <button className="ghost" onClick={onClose} aria-label="Close menu" style={{ padding: '4px 10px' }}>✕</button>
         </div>
-
-        <div className="mono dim" style={{ fontSize: 10, letterSpacing: 2, margin: '2px 0 4px' }}>YOUR COMPANY</div>
-        <select value={company} onChange={(e) => setCompany(e.target.value)} style={{ marginBottom: 8 }}>
-          <option value="">— Select your company —</option>
-          {COMPANIES.filter((c) => c.letter !== 'R').map((c) => <option key={c.letter} value={c.letter}>{c.name}</option>)}
-        </select>
-
-        <div className="divider" />
-        <MenuItem label="Command Map" sub="Operational overview" onClick={() => go('/')} />
-        <MenuItem label="Intercepted Intelligence" sub="Decrypt Meridian transmissions" onClick={() => go('/intel')} />
-        <MenuItem label="Briefings" sub="Unit briefings" onClick={() => go('/briefings')} />
-
-        <div className="grow" />
-        <button className="ghost" onClick={() => setSupport(true)}>Help &amp; Support</button>
-        {isRHQ
-          ? <button className="ghost" onClick={() => go('/operations-centre')}>OPS CENTRE</button>
-          : isCommander
-          ? <button className="ghost" onClick={() => go('/company-command')}>COY CENTRE</button>
-          : <button className="ghost" onClick={() => { onClose(); onAuth() }} style={{ fontSize: 11 }}>Access</button>}
-        <Link to="/" onClick={onClose} className="mono dim" style={{ fontSize: 10, marginTop: 10 }}>
-          LUCET PER MINISTERIUM
-        </Link>
+        <NavContent onAuth={onAuth} onNavigate={onClose} />
       </nav>
-      {support && <SupportModal onClose={() => setSupport(false)} />}
     </>
   )
 }
 
-function MenuItem({ label, sub, onClick, locked }) {
+function MenuItem({ label, sub, onClick, locked, active }) {
   return (
     <button
       className="ghost"
@@ -94,9 +107,11 @@ function MenuItem({ label, sub, onClick, locked }) {
         textAlign: 'left', padding: '12px 12px', width: '100%',
         display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'flex-start',
         textTransform: 'none', letterSpacing: 0,
+        borderColor: active ? 'var(--accent)' : undefined,
+        background: active ? 'rgba(54,224,192,0.08)' : undefined,
       }}
     >
-      <span className="head" style={{ fontSize: 13, letterSpacing: 1 }}>
+      <span className="head" style={{ fontSize: 13, letterSpacing: 1, color: active ? 'var(--accent)' : undefined }}>
         {label} {locked && <span className="dim" style={{ fontSize: 10 }}>🔒</span>}
       </span>
       {sub && <span className="mono dim" style={{ fontSize: 10 }}>{sub}</span>}

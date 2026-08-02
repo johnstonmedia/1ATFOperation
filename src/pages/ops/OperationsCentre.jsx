@@ -33,6 +33,9 @@ export default function OperationsCentre() {
   const { user, isRHQ, logout } = useAuth()
   const [section, setSection] = useState('map')
   const [authOpen, setAuthOpen] = useState(false)
+  // Mobile only: the side rail collapses into a slide-in drawer (CSS hides
+  // the burger bar and overlay on desktop, where the rail stays pinned).
+  const [railOpen, setRailOpen] = useState(false)
 
   // Gate: RHQ only. URL-only page — not linked from the main navigation.
   if (!user || !isRHQ) {
@@ -56,8 +59,10 @@ export default function OperationsCentre() {
 
   return (
     <div className="ops-shell">
-      {/* Side rail */}
-      <aside className="ops-rail">
+      {/* Mobile drawer backdrop */}
+      <div className={`ops-overlay${railOpen ? ' open' : ''}`} onClick={() => setRailOpen(false)} />
+      {/* Side rail — pinned on desktop, slide-in drawer on mobile */}
+      <aside className={`ops-rail${railOpen ? ' open' : ''}`}>
         <Link to="/" className="row center" style={{ gap: 10, color: 'inherit', marginBottom: 8 }}>
           <Logo size={38} />
           <div>
@@ -73,7 +78,7 @@ export default function OperationsCentre() {
               <button
                 key={s.id}
                 className="ghost"
-                onClick={() => setSection(s.id)}
+                onClick={() => { setSection(s.id); setRailOpen(false) }}
                 style={{
                   width: '100%', textAlign: 'left', textTransform: 'none', letterSpacing: 0.5,
                   fontSize: 13, padding: '9px 12px', marginBottom: 2,
@@ -96,6 +101,11 @@ export default function OperationsCentre() {
 
       {/* Work area */}
       <div className="ops-work">
+        {/* Mobile-only bar: opens the rail drawer, shows the current section */}
+        <div className="ops-mobilebar row center between" style={{ gap: 10 }}>
+          <button className="ghost" onClick={() => setRailOpen(true)} aria-label="Open sections menu">☰ MENU</button>
+          <span className="mono accent" style={{ fontSize: 11 }}>{SECTIONS.find((s) => s.id === section)?.label}</span>
+        </div>
         {section === 'narrative' && <NarrativeEditor />}
         {section === 'map' && <MapEditor />}
         {section === 'briefings' && <BriefingsEditor />}
