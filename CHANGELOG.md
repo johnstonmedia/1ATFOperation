@@ -17,6 +17,35 @@ keep entries short and focused on what a new collaborator needs to know.
 
 ---
 
+## 2026-07-29 (5) — Gesture zoom, crest favicon
+- **Map zoom is now gesture-driven** — the "+" button is gone. `PixelMap`
+  holds a continuous `view {scale, x, y}` (1x–4x): mouse-wheel / trackpad
+  scroll zooms anchored at the cursor (trackpad pinches arrive as ctrlKey
+  wheel events and get a stronger response); two-finger touch pinch zooms
+  anchored at the pinch centre (which gives two-finger panning for free).
+  Read-only: one-finger/mouse drag pans once zoomed; at 1x touch swipes and
+  wheel-downs pass through to normal page scroll (`touch-action: pan-x
+  pan-y` + a wheel listener that only preventDefaults when it actually
+  zooms), so the map never traps page scrolling. Edit mode: one finger/click
+  still always paints; a second finger cancels any live stroke and pinches;
+  middle/right-mouse drag pans (context menu suppressed in edit). Wheel
+  listener is attached manually (non-passive) since React's onWheel can't
+  reliably preventDefault. Verified headless: wheel in/out, cursor-anchored,
+  drag-pan, CDP-synthesized pinch, 1x scroll pass-through, painting + brush
+  suite + replay suite still green.
+- **Tab icon is now the real crest**: generated square-padded
+  `public/favicon.png` (512², transparent) and `public/apple-touch-icon.png`
+  (180², dark-navy background) from `public/scu-logo.png`; `index.html` now
+  links those instead of the placeholder SVG. Regenerate both if the crest
+  changes.
+- "hostile" audit: repo copy was already clean (2026-07-29 (3)); remaining
+  matches are code identifiers/comments and the language-checker rule
+  itself. The live Firestore `content/narrative` doc still carries the old
+  seeded `MERIDIAN // HOSTILE` title — RHQ must edit it in Ops Centre →
+  Map: Narrative (Meridian "Section title" field).
+
+---
+
 ## 2026-07-29 (4) — Custom domain: build for root path
 The user attached a custom domain to GitHub Pages (Settings → Pages), which
 serves the site from the domain ROOT — but the build still targeted the

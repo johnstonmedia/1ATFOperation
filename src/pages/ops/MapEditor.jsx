@@ -79,7 +79,7 @@ export default function MapEditor() {
       </OpsHeader>
 
       <div className="mono dim" style={{ fontSize: 11, marginBottom: 10 }}>
-        Pick a colour, then paint on the map — one finger/click paints, two-finger drag (or middle/right-mouse drag) pans, pinch or scroll zooms. Ocean tiles (shaded dark) can't be painted. "Full" is solid/firmly held; "Contested" is the lighter, newly-gained/loosely-held variant. Erase removes.
+        Pick a colour, then paint on the map — one finger/click paints, pinch or scroll zooms (anchored under your fingers/cursor), two-finger drag or middle/right-mouse drag pans while zoomed. Ocean tiles (shaded dark) can't be painted. "Full" is solid/firmly held; "Contested" is the lighter, newly-gained/loosely-held variant. Erase removes.
       </div>
 
       {[{ label: 'Full', variant: (c) => c }, { label: 'Contested', variant: (c) => c.toLowerCase() }].map(({ label, variant }) => (

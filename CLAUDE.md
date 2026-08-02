@@ -103,7 +103,8 @@ assuming a page exists).
 - Roles: **Company Commander** (default at creation, company-bound), **RHQ**,
   and legacy **General** (`ROLES`/`COMMANDER_ROLE` in `src/firebase/seed.js`).
   Companies (phonetic letters): A Alpha, B Bravo, C Charlie, D Delta, E Echo,
-  S Support. Meridian is the hostile force (red on the map).
+  S Support. Meridian is the threat force (red on the map; code keeps
+  `hostile` as an identifier — user-visible copy says "threat").
 
 ## Data model
 - Firestore single-value docs under `content/{slice}`: `narrative`, `territory`,

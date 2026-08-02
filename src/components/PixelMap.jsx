@@ -10,19 +10,21 @@ const CELL = 8 // fallback canvas pixels per grid cell, used only for the very
                 // without that, the fixed buffer gets rescaled by the browser
                 // at a non-integer ratio, which aliases the hatch lines into
                 // a denser, uneven wash than the values below actually ask for)
-const ZOOM_SCALE = 2.25
+const MAX_SCALE = 4 // gesture-zoom ceiling
 
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v))
 
 // Pixel-grid territory map over the NSW image.
 //
-// Interaction model (deliberately simple — pinch/wheel zoom fought the page's
-// own scroll on both touch and trackpad, so neither exists here anymore):
-//  - read-only (no `edit`): a single "+" button zooms to one fixed step
-//    (centred); once zoomed, click-and-drag pans. At the default 1x there's
-//    nothing to pan, so touch gestures pass through to normal page scroll.
-//  - edit mode: no zoom, no pan at all — the full grid always fits the
-//    container. One finger/click paints; that's the only gesture.
+// Interaction model — natural gestures, no zoom buttons:
+//  - Zoom: mouse wheel / trackpad scroll or pinch (trackpad pinch arrives as a
+//    ctrlKey wheel event), and two-finger touch pinch. Zoom is anchored at
+//    the cursor / pinch centre. At 1x a wheel that would zoom OUT is passed
+//    through untouched so the page still scrolls normally past the map.
+//  - Pan: read-only mode — one-finger / mouse drag once zoomed in (at 1x
+//    there's nothing to pan, so touch swipes scroll the page). Edit mode —
+//    one finger/click always PAINTS, so panning uses a two-finger touch drag
+//    or a middle/right mouse drag instead.
 export default function PixelMap({
   territory,
   edit = false,
@@ -42,15 +44,19 @@ export default function PixelMap({
   const canvasRef = useRef(null)
   const containerRef = useRef(null)
   const stageRef = useRef(null)
-  const [zoomed, setZoomed] = useState(false)
-  const [pan, setPan] = useState({ x: 0, y: 0 })
+  // view = continuous zoom + pan. Pan is in pre-scale units: the stage
+  // transform is `scale(s) translate(x, y)`, so a rendered point (relative
+  // to the container centre) sits at s * (stagePoint + pan).
+  const [view, setView] = useState({ scale: 1, x: 0, y: 0 })
+  const viewRef = useRef(view)
+  viewRef.current = view
   const dragOrigin = useRef(null) // { pointerId, lastX, lastY } | { pointerId, painting: true }
   const dragging = useRef(null) // place-label id being dragged
+  const touches = useRef(new Map()) // active touch pointers, for pinch
+  const pinch = useRef(null) // { d0, c0, s0, t0 } while a two-finger pinch is live
   const oceanOverlayUrl = useOceanOverlayUrl(edit)
 
-  const scale = edit ? 1 : (zoomed ? ZOOM_SCALE : 1)
-
-  useEffect(() => { setPan({ x: 0, y: 0 }) }, [zoomed, edit])
+  const scale = view.scale
 
   // Draw hatch fills + a single neutral outline per boundary edge whenever
   // the grid changes, or the container is resized. The canvas's native pixel
@@ -100,6 +106,70 @@ export default function PixelMap({
     const maxY = (H * (s - 1)) / (2 * s)
     return { x: clamp(p.x, -maxX, maxX), y: clamp(p.y, -maxY, maxY) }
   }, [])
+
+  // Zoom keeping the container point `c` (relative to the centre) anchored:
+  // solve s2*(v + t2) = c for the stage point v that was under c at (s1, t1).
+  const zoomAt = useCallback((c, factor) => {
+    setView((v) => {
+      const s2 = clamp(v.scale * factor, 1, MAX_SCALE)
+      if (s2 === v.scale) return v
+      if (s2 === 1) return { scale: 1, x: 0, y: 0 }
+      const t2 = {
+        x: c.x / s2 - c.x / v.scale + v.x,
+        y: c.y / s2 - c.y / v.scale + v.y,
+      }
+      const p = clampPan(t2, s2)
+      return { scale: s2, ...p }
+    })
+  }, [clampPan])
+
+  // Wheel / trackpad zoom. Attached manually (not via React's onWheel) so the
+  // listener is non-passive and may preventDefault — but ONLY when it actually
+  // zooms: at 1x, a wheel that would zoom out is left alone so the page keeps
+  // scrolling normally past the map.
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    const onWheel = (e) => {
+      const delta = e.deltaY * (e.deltaMode === 1 ? 33 : 1)
+      // Trackpad pinches arrive as ctrlKey wheel events with small deltas —
+      // give them a stronger response than plain scrolling.
+      const factor = Math.exp(-delta * (e.ctrlKey ? 0.012 : 0.002))
+      if (viewRef.current.scale === 1 && factor <= 1) return // pass through to page scroll
+      e.preventDefault()
+      const r = el.getBoundingClientRect()
+      zoomAt({ x: e.clientX - r.left - r.width / 2, y: e.clientY - r.top - r.height / 2 }, factor)
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [zoomAt])
+
+  // Two-finger pinch: zoom anchored at the moving pinch centre (which also
+  // gives two-finger panning for free). Any live paint/pan drag is cancelled
+  // the moment a second finger lands, so pinching never leaves a stray stroke.
+  const pinchUpdate = () => {
+    const pts = [...touches.current.values()]
+    if (pts.length < 2) return
+    const el = containerRef.current
+    const r = el.getBoundingClientRect()
+    const d = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y) || 1
+    const c = {
+      x: (pts[0].x + pts[1].x) / 2 - r.left - r.width / 2,
+      y: (pts[0].y + pts[1].y) / 2 - r.top - r.height / 2,
+    }
+    if (!pinch.current) {
+      pinch.current = { d0: d, c0: c, s0: viewRef.current.scale, t0: { x: viewRef.current.x, y: viewRef.current.y } }
+      dragOrigin.current = null
+      lastPaintCell.current = null
+      return
+    }
+    const { d0, c0, s0, t0 } = pinch.current
+    const s2 = clamp(s0 * (d / d0), 1, MAX_SCALE)
+    const t2 = s2 === 1
+      ? { x: 0, y: 0 }
+      : clampPan({ x: c.x / s2 - c0.x / s0 + t0.x, y: c.y / s2 - c0.y / s0 + t0.y }, s2)
+    setView({ scale: s2, ...t2 })
+  }
 
   const cellFromEvent = useCallback((e) => {
     const st = stageRef.current
@@ -157,9 +227,24 @@ export default function PixelMap({
 
   const onPointerDown = (e) => {
     if (dragging.current) return
+    if (e.pointerType === 'touch') {
+      touches.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+      if (touches.current.size >= 2) {
+        containerRef.current?.setPointerCapture?.(e.pointerId)
+        pinchUpdate() // second finger down: cancel any drag, arm the pinch
+        return
+      }
+    }
     if (edit) {
       if (!onPaint) return
       containerRef.current?.setPointerCapture?.(e.pointerId)
+      // Middle/right mouse drag pans the (possibly zoomed) editor; everything
+      // else — left button, pen, single finger — paints.
+      if (e.pointerType === 'mouse' && e.button !== 0) {
+        e.preventDefault() // stop middle-click autoscroll
+        dragOrigin.current = { pointerId: e.pointerId, lastX: e.clientX, lastY: e.clientY }
+        return
+      }
       dragOrigin.current = { pointerId: e.pointerId, painting: true }
       lastPaintCell.current = null
       const c = cellFromEvent(e)
@@ -171,6 +256,13 @@ export default function PixelMap({
   }
 
   const onPointerMove = (e) => {
+    if (e.pointerType === 'touch' && touches.current.has(e.pointerId)) {
+      touches.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+      if (touches.current.size >= 2) {
+        pinchUpdate()
+        return
+      }
+    }
     if (dragging.current && onMovePlace) {
       const c = cellFromEvent(e)
       if (c) onMovePlace(dragging.current, c.x, c.y)
@@ -184,20 +276,25 @@ export default function PixelMap({
       const dx = e.clientX - o.lastX, dy = e.clientY - o.lastY
       o.lastX = e.clientX
       o.lastY = e.clientY
-      setPan((p) => clampPan({ x: p.x + dx / scale, y: p.y + dy / scale }, scale))
+      setView((v) => ({ scale: v.scale, ...clampPan({ x: v.x + dx / v.scale, y: v.y + dy / v.scale }, v.scale) }))
     }
   }
 
   const endPointer = (e) => {
+    if (e.pointerType === 'touch') {
+      touches.current.delete(e.pointerId)
+      if (touches.current.size < 2) pinch.current = null
+    }
     if (dragOrigin.current?.pointerId === e.pointerId) dragOrigin.current = null
     dragging.current = null
     lastPaintCell.current = null
   }
 
-  // Only trap touch gestures on the map when there's something to drag
-  // (painting, or panning while zoomed) — otherwise let normal page-scroll
-  // swipes pass straight through instead of getting stuck on the map.
-  const capturesTouch = edit || scale > 1
+  // touch-action: while editing (or once zoomed) all touch gestures belong to
+  // the map. At rest in read-only mode, allow browser panning so one-finger
+  // swipes keep scrolling the page — pinches aren't pans, so the browser
+  // leaves those to us and pinch-zoom still works.
+  const touchAction = edit || scale > 1 ? 'none' : 'pan-x pan-y'
 
   return (
     <div style={{ position: 'relative', width: '100%', maxWidth: maxWidth || 'none' }}>
@@ -216,9 +313,10 @@ export default function PixelMap({
           borderRadius: 'var(--radius)',
           border: '1px solid var(--line)',
           background: '#0a0f1a',
-          touchAction: capturesTouch ? 'none' : 'auto',
+          touchAction,
           cursor: edit ? 'crosshair' : (scale > 1 ? 'grab' : 'default'),
         }}
+        onContextMenu={edit ? (e) => e.preventDefault() : undefined}
       >
         <div
           ref={stageRef}
@@ -228,7 +326,7 @@ export default function PixelMap({
             width: '100%',
             height: '100%',
             transformOrigin: 'center center',
-            transform: `scale(${scale}) translate(${pan.x}px, ${pan.y}px)`,
+            transform: `scale(${scale}) translate(${view.x}px, ${view.y}px)`,
           }}
         >
           <img src={MAP_IMAGE} alt="NSW operational map" draggable={false}
@@ -265,16 +363,6 @@ export default function PixelMap({
           })}
         </div>
       </div>
-      {!edit && (
-        <button
-          className="ghost"
-          onClick={() => setZoomed((z) => !z)}
-          aria-label={zoomed ? 'Zoom out' : 'Zoom in'}
-          style={{ position: 'absolute', right: 8, bottom: 8, padding: '2px 12px', fontSize: 16, lineHeight: 1 }}
-        >
-          {zoomed ? '−' : '+'}
-        </button>
-      )}
     </div>
   )
 }
