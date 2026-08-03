@@ -1,4 +1,4 @@
-import { PAINT, RHQ_PAINT, colorOf } from './territory'
+import { PAINT, RHQ_PAINT, colorOf, coyLabelOf } from './territory'
 
 // Campaign replay timeline. The campaign is stored as ONE content slice
 // (`content/campaign`) shaped as:
@@ -127,8 +127,11 @@ export function campaignByteSize(campaign) {
 /* --------------------------- replay transitions -------------------------- */
 
 // Owner-code -> display label for the conquest flash.
+// Conquest flashes use the same unit-style labels the persistent map beacons
+// do ("A-COY"), so the name that flashes during a capture is the one that
+// stays on the zone afterwards.
 const LABELS = {}
-;[...PAINT, RHQ_PAINT].forEach((p) => { LABELS[p.code] = p.label.toUpperCase() })
+;[...PAINT, RHQ_PAINT].forEach((p) => { LABELS[p.code] = coyLabelOf(p.code) || p.label.toUpperCase() })
 
 // Analyse one frame transition for animation. Changed cells are grouped into
 // contiguous clusters per new owner (8-connected, so one brush stroke stays

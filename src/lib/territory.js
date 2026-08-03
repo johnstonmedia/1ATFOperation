@@ -63,11 +63,21 @@ export const isMeridianCode = (code) => !!code && code.toUpperCase() === 'M'
 // Everything that isn't Meridian or empty belongs to SCU / 1ATF.
 export const isSCUCode = (code) => !!code && code !== '.' && !isMeridianCode(code)
 
-// Display name for an owner code ('a' -> 'Alpha', 'M' -> 'Meridian').
+// Full display name for an owner code ('a' -> 'Alpha', 'M' -> 'Meridian').
 export function labelOf(code) {
   if (!code || code === '.') return null
   const up = code.toUpperCase()
   return [...PAINT, RHQ_PAINT].find((p) => p.code === up)?.label || null
+}
+
+// Unit-style short label used on the map: companies read as "A-COY", while
+// RHQ and the Meridian threat keep their own names.
+export function coyLabelOf(code) {
+  if (!code || code === '.') return null
+  const up = code.toUpperCase()
+  if (isMeridianCode(up)) return 'MERIDIAN'
+  if (isRHQCode(up)) return 'RHQ'
+  return labelOf(up) ? `${up}-COY` : null
 }
 
 // Majority owner of the cells around (x, y). Sampled over a small radius
@@ -113,7 +123,7 @@ export function beaconStateFor(territory, place, { showRHQ = true } = {}) {
     recaptured: false,
     // Unheld stronghold keeps the threat-red marker it has always had.
     color: owner ? colorOf(owner) : (stronghold ? MERIDIAN_COLOR : null),
-    tag: labelOf(owner),
+    tag: coyLabelOf(owner),
     pulse: stronghold,
   }
 }

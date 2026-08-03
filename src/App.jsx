@@ -8,6 +8,7 @@ import Intel from './pages/Intel'
 import Briefings from './pages/Briefings'
 import Classified from './pages/Classified'
 import Privacy from './pages/Privacy'
+import StaffCentre from './pages/StaffCentre'
 import OperationsCentre from './pages/ops/OperationsCentre'
 import CommanderPanel from './pages/CommanderPanel'
 import Boot from './components/Boot'
@@ -23,6 +24,9 @@ export default function App() {
       <Route path="/classified" element={<Classified />} />
       <Route path="/operations-centre/*" element={<OperationsCentre />} />
       <Route path="/company-command" element={<CommanderPanel />} />
+      {/* URL-only staff overview, shared-password gated (see StaffCentre.jsx) */}
+      <Route path="/staff-centre" element={<StaffCentre />} />
+      <Route path="/staff-Centre" element={<StaffCentre />} />
 
       {/* Main app shell with top bar + hamburger — three tabs. First-time
           visitors pick their company before the shell renders. */}

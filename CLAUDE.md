@@ -72,6 +72,15 @@ routes — see [src/App.jsx](src/App.jsx):
   cadets are sent to; "Continue" starts temp-password registration.
 - `/operations-centre/*` — **RHQ-only** admin console (see below). URL-only,
   not linked from nav.
+- `/staff-centre` — **Staff Centre**: URL-only, read-only unit overview
+  ([src/pages/StaffCentre.jsx](src/pages/StaffCentre.jsx)) behind ONE shared
+  password (`SCUNARRATIVE`, in the client bundle — a latch, not a secret; the
+  page only shows already-public `content/*` data and no PII). Shows pending
+  COY approvals, scheduled video distribution, intel per company, the campaign
+  timeline and content freshness. NOTE: `intelSubmissions` is RHQ/own-commander
+  only under the rules, so the approvals list is empty-with-a-notice for a
+  password-only visitor against live Firebase (works in LOCAL MODE / when
+  signed in).
 - `/company-command` — **Company Commander-only** "COY Centre"
   ([src/pages/CommanderPanel.jsx](src/pages/CommanderPanel.jsx)). URL-only;
   reached via the role-aware **COY CENTRE** button shown once a commander signs
@@ -182,7 +191,8 @@ assuming a page exists).
   or light variant), paint with a sized brush, add/drag/rename place labels,
   toggle RHQ visibility. There is no code-level territory editing path.
 - **Place beacons / occupancy**: `territory.places` entries are the map's
-  named "zones". [Beacon.jsx](src/components/Beacon.jsx) (the ping-ring
+  named "zones", labelled unit-style ("A-COY" via `coyLabelOf()`, shared with
+  the replay's conquest flashes). [Beacon.jsx](src/components/Beacon.jsx) (the ping-ring
   marker, extracted out of PixelMap) renders each one, coloured by the
   **majority owner of the surrounding cells** (`occupierAt`/`beaconStateFor`
   in territory.js) so occupancy is legible statically, not just during the

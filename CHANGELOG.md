@@ -17,6 +17,42 @@ keep entries short and focused on what a new collaborator needs to know.
 
 ---
 
+## 2026-07-31 — "A-COY" map labels + Staff Centre
+### Map labels are unit-style and persist
+- `coyLabelOf()` in [territory.js](src/lib/territory.js): companies now read as
+  **"A-COY"** (was "ALPHA") on the persistent occupier beacons AND in the
+  conquest flashes during replay, so the name that flashes when ground is
+  taken is the one that stays on the zone afterwards. RHQ stays "RHQ",
+  Meridian stays "MERIDIAN". Recaptured strongholds keep the assure-blue
+  "SCU" state.
+- (The labels already persisted after a replay — they are derived from the
+  cells on every render. What changed is the format.)
+
+### New `/staff-centre` ([StaffCentre.jsx](src/pages/StaffCentre.jsx))
+URL-only, not linked from anywhere. Single shared password `SCUNARRATIVE`
+(case-insensitive); unlock is remembered per device with a Lock button to
+clear it. Read-only overview in one page: pending COY→RHQ approval requests,
+scheduled/published video distribution, intel counts per company, territory +
+campaign replay timeline (with each frame's label), and content freshness for
+every editable slice.
+- ⚠️ **Security model, stated plainly:** the password ships in the client
+  bundle, so it is a latch against casual visitors, NOT a secret. That is
+  acceptable *only because this page shows nothing that isn't already
+  public* — every `content/*` slice is world-readable by design so the
+  signed-out site works. It grants no writes and touches no personal data
+  (roster, help inbox and audit log are deliberately not shown).
+- ⚠️ **Approvals queue caveat:** `intelSubmissions` is restricted by the
+  Firestore rules to RHQ and the submitting commander. A password-only staff
+  visitor isn't signed in to Firebase at all, so against LIVE Firebase that
+  read is denied by design. The page tries anyway and shows an honest notice
+  when it can't read them; it works in LOCAL MODE, and live if an RHQ or
+  commander session already exists in that browser. Making it work for
+  password-only staff would require relaxing the rules to expose unapproved
+  drafts publicly — NOT done, flagged for the user to decide.
+- Verified: 18 headless checks (A-COY in flash + after replay + on the static
+  map, gate rejects/accepts, no content before unlock, persistence, Lock
+  re-gates, all five sections, pending requests listed).
+
 ## 2026-07-30 (5) — Brush performance (3x faster), per-frame replay labels
 ### Brush lag — profiled and fixed
 Painting was still heavy. A CPU profile of a 60-move stroke put **434 ms in
