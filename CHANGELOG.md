@@ -17,6 +17,19 @@ keep entries short and focused on what a new collaborator needs to know.
 
 ---
 
+## 2026-07-30 (2) — Live copy auto-reworded: "hostile" → "threat"
+The seed defaults were reworded on 2026-07-29, but narrative text already
+saved to Firestore still carried the old word (e.g. `MERIDIAN // HOSTILE`),
+which needed a manual RHQ edit of every field. `store.js` now rewrites it at
+READ time (`normalizeNarrative`/`dehostile`): whole-word, case-preserving,
+applied recursively across the whole `narrative` slice. Nothing is written
+back to Firestore and RHQ edits still win for all other text — the swap just
+re-applies on each load, so live copy complies with no manual pass. Verified
+with a simulated pre-reword doc: home page renders `MERIDIAN // THREAT` and
+no visible "hostile" anywhere.
+
+---
+
 ## 2026-07-30 — Unread alerts, responsive nav, SMEAC brief
 Four changes, all e2e-tested headless at 1200/800/390px widths (25 checks).
 - **Unread-content banners** ([src/hooks/useUnseen.js](src/hooks/useUnseen.js)):

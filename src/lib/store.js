@@ -139,6 +139,28 @@ function normalizeTerritory(state) {
   return state
 }
 
+// Unit policy: outward-facing copy says "threat", never "hostile". The seed
+// defaults were reworded, but narrative text saved to Firestore BEFORE that
+// change still carries the old word (e.g. "MERIDIAN // HOSTILE"). Rewrite it
+// at read time — case-preserving, whole word only — so live copy complies
+// without RHQ having to hand-edit every field. Read-time only: nothing is
+// written back, and RHQ edits still win for everything else.
+const THREAT_WORD = { HOSTILE: 'THREAT', Hostile: 'Threat', hostile: 'threat' }
+function dehostile(v) {
+  if (typeof v === 'string') return v.replace(/\bhostile\b/gi, (m) => THREAT_WORD[m] || THREAT_WORD[m.toLowerCase()] || 'threat')
+  if (Array.isArray(v)) return v.map(dehostile)
+  if (v && typeof v === 'object') {
+    const out = {}
+    for (const k of Object.keys(v)) out[k] = dehostile(v[k])
+    return out
+  }
+  return v
+}
+function normalizeNarrative(state) {
+  if (state.narrative) state.narrative = dehostile(state.narrative)
+  return state
+}
+
 // Same idea for the campaign replay history: a start state recorded against a
 // different grid resolution can't be replayed over the current art. Treat an
 // invalid campaign as "none recorded" — RHQ re-selects a start state in the
@@ -154,7 +176,7 @@ function normalizeCampaign(state) {
 
 export async function loadState() {
   const state = await (FIREBASE_ENABLED ? loadFirebase() : loadLocal())
-  return normalizeCampaign(normalizeTerritory(state))
+  return normalizeNarrative(normalizeCampaign(normalizeTerritory(state)))
 }
 
 export async function persistSlice(state, slice) {
