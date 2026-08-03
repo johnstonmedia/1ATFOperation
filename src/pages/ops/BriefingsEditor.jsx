@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useData } from '../../context/DataContext'
 import { useAudit } from '../../hooks/useAudit'
+import { useConfirm } from '../../context/ConfirmContext'
 import { OpsHeader, useSaved } from './OperationsCentre'
 import { Field } from './NarrativeEditor'
 import VideoEmbed from '../../components/VideoEmbed'
@@ -12,6 +13,7 @@ import { DEFAULT_BRIEFINGS } from '../../firebase/seed'
 export default function BriefingsEditor() {
   const { state, updateSlice } = useData()
   const audit = useAudit()
+  const confirm = useConfirm()
   const [saved, flash] = useSaved()
   const [b, setB] = useState(() => {
     const stored = state.briefings || {}
@@ -30,9 +32,30 @@ export default function BriefingsEditor() {
 
   const save = () => { updateSlice('briefings', b); audit('Updated briefings'); flash() }
 
+  // Load the repo's current default briefing text into the editor. Needed
+  // because a stored Firestore doc always overrides the seed, so updating the
+  // narrative in the repo otherwise never reaches the live site. Loads into
+  // the form only — nothing is published until Save is pressed.
+  const loadDefaults = async () => {
+    const ok = await confirm({
+      title: 'Load default briefing text',
+      message: 'Replace the sections and closing quote in this editor with the unit narrative shipped in the app? Your video link is kept, and nothing is published until you press Save.',
+      confirmLabel: 'Load text',
+    })
+    if (!ok) return
+    setB((cur) => ({
+      video: cur.video,
+      sections: structuredClone(DEFAULT_BRIEFINGS.sections),
+      closingQuote: DEFAULT_BRIEFINGS.closingQuote,
+    }))
+  }
+
   return (
     <div>
       <OpsHeader title="Briefings" sub="EDIT // BRIEFINGS TAB" updatedAt={state.contentMeta?.briefings?.updatedAt}>
+        <button className="ghost" onClick={loadDefaults} title="Replace the text below with the unit narrative shipped in the app (review, then Save)">
+          Load default text
+        </button>
         <button className="primary" onClick={save}>{saved ? 'Saved ✓' : 'Save'}</button>
       </OpsHeader>
 

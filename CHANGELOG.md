@@ -17,6 +17,34 @@ keep entries short and focused on what a new collaborator needs to know.
 
 ---
 
+## 2026-08-02 — Briefings narrative updated to the supplied text
+- `DEFAULT_BRIEFINGS` in [seed.js](src/firebase/seed.js) replaced with the
+  unit's supplied narrative, verbatim: 01 Situation (3 paras), 02 The Unit,
+  03 The Mission (mission statement as the `highlight` callout, with the
+  Mondays/BIVOUAC/AFX paragraphs as the body), 04 The Progress Map, 05 Your
+  Directive. Existing closing quote kept (the supplied text didn't include
+  one).
+- **New "Load default text" button** in Ops Centre → Briefings. A stored
+  Firestore doc always overrides the seed, so updating the narrative in the
+  repo would otherwise never reach the live site. The button loads the
+  shipped text into the editor (keeping the video link) for review; nothing
+  publishes until Save. Confirm-guarded.
+- Verified (24 checks): every supplied paragraph/heading renders on a fresh
+  install, no old wording remains, a stored doc does override the seed, the
+  loader pulls the new text in and preserves the video link, and saving
+  publishes it to the Briefings tab.
+- ⚠️ Two things left for RHQ, both deliberate:
+  1. **The live site still shows the old briefing** until someone opens Ops
+     Centre → Briefings, presses *Load default text*, and Saves.
+  2. The supplied text says **"1st Allied Task Force"** whereas the rest of
+     the site says "1st Australian Task Force" (header, narrative slice,
+     seed). Used verbatim as supplied; flagged rather than silently
+     reconciled — a global rename is a one-line change if wanted.
+- The supplied document also lists a **"00. YOUR COMPANY"** section but gave
+  no body text for it, so no such section was created.
+
+---
+
 ## 2026-08-01 — Staff Centre: full drill-down detail
 Rebuilt [StaffCentre.jsx](src/pages/StaffCentre.jsx) from a flat summary into
 an overview of **clickable section cards**, each opening a detail view with the

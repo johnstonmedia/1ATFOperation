@@ -159,24 +159,35 @@ export const DEFAULT_BRIEFINGS = {
   sections: [
     {
       heading: '01 — Situation',
-      body: 'Over the past eighteen months, an expansionist threat known as THE MERIDIAN has systematically taken over sovereign territory across the world. The Meridian does not use conventional military force, instead operating through economic coercion, infrastructure seizure, and the suppression of local governance.\n\nAt the time of this briefing, The Meridian controls the majority of Australia. In New South Wales, they have concentrated their power in Singleton and Marrangaroo Training Areas, controlling Army land and supply chains. From these hubs, their control spreads out into the surrounding regions, leaving independent resistance from local units disorganised and ineffective.\n\nThe North Sydney area is among the last territory in the state still free of Meridian control: not a single Meridian operative was sighted during the Term 2 period. However, intelligence suggests that The Meridian has identified North Sydney as its next objective, with preliminary movements detected by Independent Recon Platoon at the end of last week.',
+      body:
+        'Over the past eighteen months, an expansionist power known as THE MERIDIAN has systematically taken over territory across the world. The Meridian does not use conventional military force, instead operating through economic influence and strategic asset acquisition.\n\n' +
+        'At the time of this briefing, The Meridian controls the majority of Australia. In New South Wales, they have concentrated their power in Singleton and Marrangaroo Training Areas, controlling land and supply chains. From these hubs, their control spreads out into the surrounding regions, leaving independent resistance from local units disorganised and ineffective.\n\n' +
+        'The North Sydney area is among the last territory in the state still free of Meridian control: not a single Meridian operative was sighted during the Term 2 period. However, intelligence suggests that The Meridian has identified North Sydney as its next objective, with preliminary movements detected by Recon Platoon at the end of last week.',
     },
     {
       heading: '02 — The Unit',
-      body: 'In response, the six Companies of the SCU have formed the 1st Australian Task Force (1ATF). Together, they represent the last organised resistance capable of reclaiming what has been lost to The Meridian.',
+      body:
+        'In response, the six Companies of the SCU have formed the 1st Allied Task Force (1ATF). Together, they represent the last organised resistance capable of reclaiming what has been lost to The Meridian.',
     },
     {
       heading: '03 — The Mission',
-      highlight: '1ATF will conduct sustained operations against The Meridian across New South Wales, reclaiming sovereign territory and restoring independent governance to occupied regions. The mission ends when no NSW ground remains under Meridian control.',
-      body: "Routine operations and training will be conducted over the coming Mondays, building the skills necessary to launch a sustained resistance. In doing so, the loosely held territory of regional NSW will be gradually reclaimed. Meridian encounters will be rare, but Companies must remain ready to react should North Sydney or other secured areas come under threat.\n\nThe campaign builds towards 1ATF's deployment to Singleton Military Training Area for BIVOUAC. There, the Meridian presence will be at its strongest, dug in to defend the supply lines that feed their entire operation. But if their hub at Singleton can be dismantled, Meridian influence across the state will begin to collapse, and the path to Marrangaroo, their stronghold, will be open. Plans for AFX are conditional on 1ATF successfully liberating this region.",
+      highlight:
+        '1ATF will conduct sustained operations against The Meridian across New South Wales, including reconnaissance, navigation, and infiltration, in order to reclaim territory. The mission ends when no ground within the area of operations remains under Meridian control.',
+      body:
+        'Routine operations and training will be conducted over the coming Mondays, building the skills necessary to neutralise the situation. In doing so, the loosely held territory of regional NSW will be gradually reclaimed. Meridian encounters will be rare, but Companies must remain ready to respond should North Sydney or other secured areas be contested.\n\n' +
+        "The campaign builds towards 1ATF's deployment to Singleton Military Training Area for BIVOUAC. There, the Meridian presence will be at its strongest, dug in to defend the supply lines that feed their entire operation. But if their hub at Singleton can be dismantled, Meridian influence across the state will begin to collapse, and the path to Marrangaroo, their stronghold, will be open. Plans for AFX are conditional on 1ATF successfully liberating this region.",
     },
     {
       heading: '04 — The Progress Map',
-      body: "The Unit Progress Map is a live operational display maintained by RHQ. It shows the territory regained by all six Companies and the remaining Meridian-held ground, updating after each Monday session and each major camp phase. Every operation you complete or training you receive improves 1ATF's footing.\n\nThe map also carries intercepted Meridian material: encoded intelligence fragments recovered during operations. Decoding them is left to you, but those who do will be uniquely aware of what is ahead.",
+      body:
+        "The Unit Progress Map is a live operational display maintained by RHQ. It shows the territory regained by all six Companies and the remaining Meridian-held ground, updating after each Monday session and each major camp phase. Every operation you complete or training you receive improves 1ATF's footing.\n\n" +
+        'The map also carries intercepted Meridian material: encoded intelligence fragments recovered during operations. Decoding them is left to you, but those who do will be uniquely aware of what is ahead.',
     },
     {
       heading: '05 — Your Directive',
-      body: 'Standby for further tasking through your chain of command. And remember, The Meridian is counting on us to fragment and forget — all six Companies fight the same enemy. You cannot let that happen. One Unit. One mission. One outcome.\n\nOur response begins now.',
+      body:
+        'Standby for further tasking through your chain of command. And remember: Six Companies, one objective. One Unit. One outcome. Stay focused.\n\n' +
+        'Our response begins now.',
     },
   ],
   closingQuote: 'One unit, one culture — everyone belongs, everyone contributes, and together we succeed.',
