@@ -45,6 +45,9 @@ export default function PixelMap({
   const canvasRef = useRef(null)
   const containerRef = useRef(null)
   const stageRef = useRef(null)
+  // Last grid actually rasterised, so the draw effect can redraw just the
+  // cells that changed instead of the whole map (see draw()).
+  const drawn = useRef({ cells: null, showRHQ: null })
   // view = continuous zoom + pan. Pan is in pre-scale units: the stage
   // transform is `scale(s) translate(x, y)`, so a rendered point (relative
   // to the container centre) sits at s * (stagePoint + pan).
@@ -77,11 +80,44 @@ export default function PixelMap({
       const cell = (rect.width * dpr) / cols
       const w = Math.max(1, Math.round(cols * cell))
       const h = Math.max(1, Math.round(rows * cell))
-      cv.width = w
-      cv.height = h
+
+      // Redraw only what actually changed. A brush stroke touches a handful
+      // of cells, but a full redraw costs a whole-grid pass plus several
+      // full-canvas composites — far too much to run on every pointer event.
+      // Diff against the last drawn grid and hand the dirty bounds to the
+      // renderer; fall back to a full redraw when the canvas resized or the
+      // change is large (replay commits, clear-all, first paint).
+      const prev = drawn.current
+      const reusable = cv.width === w && cv.height === h &&
+        prev.cells != null && prev.cells.length === cells.length && prev.showRHQ === showRHQ
+      let region = null
+      if (reusable) {
+        let minX = Infinity, minY = Infinity, maxX = -1, maxY = -1
+        for (let i = 0; i < cells.length; i++) {
+          if (cells[i] === prev.cells[i]) continue
+          const x = i % cols, y = (i / cols) | 0
+          if (x < minX) minX = x
+          if (x > maxX) maxX = x
+          if (y < minY) minY = y
+          if (y > maxY) maxY = y
+        }
+        if (maxX < 0) { drawn.current = { cells, showRHQ }; return } // nothing changed
+        // Pad by 2 cells so neighbouring boundary lines are rebuilt correctly.
+        const pad = 2
+        const area = (maxX - minX + 1 + pad * 2) * (maxY - minY + 1 + pad * 2)
+        if (area < cols * rows * 0.25) {
+          region = { x0: minX - pad, y0: minY - pad, x1: maxX + pad, y1: maxY + pad }
+        }
+      }
+
       const ctx = cv.getContext('2d')
-      ctx.clearRect(0, 0, w, h)
-      renderTerritoryLayer(ctx, { cells, cols, rows, showRHQ, w, h })
+      if (!region) {
+        cv.width = w   // resizing also clears
+        cv.height = h
+        ctx.clearRect(0, 0, w, h)
+      }
+      renderTerritoryLayer(ctx, { cells, cols, rows, showRHQ, w, h, region })
+      drawn.current = { cells, showRHQ }
     }
 
     // Coalesce to at most one full redraw per display frame. While painting,

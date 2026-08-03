@@ -17,6 +17,54 @@ keep entries short and focused on what a new collaborator needs to know.
 
 ---
 
+## 2026-07-30 (5) — Brush performance (3x faster), per-frame replay labels
+### Brush lag — profiled and fixed
+Painting was still heavy. A CPU profile of a 60-move stroke put **434 ms in
+`drawImage`**, and the whole stroke cost **894 ms of main-thread time
+(~15 ms per pointer move)** — enough to feel laggy on anything slower than a
+desktop. Two causes, both fixed in [terrainRender.js](src/lib/terrainRender.js)
++ [PixelMap.jsx](src/components/PixelMap.jsx):
+1. **Every paint event redrew the entire map.** PixelMap now diffs the new
+   grid against the last-rasterised one and passes the dirty CELL bounds
+   (padded 2 cells so neighbouring borders rebuild correctly) to
+   `renderTerritoryLayer`, which clears+clips to that region. Full redraws
+   still happen on resize, first paint, and large changes (>25% area), e.g.
+   replay commits and clear-all.
+2. **The real hotspot: `source-in` is a GLOBAL composite.** The hatch mask
+   used a full-map scratch canvas, so the browser reprocessed the whole
+   canvas per owner colour even when only a few cells were drawn — the
+   region optimisation alone barely helped (894→737 ms). Sizing the scratch
+   to the region (rounded to a 128px grid, grow/shrink hysteresis) is what
+   actually paid off.
+- **Result: 894 ms → 304 ms per stroke, script time 673 → 148 ms,
+  `drawImage` 434 → 8 ms, ~15 ms → 5.1 ms per pointer move** (comfortably
+  inside a 16 ms frame). Output verified **pixel-identical** to a full
+  redraw after three overlapping multi-colour strokes.
+- Remaining minor cost is MapEditor's per-event `split('')/join('')` of the
+  24k-cell string (~0.6 ms/move) — left alone as it is no longer material.
+
+### Per-frame replay labels
+- **Record Progress Frame** now takes an optional label (input above the
+  button, Enter submits, cleared after recording), stored as `label` on the
+  timeline entry (`appendSave(..., label)`, capped 80 chars).
+- The campaign panel lists the **recorded timeline** — start date plus each
+  frame's date and label (or "(unlabelled)") — so RHQ can see what the
+  replay will play back.
+- During playback the label shows as a caption along the bottom of the map
+  (`.replay-caption`, fades in per move, clears at the end) and is drawn
+  into the **exported video** in the same position. Unlabelled frames simply
+  show no caption; the synthetic "live drift" final frame never has one.
+- Verified (10 checks): field hidden until a start state exists, label
+  stored/cleared, timeline listing, unlabelled frames allowed, caption
+  appears during the right move and disappears at rest.
+
+### Test-suite note
+Two older scratch tests painted at a spot that is **ocean** (deliberately
+unpaintable) and had been passing only because the ocean mask hadn't
+finished loading yet; the faster paint path made the mask win the race, so
+the app now correctly refuses the no-op. Tests repointed at land — this was
+a test bug, not a regression.
+
 ## 2026-07-30 (4) — First-visit company gate, company-scoped intel alerts, site audit
 ### Boot-screen company gate
 - New [CompanyGate.jsx](src/components/CompanyGate.jsx): the boot screen now

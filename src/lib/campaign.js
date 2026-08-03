@@ -80,6 +80,12 @@ export function buildFrames(campaign) {
   return frames
 }
 
+// Caption for each recorded move, aligned with the transitions returned by
+// buildFrames (transition k plays timeline[k]). '' when unlabelled.
+export function frameLabels(campaign) {
+  return (campaign.timeline || []).map((e) => e.label || '')
+}
+
 // The latest reconstructed state (what the last save left the map as).
 export function latestFrame(campaign) {
   let cur = campaign.start.cells
@@ -92,13 +98,16 @@ export function latestFrame(campaign) {
 // If the doc would outgrow the Firestore size budget, the oldest entries are
 // folded into the start state — history quietly loses its earliest move(s)
 // rather than the save failing outright.
-export function appendSave(campaign, newCells, ts = Date.now()) {
+export function appendSave(campaign, newCells, ts = Date.now(), label = '') {
   const prev = latestFrame(campaign)
   const diff = diffCells(prev, newCells)
   if (!diff) return null
+  const entry = { ts, diff }
+  // Optional caption shown while this move plays back (and in the export).
+  if (label && label.trim()) entry.label = label.trim().slice(0, 80)
   let next = {
     start: campaign.start,
-    timeline: [...(campaign.timeline || []), { ts, diff }],
+    timeline: [...(campaign.timeline || []), entry],
   }
   while (campaignByteSize(next) > MAX_CAMPAIGN_BYTES && next.timeline.length > 1) {
     const [oldest, ...rest] = next.timeline

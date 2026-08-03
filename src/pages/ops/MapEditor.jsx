@@ -144,6 +144,7 @@ function CampaignPanel({ campaign, terr, territory }) {
   const active = campaignValid(campaign, cols, rows)
   const moves = active ? campaign.timeline.length : 0
 
+  const [label, setLabel] = useState('')
   const [exporting, setExporting] = useState(false)
   const [exportPct, setExportPct] = useState(0)
   const [exportErr, setExportErr] = useState('')
@@ -169,16 +170,19 @@ function CampaignPanel({ campaign, terr, territory }) {
 
   // Append the current painting to the replay timeline. Leaves the start
   // state untouched — this is the "capture an incremental change" action.
+  // The optional label is shown as a caption while that move plays back.
   const recordProgress = () => {
-    const next = appendSave(campaign, terr.cells)
+    const next = appendSave(campaign, terr.cells, Date.now(), label)
     if (!next) {
       toast.push('No changes since the last frame — nothing recorded.', { type: 'error' })
       return
     }
     updateSlice('territory', terr)
     updateSlice('campaign', next)
-    audit('Recorded campaign progress frame', `frame ${next.timeline.length}`)
-    toast.push(`Progress frame ${next.timeline.length} recorded.`)
+    const n = next.timeline.length
+    audit('Recorded campaign progress frame', `frame ${n}${label.trim() ? ` — ${label.trim()}` : ''}`)
+    toast.push(`Progress frame ${n} recorded${label.trim() ? `: “${label.trim()}”` : ''}.`)
+    setLabel('')
   }
 
   const clearHistory = async () => {
@@ -233,13 +237,30 @@ function CampaignPanel({ campaign, terr, territory }) {
           <span className="hostile">Re-record Start State</span> — replaces the baseline with the current map and <strong>erases all progress frames</strong>. Only for redefining where the campaign begins.
         </div>
       )}
+      {active && (
+        <label className="col" style={{ gap: 4 }}>
+          <span className="mono dim" style={{ fontSize: 10, letterSpacing: 2 }}>
+            LABEL FOR THIS FRAME (OPTIONAL)
+          </span>
+          <input
+            value={label}
+            onChange={(e) => setLabel(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') recordProgress() }}
+            maxLength={80}
+            placeholder="e.g. Week 3 — Bravo retakes Singleton"
+          />
+          <span className="mono dim" style={{ fontSize: 10 }}>
+            Shown on screen (and in the exported video) while this move plays back.
+          </span>
+        </label>
+      )}
       <div className="row wrap center" style={{ gap: 8 }}>
         {active ? (
           <>
             <button
               className="primary"
               onClick={recordProgress}
-              title="Append the current map to the replay timeline as the next step. Does not change the start state."
+              title="Append the current map to the replay timeline as the next step, with the label above. Does not change the start state."
             >
               + Record Progress Frame
             </button>
@@ -272,6 +293,22 @@ function CampaignPanel({ campaign, terr, territory }) {
           </>
         )}
       </div>
+      {/* Recorded timeline, so RHQ can see what the replay will play back. */}
+      {active && moves > 0 && (
+        <div className="col" style={{ gap: 3, marginTop: 4 }}>
+          <div className="mono dim" style={{ fontSize: 10, letterSpacing: 2 }}>RECORDED TIMELINE</div>
+          <div className="mono dim" style={{ fontSize: 11 }}>
+            <span className="accent">START</span> · {new Date(campaign.start.ts).toLocaleDateString()}
+          </div>
+          {campaign.timeline.map((e, i) => (
+            <div key={i} className="mono dim" style={{ fontSize: 11 }}>
+              <span className="accent">{String(i + 1).padStart(2, '0')}</span>
+              {' · '}{new Date(e.ts).toLocaleDateString()}
+              {e.label ? <> · <span style={{ color: 'var(--text)' }}>{e.label}</span></> : ' · (unlabelled)'}
+            </div>
+          ))}
+        </div>
+      )}
       {exporting && (
         <div className="mono dim" style={{ fontSize: 10 }}>
           The video records in real time — keep this tab visible until it finishes. MP4 where the browser supports it, otherwise WebM.

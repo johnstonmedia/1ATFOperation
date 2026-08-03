@@ -157,6 +157,13 @@ assuming a page exists).
   source image per cell against the flat ocean fill (`OCEAN_COLOR` in
   `territory.js`, `#3c82b4`) to build a shared `Uint8Array` mask, enforced in
   `MapEditor`'s paint handler and shown as a dark overlay in edit mode.
+- **Painting is incremental**: `PixelMap` diffs the grid against the last
+  rasterised one and redraws only the dirty cell region; `renderTerritoryLayer`
+  clips to it and its hatch-mask scratch canvas is sized to that region (the
+  `source-in` mask is a global composite, so a full-map scratch made every
+  stroke pay a full-resolution composite per colour — that was the brush lag).
+  Full redraws on resize / large changes. Don't reintroduce a full-canvas
+  scratch or a whole-grid redraw per pointer event.
 - `PixelMap` renders the image (with a CSS filter for the intelligence-agency
   look) + a `<canvas>` overlay (tinted fills + a single neutral boundary
   outline per edge — deliberately not per-side coloured, since that
@@ -186,7 +193,9 @@ assuming a page exists).
   reload.
 - **Campaign replay** (v2.2): RHQ presses **Select Start State** in the
   Map: Territory editor's "Campaign replay" panel, then explicitly presses
-  **Record Progress Frame** to append each diff move to the `campaign` slice
+  **Record Progress Frame** (with an optional per-frame **label**, shown as a
+  caption during playback and in the export) to append each diff move to the
+  `campaign` slice
   (**"Save map" does NOT record a frame** — that was the pre-2026-07-30
   behaviour); **Re-record Start State** overwrites the baseline and clears
   every frame

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import PixelMap from './PixelMap'
-import { campaignValid, buildFrames, transitionPlan, transitionDuration } from '../lib/campaign'
+import { campaignValid, buildFrames, frameLabels, transitionPlan, transitionDuration } from '../lib/campaign'
 import { renderWaveLayer } from '../lib/terrainRender'
 
 // Campaign replay wrapper around PixelMap. On load it replays the campaign
@@ -40,11 +40,18 @@ export default function CampaignReplayMap({ territory, campaign, maxWidth }) {
     return f.length >= 2 ? f : null
   }, [campaign, territory.cells, cols, rows])
 
+  // Captions per transition (transition k plays timeline[k]); a synthetic
+  // final frame from live drift has no label.
+  const captions = useMemo(
+    () => (campaignValid(campaign, cols, rows) ? frameLabels(campaign) : []),
+    [campaign, cols, rows],
+  )
+
   if (!frames) return <PixelMap territory={territory} maxWidth={maxWidth} />
-  return <Replay territory={territory} frames={frames} maxWidth={maxWidth} />
+  return <Replay territory={territory} frames={frames} captions={captions} maxWidth={maxWidth} />
 }
 
-function Replay({ territory, frames, maxWidth }) {
+function Replay({ territory, frames, captions, maxWidth }) {
   const { cols, rows } = territory
   const transitions = frames.length - 1
   const perMs = useMemo(() => transitionDuration(transitions), [transitions])
@@ -54,6 +61,7 @@ function Replay({ territory, frames, maxWidth }) {
   const [done, setDone] = useState(true)
   const [labels, setLabels] = useState([]) // conquest name flashes
   const [progress, setProgress] = useState(1) // 0..1 across the whole replay
+  const [moveIdx, setMoveIdx] = useState(-1) // transition being played (-1 = at rest)
 
   const overlayRef = useRef(null)
   // Mutable engine state, outside React so the rAF loop never re-renders.
@@ -77,6 +85,7 @@ function Replay({ territory, frames, maxWidth }) {
     e.plan = null
     clearOverlay()
     setLabels([])
+    setMoveIdx(-1)
     commitFrame(transitions)
     setPlaying(false)
     setDone(true)
@@ -90,6 +99,7 @@ function Replay({ territory, frames, maxWidth }) {
     e.plan = null
     clearOverlay()
     setLabels([])
+    setMoveIdx(-1)
     commitFrame(0)
     setDone(false)
     setPlaying(true)
@@ -122,6 +132,7 @@ function Replay({ territory, frames, maxWidth }) {
         setPlaying(false)
         setDone(true)
         setProgress(1)
+        setMoveIdx(-1)
         return
       }
 
@@ -135,6 +146,7 @@ function Replay({ territory, frames, maxWidth }) {
           .filter((c) => c.label && c.size >= 6) // skip tiny touch-up strokes
           .map((c, i) => ({ id: `${e.k}-${i}`, x: c.cx, y: c.cy, text: c.label, color: c.color }))
         setLabels(flashes)
+        setMoveIdx(e.k)
       }
 
       // Progress runs 0..1 over the wave, then holds briefly before the next
@@ -163,6 +175,8 @@ function Replay({ territory, frames, maxWidth }) {
     return () => { live = false; cancelAnimationFrame(e.raf) }
   }, [playing, frames, transitions, cols, rows, perMs, commitFrame])
 
+  const caption = moveIdx >= 0 ? (captions[moveIdx] || '') : ''
+
   const overlay = (
     <>
       <canvas
@@ -176,6 +190,8 @@ function Replay({ territory, frames, maxWidth }) {
           {l.text}
         </div>
       ))}
+      {/* RHQ's caption for the move currently playing back. */}
+      {caption && <div key={moveIdx} className="replay-caption">{caption}</div>}
     </>
   )
 

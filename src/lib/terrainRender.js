@@ -65,27 +65,65 @@ function hatchFor(code, w, h) {
 // One reusable scratch canvas for masking the hatch down to a code's cells
 // (draws are synchronous, so sequential reuse across codes — and across the
 // live map / exporter — is safe). Avoids per-draw canvas allocation churn.
+//
+// Sized to the REGION being drawn, not the whole map. This matters a lot:
+// the mask uses `source-in`, which is a global composite — the browser
+// reprocesses the entire scratch canvas however small the rect we draw into
+// it. With a full-map scratch that made every brush stroke pay for a
+// full-resolution composite per owner colour (the dominant cost in a CPU
+// profile of painting). Rounded up to a 128px grid so a moving stroke reuses
+// one canvas instead of reallocating every frame.
 let scratch = null
 function scratchFor(w, h) {
-  if (!scratch || scratch.width !== w || scratch.height !== h) {
+  const q = (v) => Math.max(128, Math.ceil(v / 128) * 128)
+  const W = q(w), H = q(h)
+  // Grow to fit; shrink only when the canvas is far larger than needed, so a
+  // full redraw followed by small strokes doesn't keep paying full-size cost.
+  if (!scratch || scratch.width < W || scratch.height < H || scratch.width * scratch.height > W * H * 4) {
     scratch = document.createElement('canvas')
-    scratch.width = w; scratch.height = h
+    scratch.width = W
+    scratch.height = H
   }
   return scratch
 }
 
 // Draw hatch fills + a single neutral outline per boundary edge for `cells`
 // onto `ctx`, covering a w x h pixel area. Pure draw — the caller owns canvas
-// sizing/clearing.
-export function renderTerritoryLayer(ctx, { cells, cols, rows, showRHQ, w, h }) {
+// sizing (and clearing, for a full redraw).
+//
+// `region` ({x0,y0,x1,y1} inclusive CELL bounds) restricts the work to a
+// patch of the grid — this is what keeps brush strokes cheap. Painting used
+// to re-run the whole-grid loop plus several full-canvas composites on every
+// pointer event, which is most of a frame's budget at device resolution; a
+// stroke only ever dirties a handful of cells, so PixelMap passes the dirty
+// bounds and we redraw just those. The region is cleared and clipped, so
+// nothing outside it is touched (the pixels there are already correct) and
+// border strokes can't bleed out and double-darken over repeated strokes.
+export function renderTerritoryLayer(ctx, { cells, cols, rows, showRHQ, w, h, region }) {
   const vis = (c) => (isRHQCode(c) && !showRHQ ? '.' : c)
   const at = (x, y) => (x < 0 || y < 0 || x >= cols || y >= rows ? '.' : vis(cells[y * cols + x]))
   const cell = w / cols
 
-  // One pass over the grid, bucketing each code's cells into a rect list.
+  const x0 = region ? Math.max(0, region.x0) : 0
+  const y0 = region ? Math.max(0, region.y0) : 0
+  const x1 = region ? Math.min(cols - 1, region.x1) : cols - 1
+  const y1 = region ? Math.min(rows - 1, region.y1) : rows - 1
+  if (x1 < x0 || y1 < y0) return
+  const rx = x0 * cell, ry = y0 * cell
+  const rw = (x1 - x0 + 1) * cell, rh = (y1 - y0 + 1) * cell
+
+  if (region) {
+    ctx.save()
+    ctx.beginPath()
+    ctx.rect(rx, ry, rw, rh)
+    ctx.clip()
+    ctx.clearRect(rx, ry, rw, rh)
+  }
+
+  // One pass over the (sub)grid, bucketing each code's cells into a rect list.
   const buckets = new Map() // code -> [x, y, x, y, ...]
-  for (let y = 0; y < rows; y++) {
-    for (let x = 0; x < cols; x++) {
+  for (let y = y0; y <= y1; y++) {
+    for (let x = x0; x <= x1; x++) {
       const code = at(x, y)
       if (!colorOf(code)) continue
       let b = buckets.get(code)
@@ -98,27 +136,32 @@ export function renderTerritoryLayer(ctx, { cells, cols, rows, showRHQ, w, h }) 
   // then source-in the cached full-canvas hatch pattern so it survives only
   // inside those cells (not a clip() path built from thousands of unioned
   // per-cell rects — that pathologically complex a clip path produced a
-  // rasteriser seam artifact when tested).
-  const sc = scratchFor(w, h)
+  // rasteriser seam artifact when tested). source-in also clears whatever the
+  // scratch held outside the drawn area, so it self-cleans between codes.
+  // Scratch works in REGION-local coordinates (cell rects shifted by -rx/-ry);
+  // the hatch pattern is still sampled from the full-canvas cache at the
+  // region's offset, so the lines stay aligned to the map rather than to the
+  // patch being redrawn.
+  const sc = scratchFor(rw, rh)
   const sctx = sc.getContext('2d')
   for (const [code, b] of buckets) {
     sctx.globalCompositeOperation = 'source-over'
-    sctx.clearRect(0, 0, w, h)
+    sctx.clearRect(0, 0, sc.width, sc.height)
     sctx.fillStyle = '#000'
-    for (let i = 0; i < b.length; i += 2) sctx.fillRect(b[i] * cell, b[i + 1] * cell, cell, cell)
+    for (let i = 0; i < b.length; i += 2) sctx.fillRect(b[i] * cell - rx, b[i + 1] * cell - ry, cell, cell)
     sctx.globalCompositeOperation = 'source-in'
-    sctx.drawImage(hatchFor(code, w, h), 0, 0)
+    sctx.drawImage(hatchFor(code, w, h), rx, ry, rw, rh, 0, 0, rw, rh)
 
     ctx.globalAlpha = 1
-    ctx.drawImage(sc, 0, 0)
+    ctx.drawImage(sc, 0, 0, rw, rh, rx, ry, rw, rh)
   }
 
   ctx.globalAlpha = 1
   ctx.strokeStyle = BORDER_COLOR
   ctx.lineWidth = BORDER_WIDTH
   ctx.beginPath()
-  for (let y = 0; y < rows; y++) {
-    for (let x = 0; x < cols; x++) {
+  for (let y = y0; y <= y1; y++) {
+    for (let x = x0; x <= x1; x++) {
       const code = at(x, y)
       if (!colorOf(code)) continue
       const px = x * cell, py = y * cell
@@ -129,6 +172,8 @@ export function renderTerritoryLayer(ctx, { cells, cols, rows, showRHQ, w, h }) 
     }
   }
   ctx.stroke()
+
+  if (region) ctx.restore()
 }
 
 // Draw one animation instant of a transition's conquest wave onto `ctx`

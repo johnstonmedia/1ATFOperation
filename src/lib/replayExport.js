@@ -1,6 +1,6 @@
 import { MAP_IMAGE, MAP_PIXEL_WIDTH, MAP_PIXEL_HEIGHT } from './territory'
 import { renderTerritoryLayer, renderWaveLayer, IMAGE_FILTER } from './terrainRender'
-import { buildFrames, transitionPlan, transitionDuration } from './campaign'
+import { buildFrames, frameLabels, transitionPlan, transitionDuration } from './campaign'
 
 // Campaign replay video export.
 //
@@ -66,6 +66,7 @@ export function exportCampaignReplay({ territory, campaign, onProgress }) {
 
     const { cols, rows, showRHQ } = territory
     const frames = buildFrames(campaign)
+    const captions = frameLabels(campaign)
     if (frames[frames.length - 1] !== territory.cells) frames.push(territory.cells)
     const transitions = frames.length - 1
     if (transitions < 1) throw new Error('No campaign history to export yet.')
@@ -153,6 +154,27 @@ export function exportCampaignReplay({ territory, campaign, onProgress }) {
       }
     }
 
+    // RHQ's per-move caption, drawn along the bottom like the on-screen one.
+    const drawCaption = (text) => {
+      ctx.font = `700 ${13 * SCALE}px "JetBrains Mono", monospace`
+      const padX = 10 * SCALE, padY = 7 * SCALE
+      const tw = ctx.measureText(text).width
+      const bw = Math.min(W * 0.88, tw + padX * 2)
+      const bh = 15 * SCALE + padY
+      const bx = (W - bw) / 2, by = H - bh - 14 * SCALE
+      ctx.fillStyle = 'rgba(6,10,18,0.82)'
+      ctx.strokeStyle = '#36e0c0'
+      ctx.lineWidth = 1.5 * SCALE
+      ctx.beginPath()
+      ctx.rect(bx, by, bw, bh)
+      ctx.fill()
+      ctx.stroke()
+      ctx.fillStyle = '#fff'
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      ctx.fillText(text, W / 2, by + bh / 2)
+    }
+
     const stream = canvas.captureStream(FPS)
     const recorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 8_000_000 })
     const chunks = []
@@ -210,6 +232,7 @@ export function exportCampaignReplay({ territory, campaign, onProgress }) {
           drawFlashes(plan, waveT)
         }
         drawPlaces()
+        if (k >= 0 && captions[k]) drawCaption(captions[k])
 
         if (elapsed >= totalMs) {
           recorder.stop()
