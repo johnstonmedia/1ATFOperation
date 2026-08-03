@@ -47,6 +47,8 @@ distribution) outline in red. Eight sections:
   embedded player, activity entries, map render, SMEAC, back-navigation) plus
   the original 22 gate/label checks.
 
+---
+
 ## 2026-07-31 — "A-COY" map labels + Staff Centre
 ### Map labels are unit-style and persist
 - `coyLabelOf()` in [territory.js](src/lib/territory.js): companies now read as
