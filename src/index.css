@@ -311,9 +311,11 @@ label { font-size: 12px; color: var(--text-dim); text-transform: uppercase; lett
     border-right: 1px solid var(--accent);
     box-shadow: 0 0 40px rgba(54, 224, 192, 0.15);
     transform: translateX(-105%);
-    transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+    /* visibility keeps the closed drawer's buttons out of the tab order */
+    visibility: hidden;
+    transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), visibility 0.25s;
   }
-  .ops-rail.open { transform: translateX(0); }
+  .ops-rail.open { transform: translateX(0); visibility: visible; }
   .ops-overlay {
     display: block;
     position: fixed;

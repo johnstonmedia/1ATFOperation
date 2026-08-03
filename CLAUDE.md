@@ -42,12 +42,25 @@ routes — see [src/App.jsx](src/App.jsx):
   Meridian brief. Public nav is responsive: pinned left rail ≥768px,
   hamburger drawer below (`NavContent` in Sidebar.jsx is shared by both);
   the Ops Centre is the inverse — rail pinned on desktop, ☰ MENU drawer
-  ≤820px. Unread tracking: `src/hooks/useUnseen.js` compares each content
-  slice's `updatedAt` against a device-local seen stamp; Intel/Briefings
-  pages mark themselves seen on open.
+  ≤820px. **Unread tracking** (`src/hooks/useUnseen.js`, device-local, no
+  auth): briefings use `useUnseen(slice)` — the slice's `updatedAt` vs a
+  stored stamp. **Intel is company-scoped**: `useUnseenIntel(company)`
+  fingerprints only the fragments that visitor can see (`ALL` + own company)
+  via `intelSignature()`, so another company's edits never light their alert;
+  a first visit (or a company switch) silently records the baseline
+  (`hasIntelBaseline`) so the alert only ever fires on a real change.
+  Intel/Briefings pages mark themselves seen on open.
+- **First-visit company gate** ([CompanyGate.jsx](src/components/CompanyGate.jsx)):
+  the boot/"SECURE LINK ESTABLISHED" screen asks for the visitor's company
+  before the public shell renders, once per device. `CompanyContext` exposes
+  `chosen` (the localStorage key **exists**) separately from `company` (which
+  may be `''` if they skipped), so skippers aren't re-prompted. Gate applies
+  only to the `PublicShell` routes in App.jsx — Classified / ops / COY
+  consoles bypass it.
 - `/intel` **Intel** — "Intercepted Intelligence": RHQ-wide fragments plus
-  company-specific ones, gated only by a **company dropdown** (device-local
-  preference, no auth — [CompanyContext](src/context/CompanyContext.jsx)).
+  company-specific ones, gated only by the **company preference** (chosen at
+  the boot gate, changeable from the nav dropdown; device-local, no auth —
+  [CompanyContext](src/context/CompanyContext.jsx)).
   Fragments are decrypt-style puzzles (fill in redacted words) with optional
   linked docs/images.
 - `/briefings` **Briefings** — a video embed + free text, admin-edited.
@@ -230,12 +243,25 @@ Orbitron (headings) / Rajdhani (body) / JetBrains Mono. Utility classes:
 styles — there is no CSS-in-JS or component library.
 
 ## Firebase setup checklist (console)
-1. Authentication → enable **Email/Password**.
+1. Authentication → enable **Email/Password**. Add the custom domain under
+   **Settings → Authorized domains** or sign-ins fail there.
 2. Firestore → create DB → publish [firestore.rules](firestore.rules).
-   ⚠️ **Re-publish after this change** — the rules now include an
-   `intelSubmissions` block (commander read/writes own company only; RHQ all).
-   The COY-intel approval workflow will not work live until they're republished.
+   ⚠️ **STILL PENDING (user action):** the rules in the repo are current and
+   emulator-verified, but must be **re-published in the Firebase Console** to
+   take effect live. Two changes are waiting on that republish: the
+   `intelSubmissions` block (COY-intel approval workflow) and the roster
+   read lockdown (RHQ + own-record only). Until then, live Firebase still
+   runs the older rules.
 3. Storage is **not used** (logo and map image are repo files under `public/`).
+
+**Rules coverage** — every collection/doc the app touches has a block:
+`content/*` (all `SINGLE_SLICES`, incl. `campaign` — adding a slice needs no
+rules change), `roster`, `tasks`, `activity`, `users`, `support`,
+`resetRequests`, `audit`, `authIndex`, `intelSubmissions`; everything else
+default-denies. Verified against the real rules engine via the `firebase-tools`
+Firestore emulator + `@firebase/rules-unit-testing` (19 checks: roster
+own-record vs others, tasks/activity RHQ-only, campaign public-read/RHQ-write,
+COY submission scoping).
 
 ## Known privacy gaps / TODO (discussed, not yet done)
 - ✅ **Fixed 2026-07-23**: `roster` reads are now RHQ **or own-record only**

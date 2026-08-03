@@ -17,6 +17,53 @@ keep entries short and focused on what a new collaborator needs to know.
 
 ---
 
+## 2026-07-30 (4) — First-visit company gate, company-scoped intel alerts, site audit
+### Boot-screen company gate
+- New [CompanyGate.jsx](src/components/CompanyGate.jsx): the boot screen now
+  reads "SECURE LINK ESTABLISHED" and asks the visitor to pick their company
+  before the public shell renders — **once per device**, then it sticks from
+  localStorage. Includes a "Skip — show unit-wide content only" path for
+  staff/parents/visitors.
+- `CompanyContext` gained `chosen` (the localStorage key EXISTS) separate
+  from `company` (may be `''` when skipped), so skippers aren't re-prompted
+  on every visit. Gating happens in a `PublicShell` wrapper in App.jsx, so
+  the Classified landing page and the RHQ/COY consoles bypass it.
+
+### Company-scoped intel alerts
+- The home-page new-intel banner previously used the intel slice's
+  `updatedAt`, so ANY company's intel edit alerted EVERY cadet. It now
+  fingerprints only the fragments that visitor can see — unit-wide (`ALL`)
+  plus their own company — via `intelSignature()` in
+  [useUnseen.js](src/hooks/useUnseen.js), tracked per company key.
+- First visit, and any later company switch, silently records a baseline
+  (`hasIntelBaseline`), so the alert only ever fires on a genuine change
+  rather than greeting new arrivals with "NEW".
+- Banner now names the scope, e.g. "NEW INTERCEPTED INTELLIGENCE — BRAVO /
+  UNIT". Briefings/taskings keep the simpler whole-slice stamp.
+- Verified (9 checks): first visit silent; Charlie's edits don't alert Bravo;
+  own-company and unit-wide edits do; opening Intel clears it; switching
+  company doesn't false-alert.
+
+### Site audit (back to front)
+Swept all 8 routes at 1280/820/390px for blank pages, horizontal overflow,
+broken images, console/page errors and off-viewport controls.
+- **Fixed — closed off-canvas menus stayed in the tab order.** Both the
+  public mobile drawer and the Ops Centre mobile rail were only translated
+  off-screen, so keyboard users could tab into an invisible menu. Both now
+  also toggle `visibility`, which removes them from the tab order; confirmed
+  by tabbing 25 times on each and asserting focus never lands on a hidden
+  element.
+- No blank pages, no horizontal overflow, no broken images, no page errors
+  on any route/viewport. The one `scu-logo.png` request failure seen was a
+  dev-server flake (serves 200; Logo also falls back to the SVG).
+- Firestore rules reviewed: every collection the code touches is covered,
+  header comment updated to say so; re-verified on the emulator (19 checks
+  across both rule suites) including `content/campaign` and COY submission
+  scoping. **Rules still need re-publishing in the Firebase Console** — repo
+  is current, live is not.
+
+---
+
 ## 2026-07-30 (3) — Explicit start/progress recording + persistent occupier beacons
 ### 1. Two-action replay recording ([MapEditor.jsx](src/pages/ops/MapEditor.jsx))
 - **Behaviour change**: "Save map" no longer auto-appends a replay frame.

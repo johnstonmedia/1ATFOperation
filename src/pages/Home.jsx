@@ -1,8 +1,10 @@
+import { useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import CampaignReplayMap from '../components/CampaignReplayMap'
 import { useData } from '../context/DataContext'
-import { useUnseen } from '../hooks/useUnseen'
-import { COMPANIES, smeacOf } from '../firebase/seed'
+import { useCompany } from '../context/CompanyContext'
+import { useUnseen, useUnseenIntel, hasIntelBaseline, markIntelSeen } from '../hooks/useUnseen'
+import { COMPANIES, PHONETIC, smeacOf } from '../firebase/seed'
 
 const RECRUITS = ['Alpha', 'Bravo', 'Charlie', 'Delta']
 const badge = (c) => (
@@ -14,9 +16,18 @@ const badge = (c) => (
 
 export default function Home() {
   const { state } = useData()
+  const { company } = useCompany()
   const n = state.narrative
-  const newIntel = useUnseen('intel')
+  // Intel alerts are scoped to what this visitor can actually see (unit-wide
+  // + their own company), so another company's edits never light their alert.
+  const newIntel = useUnseenIntel(company)
   const newBriefing = useUnseen('briefings')
+
+  // First visit (or straight after switching company): record the current
+  // intel as the baseline so the alert only ever fires on a real change.
+  useEffect(() => {
+    if (!hasIntelBaseline(company)) markIntelSeen(state.intel, company)
+  }, [company, state.intel])
 
   return (
     <div className="container" style={{ padding: '24px 20px 60px' }}>
@@ -31,8 +42,10 @@ export default function Home() {
 
       {/* Unread-content alerts: shown until this device opens the page, then
           cleared (see useUnseen/markSeen). */}
-      {newIntel !== 0 && (
-        <Link to="/intel" className="alert-banner">⚠ NEW INTERCEPTED INTELLIGENCE — TAP TO DECRYPT</Link>
+      {newIntel && (
+        <Link to="/intel" className="alert-banner">
+          ⚠ NEW INTERCEPTED INTELLIGENCE{company ? ` — ${(PHONETIC[company] || company).toUpperCase()} / UNIT` : ''} — TAP TO DECRYPT
+        </Link>
       )}
       {newBriefing !== 0 && (
         <Link to="/briefings" className="alert-banner">⚠ NEW BRIEFING / TASKING POSTED — TAP TO VIEW</Link>

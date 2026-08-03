@@ -83,7 +83,11 @@ export default function Sidebar({ open, onClose, onAuth }) {
           borderRight: '1px solid var(--accent)',
           boxShadow: '0 0 40px rgba(54,224,192,0.15)',
           transform: open ? 'translateX(0)' : 'translateX(-105%)',
-          transition: 'transform 0.25s cubic-bezier(.2,.8,.2,1)',
+          // visibility (not just the off-screen transform) so the closed
+          // drawer's links leave the tab order — otherwise keyboard users
+          // tab into an invisible menu.
+          visibility: open ? 'visible' : 'hidden',
+          transition: 'transform 0.25s cubic-bezier(.2,.8,.2,1), visibility 0.25s',
           padding: 18,
           display: 'flex', flexDirection: 'column', gap: 6,
         }}
