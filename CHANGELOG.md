@@ -65,6 +65,8 @@ finished loading yet; the faster paint path made the mask win the race, so
 the app now correctly refuses the no-op. Tests repointed at land — this was
 a test bug, not a regression.
 
+---
+
 ## 2026-07-30 (4) — First-visit company gate, company-scoped intel alerts, site audit
 ### Boot-screen company gate
 - New [CompanyGate.jsx](src/components/CompanyGate.jsx): the boot screen now
