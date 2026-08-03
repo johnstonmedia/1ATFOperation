@@ -77,7 +77,10 @@ routes — see [src/App.jsx](src/App.jsx):
   password (`SCUNARRATIVE`, in the client bundle — a latch, not a secret; the
   page only shows already-public `content/*` data and no PII). Shows pending
   COY approvals, scheduled video distribution, intel per company, the campaign
-  timeline and content freshness. NOTE: `intelSubmissions` is RHQ/own-commander
+  timeline and content freshness — as an overview of clickable cards, each
+  opening a detail view with the real content (intel fragments incl. answers,
+  the video playing, the live map, activity feed, full SMEAC/briefing text).
+  NOTE: `intelSubmissions` is RHQ/own-commander
   only under the rules, so the approvals list is empty-with-a-notice for a
   password-only visitor against live Firebase (works in LOCAL MODE / when
   signed in).

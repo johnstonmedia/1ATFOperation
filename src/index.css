@@ -216,6 +216,35 @@ label { font-size: 12px; color: var(--text-dim); text-transform: uppercase; lett
   70% { opacity: 1; }
   100% { opacity: 0; transform: translate(-50%, -50%) scale(1); }
 }
+/* Staff Centre: clickable section cards on the overview. */
+.staff-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
+}
+.staff-card {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  align-items: flex-start;
+  text-align: left;
+  padding: 14px;
+  min-height: 92px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  color: var(--text);
+  cursor: pointer;
+  text-transform: none;
+  letter-spacing: 0;
+  transition: border-color 0.15s, background 0.15s, transform 0.15s;
+}
+.staff-card:hover {
+  border-color: var(--accent);
+  background: rgba(54, 224, 192, 0.06);
+  transform: translateY(-1px);
+}
+
 /* RHQ's caption for the campaign move currently playing back — sits along the
    bottom of the map, fades in with the move. */
 @keyframes replay-caption-in {

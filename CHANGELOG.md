@@ -17,6 +17,36 @@ keep entries short and focused on what a new collaborator needs to know.
 
 ---
 
+## 2026-08-01 — Staff Centre: full drill-down detail
+Rebuilt [StaffCentre.jsx](src/pages/StaffCentre.jsx) from a flat summary into
+an overview of **clickable section cards**, each opening a detail view with the
+actual content. Cards needing attention (pending approvals, a scheduled
+distribution) outline in red. Eight sections:
+- **Approvals** — each pending request in full: company, upsert vs removal,
+  the fragment's title/coded message/solution/reveal text, who submitted it.
+- **Intercepted Intelligence** — every fragment grouped UNIT-WIDE then per
+  company (A-COY…S-COY), showing the coded message, the **solution**, the
+  reveal text, attachments, and any embedded doc. This is what cadets see,
+  with the answers.
+- **Video & Distribution** — the video actually **plays** (reuses
+  `VideoEmbed`), plus title/caption/schedule, any unpublished RHQ draft, and
+  the Briefings-tab video.
+- **Briefings** — full section text, highlights and closing quote.
+- **Operational Map** — the live `PixelMap` rendered inline (zoomable), named
+  places with stronghold status, and the campaign timeline with each frame's
+  label.
+- **Activity Feed** — entries newest-first.
+- **Operation Brief** — the full SMEAC text, the Meridian threat block, the
+  company roles, and the Welcome/Classified copy.
+- **Content Status** — last-updated for all ten editable slices.
+- Still strictly read-only, still no PII. The two restricted feeds
+  (`intelSubmissions`, `activity`) remain RHQ-gated by the security rules, so
+  each shows an explicit notice explaining why it's empty for a password-only
+  visitor rather than pretending there's nothing there.
+- Verified: 27 new headless checks on the drill-downs (real intel text,
+  embedded player, activity entries, map render, SMEAC, back-navigation) plus
+  the original 22 gate/label checks.
+
 ## 2026-07-31 — "A-COY" map labels + Staff Centre
 ### Map labels are unit-style and persist
 - `coyLabelOf()` in [territory.js](src/lib/territory.js): companies now read as
