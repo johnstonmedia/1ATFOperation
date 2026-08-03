@@ -53,6 +53,8 @@ every editable slice.
   map, gate rejects/accepts, no content before unlock, persistence, Lock
   re-gates, all five sections, pending requests listed).
 
+---
+
 ## 2026-07-30 (5) — Brush performance (3x faster), per-frame replay labels
 ### Brush lag — profiled and fixed
 Painting was still heavy. A CPU profile of a 60-move stroke put **434 ms in
