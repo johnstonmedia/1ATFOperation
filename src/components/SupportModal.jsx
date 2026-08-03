@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useData } from '../context/DataContext'
 import { useAuth } from '../context/AuthContext'
 import { useDialog } from '../hooks/useDialog'
@@ -49,7 +50,12 @@ export default function SupportModal({ onClose }) {
     }
   }
 
-  return (
+  // Rendered through a portal: this modal is mounted from inside the nav
+  // rail / drawer, and those are positioned (sticky/fixed) elements that
+  // create their own stacking context — a `fixed` child inside one is
+  // trapped in that layer and the page content paints over it however high
+  // its z-index is. Portalling to <body> puts it back in the top layer.
+  return createPortal(
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 950, background: 'rgba(2,4,9,0.85)',
       display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
       <div ref={dialogRef} className="panel panel-pad" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Help and Support" style={{ width: 420, maxWidth: '100%' }}>
@@ -106,5 +112,7 @@ export default function SupportModal({ onClose }) {
         )}
       </div>
     </div>
+  ,
+    document.body,
   )
 }

@@ -107,6 +107,110 @@ export function occupierAt(territory, x, y, { radius = 3, showRHQ = true } = {})
   return best
 }
 
+// Label every contiguous block of territory with the company holding it, so a
+// viewer can read ownership straight off the map instead of matching colours
+// to a key. Returns [{ id, x, y, code, label, color, size }] in CELL
+// coordinates.
+//
+// Placement uses the most *interior* cell of each region (a multi-source BFS
+// inward from the region's edge, keeping the cell furthest from any boundary)
+// rather than the centroid — a centroid can easily land outside a concave or
+// crescent-shaped holding, which is common once territory is fought over.
+//
+// Regions smaller than `minCells` are skipped: a label wider than the ground
+// it names is worse than no label. Computed from the cells alone, so it
+// tracks replays frame-by-frame like the beacons do.
+export function regionLabels(territory, { showRHQ = true, minCells = 40, avoid = [], avoidRadius = 10 } = {}) {
+  const { cols, rows, cells } = territory
+  if (!cells) return []
+  const n = cols * rows
+  const owner = new Array(n)
+  for (let i = 0; i < n; i++) {
+    const ch = cells[i]
+    if (!ch || ch === '.') { owner[i] = null; continue }
+    const up = ch.toUpperCase()
+    owner[i] = isRHQCode(up) && !showRHQ ? null : up
+  }
+
+  const comp = new Int32Array(n).fill(-1)
+  const out = []
+  const queue = new Int32Array(n)
+
+  for (let seed = 0; seed < n; seed++) {
+    if (comp[seed] !== -1 || owner[seed] === null) continue
+    const code = owner[seed]
+    const id = out.length
+    // Flood the region (4-connected — diagonal-only touching reads as two
+    // separate holdings to the eye, so label them separately).
+    let head = 0, tail = 0
+    queue[tail++] = seed
+    comp[seed] = id
+    const members = []
+    while (head < tail) {
+      const i = queue[head++]
+      members.push(i)
+      const x = i % cols, y = (i / cols) | 0
+      if (x > 0 && comp[i - 1] === -1 && owner[i - 1] === code) { comp[i - 1] = id; queue[tail++] = i - 1 }
+      if (x < cols - 1 && comp[i + 1] === -1 && owner[i + 1] === code) { comp[i + 1] = id; queue[tail++] = i + 1 }
+      if (y > 0 && comp[i - cols] === -1 && owner[i - cols] === code) { comp[i - cols] = id; queue[tail++] = i - cols }
+      if (y < rows - 1 && comp[i + cols] === -1 && owner[i + cols] === code) { comp[i + cols] = id; queue[tail++] = i + cols }
+    }
+    if (members.length < minCells) continue
+
+    // Distance-from-edge BFS: seed with every region cell touching a
+    // non-region cell (or the grid edge), then expand inward.
+    const dist = new Map()
+    let q = []
+    for (const i of members) {
+      const x = i % cols, y = (i / cols) | 0
+      const edge =
+        x === 0 || y === 0 || x === cols - 1 || y === rows - 1 ||
+        comp[i - 1] !== id || comp[i + 1] !== id ||
+        comp[i - cols] !== id || comp[i + cols] !== id
+      if (edge) { dist.set(i, 0); q.push(i) }
+    }
+    // Prefer the most interior cell that ISN'T sitting on a named place —
+    // that place's beacon already prints the same owner tag, so overlapping
+    // them just says it twice. Large holdings keep their label (moved clear
+    // of the place); a region with no clear spot at all is left to the
+    // beacon and skipped entirely.
+    const nearPlace = (i) => {
+      const x = i % cols, y = (i / cols) | 0
+      return avoid.some((p) => Math.hypot(p.x - x, p.y - y) < avoidRadius)
+    }
+    let best = -1, bestD = -1
+    let fallbackD = 0
+    for (let d = 0; q.length; d++) {
+      const next = []
+      for (const i of q) {
+        const di = dist.get(i)
+        if (di > fallbackD) fallbackD = di
+        if (di > bestD && !nearPlace(i)) { bestD = di; best = i }
+        const x = i % cols, y = (i / cols) | 0
+        const push = (j) => { if (comp[j] === id && !dist.has(j)) { dist.set(j, d + 1); next.push(j) } }
+        if (x > 0) push(i - 1)
+        if (x < cols - 1) push(i + 1)
+        if (y > 0) push(i - cols)
+        if (y < rows - 1) push(i + cols)
+      }
+      q = next
+    }
+    if (best < 0) continue // every part of it sits under a place beacon
+
+    out.push({
+      id: `${code}-${id}`,
+      x: (best % cols) + 0.5,
+      y: ((best / cols) | 0) + 0.5,
+      code,
+      label: coyLabelOf(code),
+      color: colorOf(code),
+      size: members.length,
+      radius: bestD, // cells from the nearest edge — how much room the label has
+    })
+  }
+  return out
+}
+
 // Everything the UI needs to draw one place's occupier beacon.
 // `stronghold` marks a Meridian stronghold (place.hostile) — once SCU holds
 // the ground under one, it flips to the assure-blue "SCU" recaptured state.

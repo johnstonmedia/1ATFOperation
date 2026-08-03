@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
 import { useDialog } from '../hooks/useDialog'
@@ -55,7 +56,12 @@ export default function LoginModal({ onClose, onAuthed, initialMode = 'login' })
 
   const title = mode === 'temp' ? 'LOG IN WITH TEMPORARY PASSWORD' : mode === 'forgot' ? 'FORGOTTEN PASSWORD' : 'SECURE ACCESS'
 
-  return (
+  // Rendered through a portal: this modal is mounted from inside the nav
+  // rail / drawer, and those are positioned (sticky/fixed) elements that
+  // create their own stacking context — a `fixed` child inside one is
+  // trapped in that layer and the page content paints over it however high
+  // its z-index is. Portalling to <body> puts it back in the top layer.
+  return createPortal(
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 900, background: 'rgba(2,4,9,0.85)',
       display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
       <div ref={dialogRef} className="panel panel-pad" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={title} style={{ width: 400, maxWidth: '100%' }}>
@@ -135,7 +141,8 @@ export default function LoginModal({ onClose, onAuthed, initialMode = 'login' })
       </div>
 
       {support && <SupportModal onClose={() => setSupport(false)} />}
-    </div>
+    </div>,
+    document.body,
   )
 }
 

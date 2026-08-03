@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useCallback, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { useDialog } from '../hooks/useDialog'
 
 // Promise-based confirmation dialog, so destructive actions can do:
@@ -39,7 +40,10 @@ export function ConfirmProvider({ children }) {
 function ConfirmDialog({ opts, onResolve }) {
   // useDialog focuses Cancel first (safer for destructive prompts) and closes on Escape.
   const ref = useDialog(() => onResolve(false))
-  return (
+  // Portalled to <body> for the same reason as the other modals: it can be
+  // opened from inside a sticky/fixed nav rail, which creates a stacking
+  // context that would otherwise trap this overlay beneath the page content.
+  return createPortal(
     <div
       onClick={() => onResolve(false)}
       style={{ position: 'fixed', inset: 0, zIndex: 1500, background: 'rgba(2,4,9,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}
@@ -60,6 +64,7 @@ function ConfirmDialog({ opts, onResolve }) {
           <button className={opts.danger ? 'danger' : 'primary'} onClick={() => onResolve(true)}>{opts.confirmLabel || 'Confirm'}</button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

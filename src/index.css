@@ -216,6 +216,25 @@ label { font-size: 12px; color: var(--text-dim); text-transform: uppercase; lett
   70% { opacity: 1; }
   100% { opacity: 0; transform: translate(-50%, -50%) scale(1); }
 }
+/* Ownership label sitting on each held region of the map, so viewers read the
+   holder straight off the ground instead of matching colours to a key. Heavy
+   dark outline because it sits over the hatch fill and the terrain art. */
+.region-label {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  font-family: Orbitron, 'JetBrains Mono', monospace;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  line-height: 1;
+  white-space: nowrap;
+  pointer-events: none;
+  user-select: none;
+  text-shadow:
+    0 0 3px rgba(6, 10, 18, 0.95), 0 0 6px rgba(6, 10, 18, 0.9),
+    1px 1px 0 rgba(6, 10, 18, 0.85), -1px -1px 0 rgba(6, 10, 18, 0.85),
+    1px -1px 0 rgba(6, 10, 18, 0.85), -1px 1px 0 rgba(6, 10, 18, 0.85);
+}
+
 /* Staff Centre: clickable section cards on the overview. */
 .staff-grid {
   display: grid;

@@ -193,6 +193,16 @@ assuming a page exists).
   ([MapEditor.jsx](src/pages/ops/MapEditor.jsx)) — pick a colour swatch (solid
   or light variant), paint with a sized brush, add/drag/rename place labels,
   toggle RHQ visibility. There is no code-level territory editing path.
+- **Region ownership labels**: `regionLabels()` in territory.js flood-fills
+  contiguous same-owner regions and labels each on the map ("A-COY") at its
+  most interior cell, so ownership reads without a colour key. Sized to the
+  region, skipped under 40 cells, moved clear of place beacons (`avoid`), and
+  off in the editor via the `regionLabels` prop.
+- ⚠️ **Modals must be portalled**: `.app-rail` (sticky) and the mobile drawer
+  (fixed) create stacking contexts, so a `position: fixed` modal mounted
+  inside the nav gets trapped under page content whatever its z-index.
+  SupportModal / LoginModal / ConfirmDialog render via
+  `createPortal(..., document.body)` — keep it that way for any new overlay.
 - **Place beacons / occupancy**: `territory.places` entries are the map's
   named "zones", labelled unit-style ("A-COY" via `coyLabelOf()`, shared with
   the replay's conquest flashes). [Beacon.jsx](src/components/Beacon.jsx) (the ping-ring

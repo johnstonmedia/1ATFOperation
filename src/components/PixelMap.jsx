@@ -1,5 +1,5 @@
-import { useRef, useEffect, useState, useCallback } from 'react'
-import { MAP_IMAGE, MAP_ASPECT, beaconStateFor } from '../lib/territory'
+import { useRef, useEffect, useState, useCallback, useMemo } from 'react'
+import { MAP_IMAGE, MAP_ASPECT, beaconStateFor, regionLabels } from '../lib/territory'
 import { renderTerritoryLayer, IMAGE_FILTER } from '../lib/terrainRender'
 import Beacon from './Beacon'
 import { useOceanOverlayUrl } from '../lib/oceanMask'
@@ -39,6 +39,11 @@ export default function PixelMap({
   overlay, // optional node rendered inside the zoom/pan stage, above the
            // territory canvas — used by the campaign replay to keep its wave
            // layer and conquest labels aligned with the map under zoom
+  // Name each held region on the map ("A-COY") so ownership is readable
+  // without matching colours to a key. Off while editing: the labels would
+  // sit under the brush, and recomputing regions on every paint event is
+  // work the editor doesn't need.
+  regionLabels: showRegionLabels = !edit,
 }) {
   const { cols, rows, cells, showRHQ } = territory
   const places = territory.places || []
@@ -48,6 +53,9 @@ export default function PixelMap({
   // Last grid actually rasterised, so the draw effect can redraw just the
   // cells that changed instead of the whole map (see draw()).
   const drawn = useRef({ cells: null, showRHQ: null })
+  // CSS width of the map, so region labels can be sized relative to the cells
+  // they sit on (the zoom/pan transform scales the text along with the map).
+  const [mapW, setMapW] = useState(0)
   // view = continuous zoom + pan. Pan is in pre-scale units: the stage
   // transform is `scale(s) translate(x, y)`, so a rendered point (relative
   // to the container centre) sits at s * (stagePoint + pan).
@@ -61,6 +69,15 @@ export default function PixelMap({
   const oceanOverlayUrl = useOceanOverlayUrl(edit)
 
   const scale = view.scale
+
+  // Region ownership labels, recomputed only when the grid actually changes
+  // (so a replay's frame commits refresh them, but re-renders don't).
+  const regions = useMemo(() => {
+    if (!showRegionLabels || !mapW) return []
+    // Place labels clear of named places — their beacons already print the
+    // same owner tag, so an overlap would just repeat it.
+    return regionLabels(territory, { showRHQ, avoid: places })
+  }, [showRegionLabels, mapW, cells, cols, rows, showRHQ, places]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Draw hatch fills + a single neutral outline per boundary edge whenever
   // the grid changes, or the container is resized. The canvas's native pixel
@@ -80,6 +97,7 @@ export default function PixelMap({
       const cell = (rect.width * dpr) / cols
       const w = Math.max(1, Math.round(cols * cell))
       const h = Math.max(1, Math.round(rows * cell))
+      setMapW(rect.width)
 
       // Redraw only what actually changed. A brush stroke touches a handful
       // of cells, but a full redraw costs a whole-grid pass plus several
@@ -374,6 +392,25 @@ export default function PixelMap({
           )}
           <canvas ref={canvasRef} width={cols * CELL} height={rows * CELL}
             style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', imageRendering: 'pixelated', pointerEvents: 'none' }} />
+          {/* One label per held region, sized to the room it has. Sits under
+              the place beacons so a named location always wins. */}
+          {regions.map((r) => {
+            const cellPx = mapW / cols
+            // Fit inside the region: `radius` is its distance from the nearest
+            // edge in cells, and the label is ~5 characters wide.
+            const size = clamp(r.radius * cellPx * 0.9, 7, 15)
+            return (
+              <div key={r.id} className="region-label"
+                style={{
+                  left: `${(r.x / cols) * 100}%`,
+                  top: `${(r.y / rows) * 100}%`,
+                  color: r.color,
+                  fontSize: `${size}px`,
+                }}>
+                {r.label}
+              </div>
+            )
+          })}
           {overlay}
           {places.map((p) => {
             // Occupier is derived from the CURRENT cells on every render, so
