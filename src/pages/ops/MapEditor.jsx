@@ -2,6 +2,7 @@ import { useState, useRef } from 'react'
 import { useData } from '../../context/DataContext'
 import { useAudit } from '../../hooks/useAudit'
 import { useConfirm } from '../../context/ConfirmContext'
+import { useToast } from '../../context/ToastContext'
 import { OpsHeader, useSaved } from './OperationsCentre'
 import PixelMap from '../../components/PixelMap'
 import { PAINT, RHQ_PAINT, colorOf } from '../../lib/territory'
@@ -51,19 +52,14 @@ export default function MapEditor() {
   const delPlace = (id) => setTerr((t) => ({ ...t, places: t.places.filter((p) => p.id !== id) }))
   const clearAll = () => setTerr((t) => ({ ...t, cells: '.'.repeat(cols * rows) }))
 
-  // Saving the map also records the change as a campaign-replay move (when a
-  // start state has been selected and any cells actually changed).
+  // Publishing the map and recording a replay frame are now SEPARATE, explicit
+  // actions (see CampaignPanel). Saving used to append a replay frame on every
+  // change, which meant routine touch-ups silently became replay steps; the
+  // Record Progress Frame button is now the only thing that adds a frame.
   const campaign = state.campaign
   const save = () => {
     updateSlice('territory', terr)
     audit('Updated map territory')
-    if (campaignValid(campaign, cols, rows)) {
-      const next = appendSave(campaign, terr.cells)
-      if (next) {
-        updateSlice('campaign', next)
-        audit('Recorded campaign move', `move ${next.timeline.length}`)
-      }
-    }
     flash()
   }
 
@@ -143,6 +139,7 @@ function CampaignPanel({ campaign, terr, territory }) {
   const { updateSlice } = useData()
   const audit = useAudit()
   const confirm = useConfirm()
+  const toast = useToast()
   const { cols, rows } = terr
   const active = campaignValid(campaign, cols, rows)
   const moves = active ? campaign.timeline.length : 0
@@ -152,18 +149,36 @@ function CampaignPanel({ campaign, terr, territory }) {
   const [exportErr, setExportErr] = useState('')
   const job = useRef(null)
 
+  // Both recording actions publish the current painting first, so the live map
+  // can never drift from the frame that was just recorded.
   const selectStart = async () => {
     const ok = await confirm({
-      title: 'Select start state',
+      title: active ? 'Re-record start state' : 'Select start state',
       message: active
-        ? `Set the map AS CURRENTLY PAINTED HERE as the new campaign start state? The existing replay history (${moves} recorded move${moves === 1 ? '' : 's'}) will be erased.`
-        : 'Set the map AS CURRENTLY PAINTED HERE as the campaign start state? Every save from now on becomes a step in the public replay animation.',
+        ? `Overwrite the campaign baseline with the map AS CURRENTLY PAINTED HERE? The ${moves} recorded progress frame${moves === 1 ? '' : 's'} will be erased and the replay restarts from this state.`
+        : 'Set the map AS CURRENTLY PAINTED HERE as the campaign start state? You can then record progress frames as the campaign advances.',
       danger: active,
-      confirmLabel: 'Select start state',
+      confirmLabel: active ? 'Re-record start state' : 'Select start state',
     })
     if (!ok) return
+    updateSlice('territory', terr)
     updateSlice('campaign', { start: { cells: terr.cells, ts: Date.now() }, timeline: [] })
-    audit(active ? 'Reset campaign start state' : 'Selected campaign start state')
+    audit(active ? 'Re-recorded campaign start state' : 'Selected campaign start state')
+    toast.push(active ? 'Start state re-recorded — progress frames cleared.' : 'Start state recorded.')
+  }
+
+  // Append the current painting to the replay timeline. Leaves the start
+  // state untouched — this is the "capture an incremental change" action.
+  const recordProgress = () => {
+    const next = appendSave(campaign, terr.cells)
+    if (!next) {
+      toast.push('No changes since the last frame — nothing recorded.', { type: 'error' })
+      return
+    }
+    updateSlice('territory', terr)
+    updateSlice('campaign', next)
+    audit('Recorded campaign progress frame', `frame ${next.timeline.length}`)
+    toast.push(`Progress frame ${next.timeline.length} recorded.`)
   }
 
   const clearHistory = async () => {
@@ -203,17 +218,42 @@ function CampaignPanel({ campaign, terr, territory }) {
         <strong className="head" style={{ fontSize: 14 }}>Campaign replay</strong>
         {active && (
           <span className="mono dim" style={{ fontSize: 10 }}>
-            START {new Date(campaign.start.ts).toLocaleDateString()} · {moves} MOVE{moves === 1 ? '' : 'S'} RECORDED
+            START {new Date(campaign.start.ts).toLocaleDateString()} · {moves} PROGRESS FRAME{moves === 1 ? '' : 'S'} RECORDED
           </span>
         )}
       </div>
       <div className="mono dim" style={{ fontSize: 11 }}>
         {active
-          ? 'Replay is live: every "Save map" that changes cells records a move, and visitors watch the conquest animate from the start state when the map loads.'
-          : 'No start state selected. Pick one to start recording campaign history — each later save becomes a step in an animated conquest replay shown to visitors.'}
+          ? 'Replay is live — visitors watch the conquest animate from the start state when the map loads. "Save map" only publishes your painting; use Record Progress Frame below to add a step to that animation.'
+          : 'No start state selected. Pick one to start recording campaign history — you can then record a progress frame each time the campaign advances.'}
       </div>
+      {active && (
+        <div className="mono dim" style={{ fontSize: 11, lineHeight: 1.7, borderLeft: '2px solid var(--line)', paddingLeft: 10 }}>
+          <span className="accent">Record Progress Frame</span> — adds the current map as the next step in the replay. Start state untouched. Use this as the campaign advances.<br />
+          <span className="hostile">Re-record Start State</span> — replaces the baseline with the current map and <strong>erases all progress frames</strong>. Only for redefining where the campaign begins.
+        </div>
+      )}
       <div className="row wrap center" style={{ gap: 8 }}>
-        <button className="ghost" onClick={selectStart}>{active ? 'Re-select start state' : 'Select Start State'}</button>
+        {active ? (
+          <>
+            <button
+              className="primary"
+              onClick={recordProgress}
+              title="Append the current map to the replay timeline as the next step. Does not change the start state."
+            >
+              + Record Progress Frame
+            </button>
+            <button
+              className="danger ghost"
+              onClick={selectStart}
+              title="Overwrite the campaign baseline with the current map. Erases every recorded progress frame."
+            >
+              ⟲ Re-record Start State
+            </button>
+          </>
+        ) : (
+          <button className="ghost" onClick={selectStart} title="Set the current map as the campaign baseline (frame 0).">Select Start State</button>
+        )}
         {active && <button className="danger ghost" onClick={clearHistory}>Clear replay history</button>}
         {active && !exporting && (
           <button

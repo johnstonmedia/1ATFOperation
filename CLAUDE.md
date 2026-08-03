@@ -161,9 +161,22 @@ assuming a page exists).
   ([MapEditor.jsx](src/pages/ops/MapEditor.jsx)) — pick a colour swatch (solid
   or light variant), paint with a sized brush, add/drag/rename place labels,
   toggle RHQ visibility. There is no code-level territory editing path.
-- **Campaign replay** (v2.2): once RHQ presses **Select Start State** in the
-  Map: Territory editor's "Campaign replay" panel, every later "Save map"
-  that changes cells appends a diff move to the `campaign` slice
+- **Place beacons / occupancy**: `territory.places` entries are the map's
+  named "zones". [Beacon.jsx](src/components/Beacon.jsx) (the ping-ring
+  marker, extracted out of PixelMap) renders each one, coloured by the
+  **majority owner of the surrounding cells** (`occupierAt`/`beaconStateFor`
+  in territory.js) so occupancy is legible statically, not just during the
+  conquest animation. A place flagged `hostile` (the editor's "Meridian
+  stronghold" tick) that sits on 1ATF-held ground flips to the assure-blue
+  **SCU** recaptured state (`ASSURE_BLUE` — one constant restyles them all).
+  All derived at render time, so it tracks replays frame-by-frame with no
+  reload.
+- **Campaign replay** (v2.2): RHQ presses **Select Start State** in the
+  Map: Territory editor's "Campaign replay" panel, then explicitly presses
+  **Record Progress Frame** to append each diff move to the `campaign` slice
+  (**"Save map" does NOT record a frame** — that was the pre-2026-07-30
+  behaviour); **Re-record Start State** overwrites the baseline and clears
+  every frame
   ([src/lib/campaign.js](src/lib/campaign.js) — run-length diffs, oldest
   moves auto-fold into the start state near Firestore's doc-size cap). The
   Home map then renders through

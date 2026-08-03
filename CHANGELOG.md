@@ -17,6 +17,59 @@ keep entries short and focused on what a new collaborator needs to know.
 
 ---
 
+## 2026-07-30 (3) — Explicit start/progress recording + persistent occupier beacons
+### 1. Two-action replay recording ([MapEditor.jsx](src/pages/ops/MapEditor.jsx))
+- **Behaviour change**: "Save map" no longer auto-appends a replay frame.
+  Previously every save that changed cells silently became a replay step, so
+  routine touch-ups polluted the timeline; recording is now deliberate.
+- Before a start state exists: one **Select Start State** button (as before).
+  Once it exists, two clearly-separated actions appear (both gated on the
+  start state, each with an explanatory tooltip + an inline legend):
+  - **+ Record Progress Frame** (primary) — appends the current map to
+    `campaign.timeline` via the existing `appendSave()`; start state
+    untouched. Refuses a no-op with a toast rather than silently doing
+    nothing.
+  - **⟲ Re-record Start State** (danger) — overwrites `campaign.start` and
+    **clears all progress frames**; confirm dialog states the frame count.
+- Both actions publish the current painting (`updateSlice('territory')`)
+  before recording, so the live map can never drift from the frame just
+  recorded — verified by reconstructing the timeline and comparing.
+- Frames stay ordered and flow into the existing replay/export unchanged
+  (same `appendSave`/`buildFrames` path). Panel now counts "PROGRESS FRAMES".
+
+### 2. Persistent occupier beacons ([Beacon.jsx](src/components/Beacon.jsx))
+- The Marrangaroo/Singleton marker was **inline JSX inside PixelMap**, not a
+  component — extracted verbatim into `<Beacon>` and reused (no rebuild).
+  New props: `color`, `pulse`, `label`, `tag`, `tagColor`, `variant`
+  ('plain' | 'boxed').
+- There are no zone/region entities — territory is a flat cell grid — so a
+  "zone" is a `territory.places` entry, and its occupier is the **majority
+  owner of the cells around it** (`occupierAt()` in territory.js, radius 3;
+  sampled rather than read from the single cell under the label, which is
+  often on a boundary/unpainted). Occupier is now shown statically at all
+  times, not just mid-animation, in that faction's existing colour.
+- **Recaptured strongholds**: `beaconStateFor()` returns the assure-blue
+  `SCU` state when a place flagged as a Meridian stronghold (`place.hostile`,
+  the editor's existing "Meridian stronghold" tick) sits on ground held by
+  any 1ATF company. Blue = `ASSURE_BLUE` in territory.js (**one constant to
+  restyle every recaptured stronghold** — value chosen to be distinct from
+  Alpha's blue; change it if the unit has an exact brand blue). The SCU tag
+  uses the boxed variant (glowing border, white text) so it reads
+  differently from an ordinary occupier tag.
+- Reactive by derivation: occupancy is computed from the cells on every
+  render, so it updates with no reload — verified flipping MERIDIAN → SCU
+  mid-replay (the replay feeds PixelMap each committed frame).
+- Both tag variants sit on a dark chip; without it, tags were unreadable
+  over the hatch fill.
+- **Verified**: 24 headless checks (gating, save-doesn't-record, frame
+  append/order, start-state untouched, no-op refusal, live-map==latest-frame,
+  re-record clears, static occupier tags, company colour, SCU blue + boxed
+  tag, mid-replay flip). Brush/zoom/nav/replay suites re-run green.
+- ⚠️ Note for RHQ: in the current data **none** of the three places are
+  flagged as strongholds, so none show the pulsing/recapture treatment until
+  the "Meridian stronghold" box is ticked for Marrangaroo/Singleton in
+  Map: Territory → Place names.
+
 ## 2026-07-30 (2) — Live copy auto-reworded: "hostile" → "threat"
 The seed defaults were reworded on 2026-07-29, but narrative text already
 saved to Firestore still carried the old word (e.g. `MERIDIAN // HOSTILE`),

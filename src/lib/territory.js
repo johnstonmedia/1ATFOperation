@@ -46,6 +46,78 @@ export function lighten(hex, amt = 0.5) {
 
 export const isRHQCode = (code) => !!code && code.toUpperCase() === 'R'
 
+/* ------------------------------ occupancy ------------------------------ */
+// Who holds a given point on the map. Used by the persistent occupier
+// beacons on place labels (see components/Beacon.jsx) — the map itself is a
+// flat cell grid with no zone entities, so a "zone" here is the named place
+// and its occupier is whoever holds the ground around it.
+
+// Colour a stronghold beacon switches to once SCU has retaken it —
+// deliberately NOT one of the six company accents, so a recaptured
+// stronghold reads as a unit-wide win at a glance. Single source of truth:
+// change this one value to restyle every recaptured stronghold.
+export const ASSURE_BLUE = '#1e9bff'
+export const SCU_LABEL = 'SCU'
+
+export const isMeridianCode = (code) => !!code && code.toUpperCase() === 'M'
+// Everything that isn't Meridian or empty belongs to SCU / 1ATF.
+export const isSCUCode = (code) => !!code && code !== '.' && !isMeridianCode(code)
+
+// Display name for an owner code ('a' -> 'Alpha', 'M' -> 'Meridian').
+export function labelOf(code) {
+  if (!code || code === '.') return null
+  const up = code.toUpperCase()
+  return [...PAINT, RHQ_PAINT].find((p) => p.code === up)?.label || null
+}
+
+// Majority owner of the cells around (x, y). Sampled over a small radius
+// rather than read from the single cell under the label, because a place
+// marker often sits on a boundary or an unpainted pixel while the ground
+// around it is clearly held. Returns the uppercase base code, or null when
+// the area is mostly unclaimed. `showRHQ: false` hides RHQ holdings, matching
+// how the territory layer itself renders them.
+export function occupierAt(territory, x, y, { radius = 3, showRHQ = true } = {}) {
+  const { cols, rows, cells } = territory
+  if (!cells) return null
+  const tally = new Map()
+  for (let dy = -radius; dy <= radius; dy++) {
+    for (let dx = -radius; dx <= radius; dx++) {
+      const nx = Math.round(x) + dx
+      const ny = Math.round(y) + dy
+      if (nx < 0 || ny < 0 || nx >= cols || ny >= rows) continue
+      const ch = cells[ny * cols + nx]
+      if (!ch || ch === '.') continue
+      const up = ch.toUpperCase()
+      if (isRHQCode(up) && !showRHQ) continue
+      tally.set(up, (tally.get(up) || 0) + 1)
+    }
+  }
+  let best = null, bestN = 0
+  for (const [code, n] of tally) if (n > bestN) { best = code; bestN = n }
+  return best
+}
+
+// Everything the UI needs to draw one place's occupier beacon.
+// `stronghold` marks a Meridian stronghold (place.hostile) — once SCU holds
+// the ground under one, it flips to the assure-blue "SCU" recaptured state.
+export function beaconStateFor(territory, place, { showRHQ = true } = {}) {
+  const owner = occupierAt(territory, place.x, place.y, { showRHQ })
+  const stronghold = !!place.hostile
+  const recaptured = stronghold && isSCUCode(owner)
+  if (recaptured) {
+    return { owner, stronghold, recaptured: true, color: ASSURE_BLUE, tag: SCU_LABEL, pulse: true }
+  }
+  return {
+    owner,
+    stronghold,
+    recaptured: false,
+    // Unheld stronghold keeps the threat-red marker it has always had.
+    color: owner ? colorOf(owner) : (stronghold ? MERIDIAN_COLOR : null),
+    tag: labelOf(owner),
+    pulse: stronghold,
+  }
+}
+
 // Hex colour for a cell code (lowercase = lighter, loosely-held variant).
 export function colorOf(code) {
   if (!code || code === '.') return null

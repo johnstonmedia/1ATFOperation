@@ -1,6 +1,7 @@
 import { useRef, useEffect, useState, useCallback } from 'react'
-import { MAP_IMAGE, MAP_ASPECT } from '../lib/territory'
+import { MAP_IMAGE, MAP_ASPECT, beaconStateFor } from '../lib/territory'
 import { renderTerritoryLayer, IMAGE_FILTER } from '../lib/terrainRender'
+import Beacon from './Beacon'
 import { useOceanOverlayUrl } from '../lib/oceanMask'
 
 const CELL = 8 // fallback canvas pixels per grid cell, used only for the very
@@ -339,25 +340,22 @@ export default function PixelMap({
             style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', imageRendering: 'pixelated', pointerEvents: 'none' }} />
           {overlay}
           {places.map((p) => {
-            const hostile = !!p.hostile
+            // Occupier is derived from the CURRENT cells on every render, so
+            // the beacon tracks conquests live — including frame-by-frame
+            // during a campaign replay, which feeds PixelMap the committed
+            // frame's cells.
+            const b = beaconStateFor(territory, p, { showRHQ })
             return (
               <div key={p.id}
                 onPointerDown={onMovePlace ? (e) => { e.stopPropagation(); dragging.current = p.id } : undefined}
                 style={{ position: 'absolute', left: `${(p.x / cols) * 100}%`, top: `${(p.y / rows) * 100}%`, transform: 'translate(-50%,-50%)', display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap', pointerEvents: onMovePlace ? 'auto' : 'none', cursor: onMovePlace ? 'move' : 'default' }}>
-                {hostile ? (
-                  <span style={{ position: 'relative', width: 16, height: 16, flex: '0 0 auto' }}>
-                    <span className="ping-ring" />
-                    <span style={{ position: 'absolute', inset: 3, borderRadius: '50%', background: 'var(--hostile)', boxShadow: '0 0 10px var(--hostile), 0 0 18px var(--hostile)' }} />
-                  </span>
-                ) : (
-                  <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#dfe6f2', boxShadow: '0 0 5px #dfe6f2', display: 'inline-block' }} />
-                )}
-                <span style={{
-                  color: '#fff', fontWeight: 700, font: "700 11px 'JetBrains Mono',monospace",
-                  ...(hostile
-                    ? { background: 'rgba(6,10,18,0.8)', padding: '2px 6px', borderRadius: 3, border: '1px solid var(--hostile)' }
-                    : { color: '#d3dced', fontWeight: 600, textShadow: '0 1px 3px #000' }),
-                }}>{p.name}</span>
+                <Beacon
+                  color={b.color}
+                  pulse={b.pulse}
+                  label={p.name}
+                  tag={b.tag}
+                  variant={b.recaptured ? 'boxed' : 'plain'}
+                />
               </div>
             )
           })}
