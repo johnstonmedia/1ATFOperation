@@ -107,6 +107,7 @@ export function occupierAt(territory, x, y, { radius = 3, showRHQ = true } = {})
   return best
 }
 
+
 // Everything the UI needs to draw one place's occupier beacon.
 // `stronghold` marks a Meridian stronghold (place.hostile) — once SCU holds
 // the ground under one, it flips to the assure-blue "1ATF" recaptured state

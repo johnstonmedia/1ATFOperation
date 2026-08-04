@@ -244,8 +244,12 @@ In rough priority order:
 - **`leaflet` / `react-leaflet` are unused dependencies.** The map is a custom
   canvas grid. Only leftover CSS in [index.css](src/index.css) references them.
   Removing the deps would cut the bundle meaningfully.
-- **No test suite at all.** No runner, no CI checks beyond the Pages build.
-  The rules emulator suite (§1) is the highest-value thing to add first.
+- **No test suite at all.** No runner, no test dependencies, no CI checks
+  beyond the Pages build. Note that CHANGELOG entries reference test "suites"
+  and check counts (e.g. "167 checks total") — **none of those were ever
+  committed**; they were throwaway harnesses run in-session and deleted. Don't
+  go looking for them. The rules emulator suite (§1) is the highest-value
+  thing to add first, and the first one that should actually be committed.
 - **Bundle is ~1.38 MB** (395 KB gzipped) in one chunk, no code splitting.
   Firebase is statically imported in `config.js` while being dynamically
   imported elsewhere, which defeats the splitting the dynamic imports intend —
@@ -253,7 +257,20 @@ In rough priority order:
 
 ---
 
-## 7. Deploy — the trap
+## 7. Parallel-session hazard (this actually happened)
+
+On 2026-08-04 two sessions built **the same feature independently** — territory
+ownership labels — and the second one only found out when `git push` was
+rejected. The merge kept one implementation and discarded the other's on-screen
+layer, plus a chunk of CSS and a `territory.js` function.
+
+Before starting anything substantial: `git fetch && git log --oneline HEAD..origin/main`.
+Push early rather than accumulating a large local branch. If a push is
+rejected, **read the remote commit before resolving** — the one in this case
+also carried an unrelated bug fix (modal stacking contexts) that a force-push
+would have silently destroyed. Never force-push this repo.
+
+## 8. Deploy — the trap
 
 - Deploy branch is **`main`**; every push triggers the Pages build.
 - ⚠️ [.github/workflows/deploy.yml](.github/workflows/deploy.yml) uses

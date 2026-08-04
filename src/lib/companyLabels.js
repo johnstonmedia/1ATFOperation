@@ -38,10 +38,20 @@ export function legendCodes({ showRHQ = true } = {}) {
   return CODE_ORDER.filter((c) => showRHQ || !isRHQCode(c))
 }
 
+// How close (in cells) a label may sit to a named place before it's pushed
+// elsewhere. A place beacon already prints the owner tag next to its name, so
+// a company label on top of one just says the same thing twice.
+const AVOID_RADIUS = 10
+
 // Pole of inaccessibility for a membership mask, restricted to the mask's
 // largest connected component. Returns { x, y, size } in cell coordinates
 // (centre of the winning cell), or null when the mask is empty.
-function poleOfLargestComponent(mask, cols, rows) {
+//
+// `avoid` is a list of {x, y} places to keep clear of: the deepest cell that
+// isn't near one wins, and only if EVERY interior cell is near a place does
+// the label fall back to the plain deepest cell — better a slight overlap than
+// silently dropping a company's name off the map.
+function poleOfLargestComponent(mask, cols, rows, avoid = []) {
   const n = cols * rows
   const comp = new Int32Array(n).fill(-1)
   let bestComp = -1
@@ -84,9 +94,13 @@ function poleOfLargestComponent(mask, cols, rows) {
   }
   const cx = sumX / bestSize, cy = sumY / bestSize
 
-  let best = queue[0]
-  let bestDepth = 0
-  let bestDist = Infinity
+  const nearPlace = (x, y) =>
+    avoid.some((p) => Math.hypot((p.x ?? Infinity) - x, (p.y ?? Infinity) - y) < AVOID_RADIUS)
+
+  // Two candidates tracked at once: the best cell clear of any place, and the
+  // best cell overall as a fallback for a holding that's entirely covered.
+  let best = -1, bestDepth = -1, bestDist = Infinity
+  let anyBest = queue[0], anyDepth = -1, anyDist = Infinity
   while (head < tail) {
     const i = queue[head++]
     const d = depth[i]
@@ -94,7 +108,10 @@ function poleOfLargestComponent(mask, cols, rows) {
     // Deepest wins; ties break toward the component's centroid so the label
     // doesn't jitter between two equally-deep cells across frames.
     const dist = (x - cx) ** 2 + (y - cy) ** 2
-    if (d > bestDepth || (d === bestDepth && dist < bestDist)) {
+    if (d > anyDepth || (d === anyDepth && dist < anyDist)) {
+      anyBest = i; anyDepth = d; anyDist = dist
+    }
+    if ((d > bestDepth || (d === bestDepth && dist < bestDist)) && !nearPlace(x, y)) {
       best = i; bestDepth = d; bestDist = dist
     }
     const push = (j) => { if (comp[j] === bestComp && depth[j] < 0) { depth[j] = d + 1; queue[tail++] = j } }
@@ -104,12 +121,14 @@ function poleOfLargestComponent(mask, cols, rows) {
     if (y < rows - 1) push(i + cols)
   }
 
-  return { x: (best % cols) + 0.5, y: ((best / cols) | 0) + 0.5, size: bestSize }
+  const win = best >= 0 ? best : anyBest
+  return { x: (win % cols) + 0.5, y: ((win / cols) | 0) + 0.5, size: bestSize }
 }
 
 // One name label per owner present on the grid.
 // Returns [{ code, label, color, x, y, size }] in cell coordinates.
-export function companyLabelPoints(cells, cols, rows, { showRHQ = true, minCells = MIN_LABEL_CELLS } = {}) {
+// `avoid` is `territory.places` — see poleOfLargestComponent.
+export function companyLabelPoints(cells, cols, rows, { showRHQ = true, minCells = MIN_LABEL_CELLS, avoid = [] } = {}) {
   if (!cells || cells.length !== cols * rows) return []
   const n = cells.length
 
@@ -130,7 +149,7 @@ export function companyLabelPoints(cells, cols, rows, { showRHQ = true, minCells
   for (const code of CODE_ORDER) {
     const mask = masks.get(code)
     if (!mask) continue
-    const pole = poleOfLargestComponent(mask, cols, rows)
+    const pole = poleOfLargestComponent(mask, cols, rows, avoid)
     if (!pole || pole.size < minCells) continue
     out.push({ code, label: coyLabelOf(code), color: colorOf(code), x: pole.x, y: pole.y, size: pole.size })
   }

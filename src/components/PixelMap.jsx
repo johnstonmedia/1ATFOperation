@@ -65,9 +65,12 @@ export default function PixelMap({
   // committed replay frame exactly like the beacons do. Memoised on the cell
   // string: the derivation is a few passes over the grid, which is cheap but
   // not free enough to redo on every pan/zoom re-render.
+  // `avoid` keeps a company name off a named place: that place's beacon
+  // already prints the same owner tag, so overlapping them just says it twice.
   const companyLabels = useMemo(
-    () => (showCompanyLabels ? companyLabelPoints(cells, cols, rows, { showRHQ }) : []),
-    [showCompanyLabels, cells, cols, rows, showRHQ],
+    () => (showCompanyLabels ? companyLabelPoints(cells, cols, rows, { showRHQ, avoid: places }) : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [showCompanyLabels, cells, cols, rows, showRHQ, places],
   )
 
   const scale = view.scale
@@ -90,6 +93,7 @@ export default function PixelMap({
       const cell = (rect.width * dpr) / cols
       const w = Math.max(1, Math.round(cols * cell))
       const h = Math.max(1, Math.round(rows * cell))
+      setMapW(rect.width)
 
       // Redraw only what actually changed. A brush stroke touches a handful
       // of cells, but a full redraw costs a whole-grid pass plus several

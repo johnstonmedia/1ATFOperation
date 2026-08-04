@@ -271,7 +271,7 @@ export function exportCampaignReplay({ territory, frames: campaignFrames, onProg
     const codes = legendCodes({ showRHQ })
     let derived = { cells: null, labels: [] }
     const labelsFor = (cells) => {
-      if (derived.cells !== cells) derived = { cells, labels: companyLabelPoints(cells, cols, rows, { showRHQ }) }
+      if (derived.cells !== cells) derived = { cells, labels: companyLabelPoints(cells, cols, rows, { showRHQ, avoid: territory.places }) }
       return derived.labels
     }
 
@@ -467,7 +467,7 @@ export async function exportProgressImage({ territory, frames: campaignFrames, d
   ctx.drawImage(renderBaseMap(img, W, H), 0, 0)
   ctx.drawImage(renderHatch(finalCells, cols, rows, showRHQ, W, H), 0, 0)
   if (plan.clusters.length) renderWaveLayer(ctx, plan, 1, { cols, rows, w: W, h: H })
-  drawCompanyLabels(ctx, companyLabelPoints(finalCells, cols, rows, { showRHQ }), { cols, rows, w: W, h: H, scale: SCALE })
+  drawCompanyLabels(ctx, companyLabelPoints(finalCells, cols, rows, { showRHQ, avoid: territory.places }), { cols, rows, w: W, h: H, scale: SCALE })
   // Who gained ground this week, named once each, drawn a touch larger than
   // the standing company labels so the week's story reads first.
   drawCompanyLabels(ctx, mergedGainLabels(plan, cols, rows), { cols, rows, w: W, h: H, scale: SCALE * 1.25 })

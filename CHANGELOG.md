@@ -393,6 +393,47 @@ except visible accumulation — hence progress being the centrepiece.
   should sanity-check the map zoom buttons and beacon alignment on their
   build.
 
+## 2026-08-03 — Territory ownership labels + modal layering fix
+### Every held region names its holder
+- `regionLabels()` in [territory.js](src/lib/territory.js) flood-fills the grid
+  into contiguous same-owner regions and returns a label anchor for each, so
+  the map reads "A-COY" / "MERIDIAN" directly on the ground instead of making
+  viewers match colours to the key.
+- Anchor is the region's most **interior** cell (multi-source BFS inward from
+  its edge), not the centroid — a centroid frequently lands outside a concave
+  or crescent holding, which is exactly what contested ground looks like.
+- Text size scales with the room available (`radius` × cell size, clamped
+  7–15px) and, because the labels live inside the zoom/pan stage, they scale
+  with the map when zoomed. Regions under 40 cells get no label — a label
+  wider than the ground it names is worse than none.
+- Labels avoid named places: those beacons already print the same owner tag,
+  so `avoid`/`avoidRadius` moves the region label to the best interior spot
+  clear of them, and skips it entirely if the whole region sits under one.
+- On by default for read-only maps, off in the editor (`regionLabels` prop) —
+  they'd sit under the brush and recomputing regions per paint event is work
+  the editor doesn't need.
+
+### Fixed: Help / Access modals appeared *behind* the map
+- Reported by the user and reproduced: the Help & Support and Access modals
+  rendered under the map and other content.
+- Cause: they mount from inside the nav (`.app-rail`, `position: sticky`, and
+  the mobile drawer, `position: fixed`). **Both create a stacking context**, so
+  a `position: fixed` child is confined to that layer no matter how high its
+  z-index — the rail has no z-index and comes before `.app-main` in DOM order,
+  so page content painted over the modal.
+- Fix: `SupportModal`, `LoginModal` and the confirm dialog now render through
+  `createPortal(..., document.body)`, escaping any ancestor stacking context.
+  z-index values unchanged (900 / 950 / 1500) and now actually meaningful.
+- Verified by hit-testing `document.elementFromPoint` at each modal's centre —
+  the modal is the topmost element, and is confirmed to be mounted outside the
+  rail/drawer.
+- Verified overall: 11 checks for these two changes (labels present, correct
+  size, sitting on their own side's ground, zooming with the map, sliver
+  skipped, both modals topmost + portalled), and all nine other suites re-run
+  green (167 checks total).
+
+---
+
 ## 2026-08-02 — Briefings narrative updated to the supplied text
 - `DEFAULT_BRIEFINGS` in [seed.js](src/firebase/seed.js) replaced with the
   unit's supplied narrative, verbatim: 01 Situation (3 paras), 02 The Unit,

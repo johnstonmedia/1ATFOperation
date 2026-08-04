@@ -237,6 +237,11 @@ assuming a page exists).
   ([MapEditor.jsx](src/pages/ops/MapEditor.jsx)) — pick a colour swatch (solid
   or light variant), paint with a sized brush, add/drag/rename place labels,
   toggle RHQ visibility. There is no code-level territory editing path.
+- ⚠️ **Modals must be portalled**: `.app-rail` (sticky) and the mobile drawer
+  (fixed) create stacking contexts, so a `position: fixed` modal mounted
+  inside the nav gets trapped under page content whatever its z-index.
+  LoginModal / ConfirmDialog render via `createPortal(..., document.body)` —
+  keep it that way for any new overlay.
 - **Place beacons / occupancy**: `territory.places` entries are the map's
   named "zones", labelled unit-style ("A-COY" via `coyLabelOf()`, shared with
   the replay's conquest flashes). [Beacon.jsx](src/components/Beacon.jsx) (the ping-ring
@@ -256,7 +261,12 @@ assuming a page exists).
   inaccessibility** (deepest cell by BFS inward from the component's
   boundary). Don't swap this for a mean-of-coordinates centroid: that lands
   outside concave / ring / split holdings, which is the normal case here.
-  Holdings under `MIN_LABEL_CELLS` get no name. Rendered as DOM (`.company-label`)
+  Holdings under `MIN_LABEL_CELLS` get no name, and the chosen cell is kept
+  clear of named places (`avoid`) — a place beacon already prints the same
+  owner tag beside its name, so an overlap just says it twice. **One label per
+  owner, not per region**, and a fixed type size: a 2026-08-03 branch labelled
+  every contiguous region and scaled the text to the room available; that was
+  deliberately not merged (too busy, and the resizing read as inconsistent). Rendered as DOM (`.company-label`)
   on screen and via `drawCompanyLabels()` on canvas for the exports.
   Shown on the public map, the Staff Centre map and both exports, and
   deliberately **off in the ops Map: Territory editor** (`showCompanyLabels`
