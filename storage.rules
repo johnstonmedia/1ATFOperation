@@ -1,0 +1,47 @@
+rules_version = '2';
+
+// Cloud Storage rules for the 1ATF portal.
+//
+// Storage is used for exactly ONE thing: briefing videos dragged into the
+// Operations Centre (src/lib/videoUpload.js). Every other asset — the unit
+// logo, the map art — is a repo file under public/. If that stops being true,
+// add a named prefix below rather than loosening the catch-all.
+//
+//  - briefings/*: world-readable (the Briefings tab has no login), written and
+//    deleted only by RHQ, capped at 512 MB and pinned to video content types.
+//  - everything else: denied.
+//
+// "RHQ" is read from the caller's own Firestore user profile, exactly as in
+// firestore.rules — one definition of who RHQ is, in Firestore, for both.
+//
+// ⚠️ Like firestore.rules, this file does nothing until it is PUBLISHED in the
+// Firebase Console (Storage → Rules), and Storage itself must be enabled for
+// the project first. Until then uploads fail with storage/unauthorized and the
+// drop zone tells the user to paste a link instead.
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isRHQ() {
+      return request.auth != null
+        && firestore.exists(/databases/(default)/documents/users/$(request.auth.uid))
+        && firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'RHQ';
+    }
+
+    // Keep in step with MAX_VIDEO_BYTES in src/lib/videoUpload.js.
+    function isVideoUnder512MB() {
+      return request.resource.size < 512 * 1024 * 1024
+        && request.resource.contentType.matches('video/.*');
+    }
+
+    match /briefings/{file} {
+      allow read: if true;
+      allow create, update: if isRHQ() && isVideoUnder512MB();
+      allow delete: if isRHQ();
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

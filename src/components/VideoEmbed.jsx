@@ -18,7 +18,16 @@ export function resolveVideo(url) {
     const id = u.pathname.split('/').filter(Boolean)[0]
     if (id) return { type: 'iframe', src: `https://player.vimeo.com/video/${id}` }
   }
-  if (/\.(mp4|webm|ogg)(\?.*)?$/i.test(u.pathname)) return { type: 'video', src: u.href }
+  // Videos uploaded through the Ops Centre drop zone. The filename (and so the
+  // extension) is inside the escaped object path, and a file may carry no
+  // extension at all, so match the host rather than the path.
+  if (host === 'firebasestorage.googleapis.com' || host === 'storage.googleapis.com') {
+    return { type: 'video', src: u.href }
+  }
+  // blob: URLs from a LOCAL MODE upload preview — new URL() keeps the whole
+  // object id in `pathname`, with no extension to test.
+  if (u.protocol === 'blob:') return { type: 'video', src: u.href }
+  if (/\.(mp4|webm|ogg|ogv|mov|m4v)(\?.*)?$/i.test(u.pathname)) return { type: 'video', src: u.href }
   return { type: 'link', src: u.href }
 }
 

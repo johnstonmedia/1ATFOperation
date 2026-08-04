@@ -81,7 +81,10 @@ routes — see [src/App.jsx](src/App.jsx):
   you have puzzles left). **Anonymous solve counts**
   ([src/lib/intelStats.js](src/lib/intelStats.js)) go to the `intelStats`
   collection — see "Data model" and the privacy notice.
-- `/briefings` **Briefings** — a video embed + free text, admin-edited.
+- `/briefings` **Briefings** — a video embed + free text, admin-edited. The
+  video is either an external link (YouTube/Vimeo/direct file) or a file
+  **dragged into the ops editor** and uploaded to Firebase Storage — see
+  "Briefing video upload" below.
 - `/privacy` **Privacy Notice** — small static member-facing privacy policy
   ([src/pages/Privacy.jsx](src/pages/Privacy.jsx)), linked from the footer in
   [Layout.jsx](src/components/Layout.jsx). Deliberately repo-versioned, not an
@@ -366,6 +369,34 @@ roster/support/`intelSubmissions` collections) via `updateSlice`/`replaceRoster`
 and most log an audit entry via `useAudit()`. **Approvals** is the RHQ side of
 the Company Commander workflow (see "Company Commander & intel approval" above).
 
+### Briefing video upload (Firebase Storage)
+The Briefings editor's video field is a **drag-and-drop zone**
+([VideoDropZone.jsx](src/components/VideoDropZone.jsx)) sitting above the
+link input — drag a file in, click to browse, or drop/paste a URL. Files upload
+to Firebase Storage via [src/lib/videoUpload.js](src/lib/videoUpload.js).
+
+- This is the **only** thing in the app that uses Storage; everything else
+  (logo, map art) is a repo file under `public/`. Don't broaden that without
+  adding a named prefix to [storage.rules](storage.rules).
+- Path `briefings/<timestamp>-<filename>`, 512 MB cap (`MAX_VIDEO_BYTES`,
+  mirrored in the rules — change both). Non-MP4/WebM warns but uploads.
+- **Keep the link field.** Uploads need Storage enabled + rules published, and
+  a YouTube link costs the unit no bandwidth — it's the right answer for
+  anything long, and the fallback when Storage isn't available.
+- `briefings.videoPath` records the object path for an uploaded video (empty
+  for a link). The editor deletes only uploads made **in the current editing
+  session** when they're replaced; the already-published object is left alone,
+  since the user may close the tab without saving.
+- ⚠️ **Two console actions, both still outstanding:** enable Storage for the
+  project, then publish `storage.rules` (Storage → Rules). Until then uploads
+  fail `storage/unauthorized`; the drop zone reports it and points at the link
+  field, so nothing else breaks. Note Storage now needs the **Blaze** plan on
+  projects created after Oct 2024.
+- `resolveVideo()` in [VideoEmbed.jsx](src/components/VideoEmbed.jsx) matches
+  Storage download URLs by **host**, not by file extension — the filename is
+  inside the escaped `/o/...` path and may have no extension. Don't "simplify"
+  that back to a pathname regex.
+
 ### Users / spreadsheet import
 Captures only **name, ID number, company, email** (fuzzy `COLUMN_HINTS` in
 `src/pages/ops/UsersAdmin.jsx`). Company accepts a letter or phonetic name.
@@ -403,7 +434,12 @@ styles — there is no CSS-in-JS or component library.
    all and every anonymous decrypt count is silently rejected (by design the
    write failure is swallowed, so the puzzle still works — the counts just
    stay at zero).
-3. Storage is **not used** (logo and map image are repo files under `public/`).
+3. Storage → **enable the default bucket**, then publish
+   [storage.rules](storage.rules) (Storage → Rules). ⚠️ **STILL PENDING (user
+   action)** — needed only for the Briefings drag-and-drop video upload; until
+   it's done, uploads fail and RHQ must paste a link as before. Everything
+   else (logo, map image) is a repo file under `public/` and needs no bucket.
+   Storage requires the **Blaze** plan on projects created after Oct 2024.
 
 **Rules coverage** — every collection/doc the app touches has a block:
 `content/*` (all `SINGLE_SLICES` — adding a slice needs no rules change),
