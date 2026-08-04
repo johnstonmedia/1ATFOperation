@@ -1,4 +1,4 @@
-import { colorOf, isRHQCode } from './territory'
+import { colorOf, isRHQCode, coyLabelOf } from './territory'
 
 // Shared territory-layer renderer. PixelMap's on-screen canvas and the
 // campaign-replay video exporter both draw the same hatch + boundary look
@@ -174,6 +174,123 @@ export function renderTerritoryLayer(ctx, { cells, cols, rows, showRHQ, w, h, re
   ctx.stroke()
 
   if (region) ctx.restore()
+}
+
+/* ----------------------------- legend swatch ----------------------------- */
+
+// One legend swatch: the SAME cached hatch pattern the territory layer fills
+// with, over the map's own background navy, so the key reads as a literal
+// off-cut of the map rather than a flat colour chip that only approximates
+// it. Deliberately drawn at the swatch's own size (the pattern is generated
+// per canvas size) instead of scaling a larger one down — scaling would
+// alias the fine diagonals into a muddy wash, which is the whole reason the
+// map itself sizes its buffer to its display resolution.
+const SWATCH_BG = '#121a28'
+
+export function renderHatchSwatch(ctx, code, w, h) {
+  ctx.clearRect(0, 0, w, h)
+  ctx.fillStyle = SWATCH_BG
+  ctx.fillRect(0, 0, w, h)
+  const hatch = hatchFor(code, w, h)
+  if (hatch) ctx.drawImage(hatch, 0, 0)
+  ctx.globalAlpha = 0.55
+  ctx.strokeStyle = colorOf(code) || '#8fa2bd'
+  ctx.lineWidth = 1
+  ctx.strokeRect(0.5, 0.5, w - 1, h - 1)
+  ctx.globalAlpha = 1
+}
+
+// Canvas legend strip for the exports (the on-screen one is a React component
+// over the same renderHatchSwatch, so page and file always agree).
+// `codes` is the owner codes to list, in the order they should appear — see
+// legendCodes(), which is the fixed full roster, not whoever holds ground.
+//
+// That full roster is wider than the frame at full size, so the strip shrinks
+// to fit rather than running off the edge — the on-screen version just wraps,
+// but a single row reads better over map art.
+export function drawLegend(ctx, codes, { w, h, scale = 1, bottom = false }) {
+  if (!codes.length) return
+  const entries = codes.map((c) => ({ code: c, text: coyLabelOf(c) || c }))
+  const MAX_W = w * 0.94
+
+  const measure = (s) => {
+    const m = { sw: 22 * s, sh: 12 * s, gap: 7 * s, itemGap: 16 * s, pad: 9 * s }
+    ctx.font = `700 ${11 * s}px "JetBrains Mono", monospace`
+    m.widths = entries.map((e) => m.sw + m.gap + ctx.measureText(e.text).width)
+    m.boxW = m.widths.reduce((a, b) => a + b, 0) + m.itemGap * (entries.length - 1) + m.pad * 2
+    m.boxH = m.sh + m.pad * 2
+    return m
+  }
+
+  let s = scale
+  let m = measure(s)
+  if (m.boxW > MAX_W) {
+    // One proportional step gets very close (text width scales linearly with
+    // the font size); a couple of refinements settle any rounding.
+    for (let i = 0; i < 4 && m.boxW > MAX_W; i++) {
+      s *= MAX_W / m.boxW
+      m = measure(s)
+    }
+  }
+
+  const { sw, sh, gap, itemGap, pad, widths, boxW, boxH } = m
+  ctx.font = `700 ${11 * s}px "JetBrains Mono", monospace`
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'middle'
+  const bx = 14 * scale
+  const by = bottom ? h - boxH - 14 * scale : 14 * scale
+
+  ctx.fillStyle = 'rgba(6,10,18,0.82)'
+  ctx.strokeStyle = 'rgba(54,224,192,0.5)'
+  ctx.lineWidth = 1.5 * scale
+  ctx.beginPath()
+  ctx.rect(bx, by, boxW, boxH)
+  ctx.fill()
+  ctx.stroke()
+
+  // Swatches render onto a scratch canvas at their own pixel size, then get
+  // blitted 1:1 — same reason as above, no resampling of the hatch.
+  const chip = document.createElement('canvas')
+  chip.width = Math.max(1, Math.round(sw))
+  chip.height = Math.max(1, Math.round(sh))
+  const cctx = chip.getContext('2d')
+
+  let x = bx + pad
+  const cy = by + boxH / 2
+  entries.forEach((e, i) => {
+    renderHatchSwatch(cctx, e.code, chip.width, chip.height)
+    ctx.drawImage(chip, Math.round(x), Math.round(cy - chip.height / 2))
+    ctx.fillStyle = '#d3dced'
+    ctx.fillText(e.text, x + sw + gap, cy)
+    x += widths[i] + itemGap
+  })
+}
+
+/* --------------------------- company name labels -------------------------- */
+
+// Draw the derived per-company name labels (see lib/companyLabels.js) onto a
+// canvas, in the same Orbitron/outlined style the conquest flashes use — a
+// name that flashes during a capture and the name that then sits permanently
+// on that ground should look like the same thing.
+export function drawCompanyLabels(ctx, points, { cols, rows, w, h, scale = 1, alpha = 1 }) {
+  if (!points?.length || alpha <= 0) return
+  ctx.save()
+  ctx.globalAlpha = alpha
+  ctx.font = `700 ${13 * scale}px Orbitron, "JetBrains Mono", monospace`
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.lineJoin = 'round'
+  ctx.lineWidth = 4 * scale
+  for (const p of points) {
+    if (!p.label) continue
+    const px = (p.x / cols) * w
+    const py = (p.y / rows) * h
+    ctx.strokeStyle = 'rgba(6,10,18,0.88)'
+    ctx.strokeText(p.label, px, py)
+    ctx.fillStyle = p.color || '#fff'
+    ctx.fillText(p.label, px, py)
+  }
+  ctx.restore()
 }
 
 // Draw one animation instant of a transition's conquest wave onto `ctx`

@@ -1,6 +1,7 @@
-import { useRef, useEffect, useState, useCallback } from 'react'
+import { useRef, useEffect, useState, useCallback, useMemo } from 'react'
 import { MAP_IMAGE, MAP_ASPECT, beaconStateFor } from '../lib/territory'
 import { renderTerritoryLayer, IMAGE_FILTER } from '../lib/terrainRender'
+import { companyLabelPoints } from '../lib/companyLabels'
 import Beacon from './Beacon'
 import { useOceanOverlayUrl } from '../lib/oceanMask'
 
@@ -11,17 +12,16 @@ const CELL = 8 // fallback canvas pixels per grid cell, used only for the very
                 // without that, the fixed buffer gets rescaled by the browser
                 // at a non-integer ratio, which aliases the hatch lines into
                 // a denser, uneven wash than the values below actually ask for)
-const MAX_SCALE = 4 // gesture-zoom ceiling
+const MAX_SCALE = 4 // zoom-button ceiling
+const ZOOM_STEP = 1.6 // multiplier per +/- button press
 
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v))
 
 // Pixel-grid territory map over the NSW image.
 //
-// Interaction model — natural gestures, no zoom buttons:
-//  - Zoom: mouse wheel / trackpad scroll or pinch (trackpad pinch arrives as a
-//    ctrlKey wheel event), and two-finger touch pinch. Zoom is anchored at
-//    the cursor / pinch centre. At 1x a wheel that would zoom OUT is passed
-//    through untouched so the page still scrolls normally past the map.
+// Interaction model:
+//  - Zoom: explicit +/- buttons (bottom-right), centred on the map. No wheel
+//    or pinch zoom — those used to fight with page scroll and painting.
 //  - Pan: read-only mode — one-finger / mouse drag once zoomed in (at 1x
 //    there's nothing to pan, so touch swipes scroll the page). Edit mode —
 //    one finger/click always PAINTS, so panning uses a two-finger touch drag
@@ -39,6 +39,9 @@ export default function PixelMap({
   overlay, // optional node rendered inside the zoom/pan stage, above the
            // territory canvas — used by the campaign replay to keep its wave
            // layer and conquest labels aligned with the map under zoom
+  showCompanyLabels = false, // derived "A-COY" names on each holding. Off by
+           // default, and deliberately left off in the ops map editor — a
+           // label sitting over cells you're trying to paint is in the way.
 }) {
   const { cols, rows, cells, showRHQ } = territory
   const places = territory.places || []
@@ -56,9 +59,16 @@ export default function PixelMap({
   viewRef.current = view
   const dragOrigin = useRef(null) // { pointerId, lastX, lastY } | { pointerId, painting: true }
   const dragging = useRef(null) // place-label id being dragged
-  const touches = useRef(new Map()) // active touch pointers, for pinch
-  const pinch = useRef(null) // { d0, c0, s0, t0 } while a two-finger pinch is live
   const oceanOverlayUrl = useOceanOverlayUrl(edit)
+
+  // Company name placements are derived from the cells, so they track the
+  // committed replay frame exactly like the beacons do. Memoised on the cell
+  // string: the derivation is a few passes over the grid, which is cheap but
+  // not free enough to redo on every pan/zoom re-render.
+  const companyLabels = useMemo(
+    () => (showCompanyLabels ? companyLabelPoints(cells, cols, rows, { showRHQ }) : []),
+    [showCompanyLabels, cells, cols, rows, showRHQ],
+  )
 
   const scale = view.scale
 
@@ -160,53 +170,9 @@ export default function PixelMap({
     })
   }, [clampPan])
 
-  // Wheel / trackpad zoom. Attached manually (not via React's onWheel) so the
-  // listener is non-passive and may preventDefault — but ONLY when it actually
-  // zooms: at 1x, a wheel that would zoom out is left alone so the page keeps
-  // scrolling normally past the map.
-  useEffect(() => {
-    const el = containerRef.current
-    if (!el) return
-    const onWheel = (e) => {
-      const delta = e.deltaY * (e.deltaMode === 1 ? 33 : 1)
-      // Trackpad pinches arrive as ctrlKey wheel events with small deltas —
-      // give them a stronger response than plain scrolling.
-      const factor = Math.exp(-delta * (e.ctrlKey ? 0.012 : 0.002))
-      if (viewRef.current.scale === 1 && factor <= 1) return // pass through to page scroll
-      e.preventDefault()
-      const r = el.getBoundingClientRect()
-      zoomAt({ x: e.clientX - r.left - r.width / 2, y: e.clientY - r.top - r.height / 2 }, factor)
-    }
-    el.addEventListener('wheel', onWheel, { passive: false })
-    return () => el.removeEventListener('wheel', onWheel)
-  }, [zoomAt])
-
-  // Two-finger pinch: zoom anchored at the moving pinch centre (which also
-  // gives two-finger panning for free). Any live paint/pan drag is cancelled
-  // the moment a second finger lands, so pinching never leaves a stray stroke.
-  const pinchUpdate = () => {
-    const pts = [...touches.current.values()]
-    if (pts.length < 2) return
-    const el = containerRef.current
-    const r = el.getBoundingClientRect()
-    const d = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y) || 1
-    const c = {
-      x: (pts[0].x + pts[1].x) / 2 - r.left - r.width / 2,
-      y: (pts[0].y + pts[1].y) / 2 - r.top - r.height / 2,
-    }
-    if (!pinch.current) {
-      pinch.current = { d0: d, c0: c, s0: viewRef.current.scale, t0: { x: viewRef.current.x, y: viewRef.current.y } }
-      dragOrigin.current = null
-      lastPaintCell.current = null
-      return
-    }
-    const { d0, c0, s0, t0 } = pinch.current
-    const s2 = clamp(s0 * (d / d0), 1, MAX_SCALE)
-    const t2 = s2 === 1
-      ? { x: 0, y: 0 }
-      : clampPan({ x: c.x / s2 - c0.x / s0 + t0.x, y: c.y / s2 - c0.y / s0 + t0.y }, s2)
-    setView({ scale: s2, ...t2 })
-  }
+  // +/- buttons: zoom anchored at the map's centre.
+  const zoomIn = useCallback(() => zoomAt({ x: 0, y: 0 }, ZOOM_STEP), [zoomAt])
+  const zoomOut = useCallback(() => zoomAt({ x: 0, y: 0 }, 1 / ZOOM_STEP), [zoomAt])
 
   const cellFromEvent = useCallback((e) => {
     const st = stageRef.current
@@ -264,14 +230,6 @@ export default function PixelMap({
 
   const onPointerDown = (e) => {
     if (dragging.current) return
-    if (e.pointerType === 'touch') {
-      touches.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
-      if (touches.current.size >= 2) {
-        containerRef.current?.setPointerCapture?.(e.pointerId)
-        pinchUpdate() // second finger down: cancel any drag, arm the pinch
-        return
-      }
-    }
     if (edit) {
       if (!onPaint) return
       containerRef.current?.setPointerCapture?.(e.pointerId)
@@ -293,13 +251,6 @@ export default function PixelMap({
   }
 
   const onPointerMove = (e) => {
-    if (e.pointerType === 'touch' && touches.current.has(e.pointerId)) {
-      touches.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
-      if (touches.current.size >= 2) {
-        pinchUpdate()
-        return
-      }
-    }
     if (dragging.current && onMovePlace) {
       const c = cellFromEvent(e)
       if (c) onMovePlace(dragging.current, c.x, c.y)
@@ -318,19 +269,14 @@ export default function PixelMap({
   }
 
   const endPointer = (e) => {
-    if (e.pointerType === 'touch') {
-      touches.current.delete(e.pointerId)
-      if (touches.current.size < 2) pinch.current = null
-    }
     if (dragOrigin.current?.pointerId === e.pointerId) dragOrigin.current = null
     dragging.current = null
     lastPaintCell.current = null
   }
 
-  // touch-action: while editing (or once zoomed) all touch gestures belong to
-  // the map. At rest in read-only mode, allow browser panning so one-finger
-  // swipes keep scrolling the page — pinches aren't pans, so the browser
-  // leaves those to us and pinch-zoom still works.
+  // touch-action: while editing (or once zoomed via the +/- buttons) one-finger
+  // touch belongs to the map (paint, or drag-to-pan). At rest in read-only
+  // mode, allow browser panning so one-finger swipes keep scrolling the page.
   const touchAction = edit || scale > 1 ? 'none' : 'pan-x pan-y'
 
   return (
@@ -375,6 +321,14 @@ export default function PixelMap({
           <canvas ref={canvasRef} width={cols * CELL} height={rows * CELL}
             style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', imageRendering: 'pixelated', pointerEvents: 'none' }} />
           {overlay}
+          {/* Derived company names, under the place beacons — a named place is
+              the more specific label, so it wins any overlap. */}
+          {companyLabels.map((l) => (
+            <div key={l.code} className="company-label"
+              style={{ left: `${(l.x / cols) * 100}%`, top: `${(l.y / rows) * 100}%`, color: l.color }}>
+              {l.label}
+            </div>
+          ))}
           {places.map((p) => {
             // Occupier is derived from the CURRENT cells on every render, so
             // the beacon tracks conquests live — including frame-by-frame
@@ -382,21 +336,45 @@ export default function PixelMap({
             // frame's cells.
             const b = beaconStateFor(territory, p, { showRHQ })
             return (
-              <div key={p.id}
+              <Beacon
+                key={p.id}
+                x={p.x} y={p.y} cols={cols} rows={rows}
+                color={b.color}
+                pulse={b.pulse}
+                label={p.name}
+                tag={b.tag}
+                variant={b.recaptured ? 'boxed' : 'plain'}
+                draggable={!!onMovePlace}
                 onPointerDown={onMovePlace ? (e) => { e.stopPropagation(); dragging.current = p.id } : undefined}
-                style={{ position: 'absolute', left: `${(p.x / cols) * 100}%`, top: `${(p.y / rows) * 100}%`, transform: 'translate(-50%,-50%)', display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap', pointerEvents: onMovePlace ? 'auto' : 'none', cursor: onMovePlace ? 'move' : 'default' }}>
-                <Beacon
-                  color={b.color}
-                  pulse={b.pulse}
-                  label={p.name}
-                  tag={b.tag}
-                  variant={b.recaptured ? 'boxed' : 'plain'}
-                />
-              </div>
+              />
             )
           })}
         </div>
+
+        <ZoomControls scale={scale} onZoomIn={zoomIn} onZoomOut={zoomOut} />
       </div>
+    </div>
+  )
+}
+
+// Turquoise-on-transparent-grey +/- zoom control, anchored bottom-right —
+// replaces the old pinch/wheel gesture zoom with an explicit, on-theme
+// control that works the same on touch and desktop.
+function ZoomControls({ scale, onZoomIn, onZoomOut }) {
+  const btn = (disabled) => ({
+    width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center',
+    border: '1px solid var(--accent)', borderRadius: 'var(--radius)',
+    background: 'rgba(20,26,36,0.65)', backdropFilter: 'blur(6px)',
+    color: 'var(--accent)', fontFamily: "'JetBrains Mono',monospace", fontSize: 16, fontWeight: 700,
+    cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.4 : 1,
+  })
+  const stop = (fn) => (e) => { e.stopPropagation(); fn() }
+  return (
+    <div style={{ position: 'absolute', right: 10, bottom: 10, display: 'flex', flexDirection: 'column', gap: 6, zIndex: 5 }}>
+      <button type="button" aria-label="Zoom in" disabled={scale >= MAX_SCALE}
+        onPointerDown={(e) => e.stopPropagation()} onClick={stop(onZoomIn)} style={btn(scale >= MAX_SCALE)}>+</button>
+      <button type="button" aria-label="Zoom out" disabled={scale <= 1}
+        onPointerDown={(e) => e.stopPropagation()} onClick={stop(onZoomOut)} style={btn(scale <= 1)}>−</button>
     </div>
   )
 }

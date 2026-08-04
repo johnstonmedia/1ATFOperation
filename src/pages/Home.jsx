@@ -4,7 +4,8 @@ import CampaignReplayMap from '../components/CampaignReplayMap'
 import { useData } from '../context/DataContext'
 import { useCompany } from '../context/CompanyContext'
 import { useUnseen, useUnseenIntel, hasIntelBaseline, markIntelSeen } from '../hooks/useUnseen'
-import { COMPANIES, PHONETIC, smeacOf } from '../firebase/seed'
+import { decryptProgress } from '../lib/intelProgress'
+import { COMPANIES, PHONETIC, smeacOf, movementsOf } from '../firebase/seed'
 
 const RECRUITS = ['Alpha', 'Bravo', 'Charlie', 'Delta']
 const badge = (c) => (
@@ -22,6 +23,10 @@ export default function Home() {
   // + their own company), so another company's edits never light their alert.
   const newIntel = useUnseenIntel(company)
   const newBriefing = useUnseen('briefings')
+  // Device-local decrypt progress over the same set of fragments the alert
+  // above is scoped to, so the two can never disagree about what's outstanding.
+  const progress = decryptProgress(state.intel, company)
+  const outstanding = progress.total - progress.done
 
   // First visit (or straight after switching company): record the current
   // intel as the baseline so the alert only ever fires on a real change.
@@ -44,7 +49,18 @@ export default function Home() {
           cleared (see useUnseen/markSeen). */}
       {newIntel && (
         <Link to="/intel" className="alert-banner">
-          ⚠ NEW INTERCEPTED INTELLIGENCE{company ? ` — ${(PHONETIC[company] || company).toUpperCase()} / UNIT` : ''} — TAP TO DECRYPT
+          ⚠ NEW INTERCEPTED INTELLIGENCE{company ? ` — ${(PHONETIC[company] || company).toUpperCase()} / UNIT` : ''}
+          {outstanding > 0 ? ` — ${outstanding} STILL ENCRYPTED` : ''} — TAP TO DECRYPT
+        </Link>
+      )}
+      {/* Nothing NEW, but puzzles left unsolved on this device: a quieter,
+          non-alarming nudge in accent rather than threat-red. The red banner
+          means "RHQ posted something"; this one only means "you haven't
+          finished", so it must not look like the same event. */}
+      {!newIntel && outstanding > 0 && (
+        <Link to="/intel" className="alert-banner quiet">
+          ◆ {outstanding} MERIDIAN TRANSMISSION{outstanding === 1 ? '' : 'S'} STILL ENCRYPTED
+          {progress.done > 0 ? ` — ${progress.done} / ${progress.total} DECRYPTED` : ''} — TAP TO DECRYPT
         </Link>
       )}
       {newBriefing !== 0 && (
@@ -53,16 +69,17 @@ export default function Home() {
 
       {/* Animated campaign-history replay; plain static map when no campaign
           start state has been recorded yet. */}
-      <CampaignReplayMap territory={state.territory} campaign={state.campaign} />
+      <CampaignReplayMap territory={state.territory} frames={state.campaignFrames} defaultStartId={state.campaignDefaultStart} />
 
-      <div style={{ marginTop: 20 }}>
-        <SmeacBrief n={n} />
-      </div>
-      <div style={{ marginTop: 16 }}>
-        <CompanyRoles n={n} />
-      </div>
-      <div style={{ marginTop: 16 }}>
-        <MeridianBrief m={n.meridian} />
+      <div className="row wrap" style={{ marginTop: 20, gap: 16, alignItems: 'flex-start' }}>
+        <div style={{ flex: '1 1 420px' }}>
+          <SmeacBrief n={n} />
+        </div>
+        <div className="col" style={{ flex: '1 1 420px', gap: 16 }}>
+          <MovementsBox mv={movementsOf(n)} />
+          <CompanyRoles n={n} />
+          <MeridianBox m={n.meridian} />
+        </div>
       </div>
     </div>
   )
@@ -77,7 +94,7 @@ function SmeacBrief({ n }) {
     ['M', 'MISSION', s.mission],
     ['E', 'EXECUTION', s.execution],
     ['A', 'ADMIN & LOGISTICS', s.admin],
-    ['C', 'COMMAND / CONTROL / COMMS', s.command],
+    ['C', 'COMMAND AND SIGNALS', s.command],
   ].filter(([, , text]) => String(text || '').trim())
 
   return (
@@ -103,6 +120,39 @@ function SmeacBrief({ n }) {
   )
 }
 
+// What each company DID to move the line, above the roles box — the roles box
+// says what a company is for, this says what it has done, which is what
+// explains the state of the map. RHQ toggles the whole box off from the ops
+// centre (`show`), and an empty entry list hides it too rather than leaving a
+// titled panel with nothing under it.
+function MovementsBox({ mv }) {
+  const entries = (mv.entries || []).filter((e) => String(e.text || '').trim())
+  if (!mv.show || !entries.length) return null
+  const comp = (letter) => COMPANIES.find((c) => c.letter === letter)
+  return (
+    <div className="panel panel-pad col" style={{ gap: 12 }}>
+      <div className="row between center wrap" style={{ gap: 10 }}>
+        <h2 className="accent" style={{ margin: 0, fontSize: 16 }}>{mv.title || 'RECENT MOVEMENTS'}</h2>
+        <span className="tag">MAP CHANGES</span>
+      </div>
+      {mv.intro && <div className="mono dim" style={{ fontSize: 11, lineHeight: 1.6 }}>{mv.intro}</div>}
+      <div className="col" style={{ gap: 12 }}>
+        {entries.map((e) => {
+          const c = comp(e.company)
+          return (
+            <div key={e.id} className="row" style={{ gap: 12, alignItems: 'flex-start' }}>
+              {/* Unknown/blank company codes still render a row — the text is
+                  the point, and a stale letter shouldn't drop the entry. */}
+              {c ? badge(c) : <span style={{ width: 28, flex: '0 0 auto' }} />}
+              <div style={{ fontSize: 13, lineHeight: 1.55 }}>{e.text}</div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 function CompanyRoles({ n }) {
   const comp = (name) => COMPANIES.find((c) => c.name === name)
   return (
@@ -123,31 +173,31 @@ function CompanyRoles({ n }) {
   )
 }
 
-function MeridianBrief({ m }) {
+// One Meridian panel with exactly TWO headings (was two panels and three
+// headings, which read as more of the page than the threat warrants).
+//
+// No RHQ copy was dropped in the merge: `whyStop` keeps its own paragraph
+// under MOTIVE rather than its own heading, since "why we stop them" is the
+// consequence of the motive, not a separate topic. Its heading field
+// (`whyHeading`) is intentionally no longer rendered — the ops editor says so.
+//
+// No `.divider` rules between the sections: the panel's own border plus the
+// spacing and the red section headings already separate them, and the extra
+// lines just added visual noise to a box that got merged to be quieter.
+function MeridianBox({ m }) {
   return (
-    <div className="row wrap" style={{ gap: 16, alignItems: 'stretch' }}>
-      <div className="panel panel-pad col grow" style={{ minWidth: 280, gap: 12, borderColor: 'var(--hostile)' }}>
-        <div className="row between center wrap" style={{ gap: 10 }}>
-          <h2 className="hostile" style={{ margin: 0, fontSize: 18 }}>{m.title}</h2>
-          <span className="tag hostile blink" style={{ display: 'inline-block' }}>THREAT: {m.threatLevel}</span>
-        </div>
-        <div className="divider" style={{ margin: 0 }} />
-        <div>
-          <div className="mono hostile" style={{ fontSize: 10, letterSpacing: 2 }}>{m.objectiveHeading || 'OBJECTIVE'}</div>
-          <p style={{ marginTop: 6, lineHeight: 1.5, marginBottom: 0 }}>{m.objective}</p>
-        </div>
+    <div className="panel panel-pad col" style={{ gap: 16, borderColor: 'var(--hostile)' }}>
+      <h2 className="hostile" style={{ margin: 0, fontSize: 18 }}>{m.title}</h2>
+      <div>
+        <div className="mono hostile" style={{ fontSize: 10, letterSpacing: 2 }}>{m.objectiveHeading || 'OBJECTIVE'}</div>
+        <p style={{ marginTop: 6, lineHeight: 1.5, marginBottom: 0 }}>{m.objective}</p>
       </div>
-
-      <div className="panel panel-pad col grow" style={{ minWidth: 280, gap: 12, borderColor: 'var(--hostile)' }}>
-        <div>
-          <div className="mono hostile" style={{ fontSize: 10, letterSpacing: 2 }}>{m.motiveHeading || 'MOTIVE'}</div>
-          <p style={{ marginTop: 6, lineHeight: 1.5, marginBottom: 0 }}>{m.motive}</p>
-        </div>
-        <div className="divider" style={{ margin: 0 }} />
-        <div>
-          <div className="mono hostile" style={{ fontSize: 10, letterSpacing: 2 }}>{m.whyHeading || 'WHY WE STOP THEM'}</div>
-          <p style={{ marginTop: 6, lineHeight: 1.5, marginBottom: 0 }}>{m.whyStop}</p>
-        </div>
+      <div>
+        <div className="mono hostile" style={{ fontSize: 10, letterSpacing: 2 }}>{m.motiveHeading || 'MOTIVE'}</div>
+        <p style={{ marginTop: 6, lineHeight: 1.5, marginBottom: 0 }}>{m.motive}</p>
+        {String(m.whyStop || '').trim() && (
+          <p style={{ marginTop: 10, lineHeight: 1.5, marginBottom: 0 }}>{m.whyStop}</p>
+        )}
       </div>
     </div>
   )

@@ -11,11 +11,26 @@ export default function Privacy() {
         <div className="mono dim" style={{ fontSize: 11 }}>SHORE CADET UNIT // 1ATF OPERATIONAL PORTAL</div>
 
         <Section title="What this site collects">
-          The public pages of this site collect nothing — no accounts, no
-          tracking, no analytics. For unit members with a login, the portal
-          stores only what unit staff enter into the roster: your <b>name</b>,{' '}
-          <b>student ID number</b>, <b>company</b>, and (if provided){' '}
-          <b>email address</b>, plus the password you choose at registration.
+          The public pages of this site have no accounts, no advertising and no
+          third-party tracking. The one thing they do send is described under{' '}
+          <b>Decrypt counts</b> below, and it cannot identify you. For unit
+          members with a login, the portal stores only what unit staff enter
+          into the roster: your <b>name</b>, <b>student ID number</b>,{' '}
+          <b>company</b>, and (if provided) <b>email address</b>, plus the
+          password you choose at registration.
+        </Section>
+
+        <Section title="Decrypt counts">
+          When someone solves an intel fragment on the <b>Intel</b> page, the
+          site adds <b>1</b> to a counter for that fragment and the company
+          selected on the device. That's the whole record: a puzzle, a company
+          letter, a running total and the date it last went up. <b>No name, no
+          ID number, no login, no device identifier</b> is sent or stored with
+          it, and there is no way to work backwards from a count to who solved
+          what. Unit staff use it only to see which puzzles are being played, so
+          they know what's worth making more of. Your own progress — which
+          fragments you've cracked — stays on your device and is never sent
+          anywhere.
         </Section>
 
         <Section title="Why it's collected">
@@ -35,9 +50,10 @@ export default function Privacy() {
 
         <Section title="Cookies and device storage">
           The site uses your browser's local storage only to keep you signed in
-          on your device and to remember simple preferences (like your selected
-          company on the Intel page). There are no advertising or third-party
-          tracking cookies.
+          on your device and to remember simple things that never leave it:
+          your selected company, which pages you've already opened, and which
+          intel fragments you've decrypted. Clearing your browser data resets
+          those. There are no advertising or third-party tracking cookies.
         </Section>
 
         <Section title="Your choices">

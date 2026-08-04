@@ -1,9 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useEffect } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useCompany } from '../context/CompanyContext'
 import { COMPANIES } from '../firebase/seed'
-import SupportModal from './SupportModal'
 
 // Shared menu body — used by BOTH the mobile slide-in drawer below and the
 // pinned desktop/tablet rail in Layout.jsx. `onNavigate` runs after any
@@ -14,7 +13,6 @@ export function NavContent({ onAuth, onNavigate = () => {} }) {
   const { company, setCompany } = useCompany()
   const navigate = useNavigate()
   const location = useLocation()
-  const [support, setSupport] = useState(false)
 
   const go = (path) => {
     onNavigate()
@@ -36,7 +34,6 @@ export function NavContent({ onAuth, onNavigate = () => {} }) {
       <MenuItem label="Briefings" sub="Unit briefings" active={active('/briefings')} onClick={() => go('/briefings')} />
 
       <div className="grow" />
-      <button className="ghost" onClick={() => setSupport(true)}>Help &amp; Support</button>
       {isRHQ
         ? <button className="ghost" onClick={() => go('/operations-centre')}>OPS CENTRE</button>
         : isCommander
@@ -45,7 +42,6 @@ export function NavContent({ onAuth, onNavigate = () => {} }) {
       <Link to="/" onClick={onNavigate} className="mono dim" style={{ fontSize: 10, marginTop: 10 }}>
         LUCET PER MINISTERIUM
       </Link>
-      {support && <SupportModal onClose={() => setSupport(false)} />}
     </>
   )
 }

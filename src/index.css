@@ -28,18 +28,27 @@
 
 html, body, #root { height: 100%; margin: 0; }
 
+/* Flat fill only. The ambient corner glows used to live here as background
+   layers on <body>, which produced a hard horizontal seam partway down any
+   page taller than the viewport: `html, body { height: 100% }` pins the body
+   box to viewport height, so the gradients were sized and positioned against
+   THAT box — the bottom-left teal glow anchored itself one screen down instead
+   of at the bottom of the page, and everything past the body box fell back to
+   flat --bg with a visible edge between them. They now live in the fixed
+   overlay below, where they're sized to the viewport by construction and can't
+   cut off. */
 body {
-  background:
-    radial-gradient(1200px 600px at 80% -10%, rgba(58, 71, 148, 0.18), transparent 60%),
-    radial-gradient(900px 500px at -10% 110%, rgba(54, 224, 192, 0.08), transparent 55%),
-    var(--bg);
+  background: var(--bg);
   color: var(--text);
   font-family: var(--body);
   letter-spacing: 0.2px;
   -webkit-font-smoothing: antialiased;
 }
 
-/* faint grid + scanline overlay */
+/* Ambient corner glows + faint grid. `position: fixed` is what keeps this
+   seamless at any page length — it's the viewport, not the document, so
+   scrolling never reveals an edge. Per-layer background-size because the grid
+   tiles at 40px while the gradients must fill the whole viewport. */
 body::before {
   content: '';
   position: fixed;
@@ -48,8 +57,10 @@ body::before {
   z-index: 0;
   background-image:
     linear-gradient(var(--grid) 1px, transparent 1px),
-    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
-  background-size: 40px 40px;
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px),
+    radial-gradient(1200px 600px at 80% -10%, rgba(58, 71, 148, 0.18), transparent 60%),
+    radial-gradient(900px 500px at -10% 110%, rgba(54, 224, 192, 0.08), transparent 55%);
+  background-size: 40px 40px, 40px 40px, 100% 100%, 100% 100%;
 }
 body::after {
   content: '';
@@ -278,6 +289,109 @@ label { font-size: 12px; color: var(--text-dim); text-transform: uppercase; lett
   pointer-events: none;
   text-shadow: 0 0 6px rgba(6, 10, 18, 0.95), 0 0 12px rgba(6, 10, 18, 0.9), 0 1px 2px #000;
   animation: conquest-flash 1.9s ease-out forwards;
+}
+
+/* Derived per-company name label sitting permanently on that company's main
+   holding (see lib/companyLabels.js). Deliberately styled like .conquest-label
+   minus the animation: the name that flashes when ground is taken and the name
+   that then stays on it should read as the same thing. */
+.company-label {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  font: 700 clamp(9px, 1.5vw, 14px) Orbitron, 'JetBrains Mono', monospace;
+  letter-spacing: 2px;
+  white-space: nowrap;
+  pointer-events: none;
+  text-shadow: 0 0 6px rgba(6, 10, 18, 0.95), 0 0 12px rgba(6, 10, 18, 0.9), 0 1px 2px #000;
+}
+
+/* Quiet variant of the unread alert: "you have puzzles left", not "RHQ posted
+   something". Accent, not threat-red, and no blink — it must never be mistaken
+   for the real alert above it. */
+.alert-banner.quiet {
+  border-color: var(--accent);
+  background: rgba(54, 224, 192, 0.09);
+  color: var(--accent);
+}
+
+/* Decrypt-progress segments on the Intel tab — one bar per puzzle, lit as it's
+   cracked. Reads as a row of locks rather than a bare fraction. */
+.decrypt-seg {
+  display: block;
+  width: 26px;
+  height: 7px;
+  border-radius: 2px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.04);
+  flex: 0 0 auto;
+}
+.decrypt-seg.is-done {
+  border-color: var(--accent);
+  background: var(--accent);
+  box-shadow: 0 0 8px rgba(54, 224, 192, 0.65);
+}
+
+/* ---------------------------------- Campaign replay timeline ("train line")
+   A bubble per recorded frame on a single rail, with the rail filling up to
+   the frame being shown. Bubbles are buttons: hover names the frame, click
+   cuts straight to it. */
+.replay-rail {
+  position: relative;
+  flex: 1 1 200px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  min-width: 140px;
+}
+.replay-rail-line,
+.replay-rail-fill {
+  position: absolute;
+  left: 0;
+  height: 3px;
+  border-radius: 2px;
+  pointer-events: none;
+}
+.replay-rail-line { right: 0; background: var(--line); }
+.replay-rail-fill { background: var(--accent); box-shadow: 0 0 8px rgba(54, 224, 192, 0.55); transition: width 120ms linear; }
+.replay-bubble {
+  position: absolute;
+  top: 50%;
+  width: 15px;
+  height: 15px;
+  padding: 0;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  border: 2px solid var(--accent);
+  background: var(--bg, #0a0f1a);
+  cursor: pointer;
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+.replay-bubble.is-played { background: var(--accent); }
+.replay-bubble.is-current {
+  transform: translate(-50%, -50%) scale(1.45);
+  background: var(--accent);
+  box-shadow: 0 0 0 3px rgba(54, 224, 192, 0.22), 0 0 12px rgba(54, 224, 192, 0.8);
+}
+.replay-bubble:hover, .replay-bubble:focus-visible { transform: translate(-50%, -50%) scale(1.45); outline: none; }
+.replay-bubble:hover .replay-bubble-tip,
+.replay-bubble:focus-visible .replay-bubble-tip { opacity: 1; }
+.replay-bubble-tip {
+  position: absolute;
+  bottom: calc(100% + 9px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 3px 8px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  background: rgba(6, 10, 18, 0.94);
+  color: #fff;
+  font: 600 10px 'JetBrains Mono', monospace;
+  letter-spacing: 1px;
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 120ms ease;
+  pointer-events: none;
+  z-index: 6;
 }
 
 /* ---------------------------------- Operations Centre layout */

@@ -1,19 +1,13 @@
-import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useData } from '../context/DataContext'
-import { useAuth } from '../context/AuthContext'
 import Logo from '../components/Logo'
-import LoginModal from '../components/LoginModal'
-import SupportModal from '../components/SupportModal'
 
 // The link originally shared with the unit: yourdomain.com/Classified
-// First page everyone sees. "Continue" opens the temporary-password setup.
+// First page everyone sees. "Continue" goes straight into the public portal
+// — this page no longer connects to member login/registration.
 export default function Classified() {
   const { state } = useData()
-  const { user } = useAuth()
   const navigate = useNavigate()
-  const [auth, setAuth] = useState(null) // 'temp' | 'login' | null
-  const [support, setSupport] = useState(false)
   const c = state.classified
 
   return (
@@ -62,47 +56,11 @@ export default function Classified() {
         {c.motto}
       </div>
 
-      {!user && (
-        <div className="panel panel-pad" style={{ marginTop: 34, maxWidth: 560, textAlign: 'left', borderColor: 'var(--accent)' }}>
-          <div className="mono accent" style={{ fontSize: 11, letterSpacing: 3, marginBottom: 12 }}>HOW TO LOG IN</div>
-          <ol className="mono" style={{ margin: 0, paddingLeft: 20, lineHeight: 1.9, fontSize: 13 }}>
-            <li>Click <span className="accent">Continue</span> below.</li>
-            <li>Enter your <span className="accent">Student ID number</span> (e.g. 183271).</li>
-            <li>Find your <span className="accent">temporary password</span> in your email.</li>
-            <li>Enter that temporary password, then choose your own password.</li>
-          </ol>
-          <div className="mono dim" style={{ fontSize: 11, marginTop: 12, lineHeight: 1.5 }}>
-            Already set your password before? Choose <span className="accent">Already registered? Sign in</span>.<br />
-            No email or temporary password? Use <span className="accent">Help &amp; Support</span> below.
-          </div>
-        </div>
-      )}
-
       <div className="row center wrap" style={{ gap: 12, marginTop: 28 }}>
-        {user ? (
-          <button className="primary" onClick={() => navigate('/')}>Enter Operational Portal →</button>
-        ) : (
-          <>
-            <button className="primary" onClick={() => setAuth('temp')}>Continue →</button>
-            <button className="ghost" onClick={() => setAuth('login')}>Already registered? Sign in</button>
-          </>
-        )}
+        <button className="primary" onClick={() => navigate('/')}>Continue →</button>
       </div>
 
-      <button className="ghost" onClick={() => setSupport(true)} style={{ marginTop: 14, fontSize: 11 }}>
-        Help &amp; Support
-      </button>
-
       <div className="mono dim" style={{ marginTop: 18, fontSize: 10 }}>LUCET PER MINISTERIUM</div>
-
-      {auth && (
-        <LoginModal
-          initialMode={auth}
-          onClose={() => setAuth(null)}
-          onAuthed={() => navigate('/')}
-        />
-      )}
-      {support && <SupportModal onClose={() => setSupport(false)} />}
     </div>
   )
 }

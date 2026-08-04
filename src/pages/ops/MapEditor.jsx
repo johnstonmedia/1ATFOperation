@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useData } from '../../context/DataContext'
 import { useAudit } from '../../hooks/useAudit'
 import { useConfirm } from '../../context/ConfirmContext'
@@ -7,8 +7,10 @@ import { OpsHeader, useSaved } from './OperationsCentre'
 import PixelMap from '../../components/PixelMap'
 import { PAINT, RHQ_PAINT, colorOf } from '../../lib/territory'
 import { useOceanMask } from '../../lib/oceanMask'
-import { EMPTY_CAMPAIGN, campaignValid, appendSave } from '../../lib/campaign'
-import { exportCampaignReplay, exportSupported, downloadBlob } from '../../lib/replayExport'
+import { sortFrames, framesValid, renumberFrames } from '../../lib/campaign'
+import { exportCampaignReplay, exportProgressImage, exportSupported, downloadBlob, defaultProgressTitle } from '../../lib/replayExport'
+
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000
 
 const rid = () => Math.random().toString(36).slice(2, 9)
 
@@ -16,10 +18,18 @@ const rid = () => Math.random().toString(36).slice(2, 9)
 export default function MapEditor() {
   const { state, updateSlice } = useData()
   const audit = useAudit()
+  const confirm = useConfirm()
+  const toast = useToast()
   const [saved, flash] = useSaved()
   const [terr, setTerr] = useState(() => ({ ...state.territory, places: state.territory.places || [] }))
   const [brush, setBrush] = useState('M')
   const [size, setSize] = useState(2)
+  // When set, the paint canvas targets this campaign frame's cells instead of
+  // the live territory — { id, order, label, cells, original }. `original` is
+  // the frame's cells as loaded, so we can tell if there are unsaved changes
+  // before switching away. "Save map" always publishes the live territory
+  // regardless of this; frame edits are saved separately via "Update Frame".
+  const [editing, setEditing] = useState(null)
 
   const { cols, rows } = terr
   const oceanMask = useOceanMask(cols, rows)
@@ -27,40 +37,70 @@ export default function MapEditor() {
   // `points` is the whole stroke segment since the last pointer event (the
   // map interpolates a continuous line between samples) — stamped in one
   // state update so long fast strokes don't rebuild the cell string per cell.
-  const paint = (points, code, sz) => {
-    setTerr((t) => {
-      const arr = t.cells.split('')
-      // NxN brush, e.g. size=2 covers cells [-1,0] relative to (x,y) so a 2x2
-      // block actually paints 2x2 (previously floor((sz-1)/2) collapsed even
-      // sizes like 2 down to a single cell).
-      const half = Math.floor(sz / 2)
-      for (const { x, y } of points) {
-        for (let dy = -half; dy < sz - half; dy++) for (let dx = -half; dx < sz - half; dx++) {
-          const nx = x + dx, ny = y + dy
-          if (nx < 0 || nx >= cols || ny < 0 || ny >= rows) continue
-          if (code !== '.' && oceanMask && oceanMask[ny * cols + nx]) continue // can't paint ocean
-          arr[ny * cols + nx] = code
-        }
+  const brushOver = (cellsStr, points, code, sz) => {
+    const arr = cellsStr.split('')
+    // NxN brush, e.g. size=2 covers cells [-1,0] relative to (x,y) so a 2x2
+    // block actually paints 2x2 (previously floor((sz-1)/2) collapsed even
+    // sizes like 2 down to a single cell).
+    const half = Math.floor(sz / 2)
+    for (const { x, y } of points) {
+      for (let dy = -half; dy < sz - half; dy++) for (let dx = -half; dx < sz - half; dx++) {
+        const nx = x + dx, ny = y + dy
+        if (nx < 0 || nx >= cols || ny < 0 || ny >= rows) continue
+        if (code !== '.' && oceanMask && oceanMask[ny * cols + nx]) continue // can't paint ocean
+        arr[ny * cols + nx] = code
       }
-      return { ...t, cells: arr.join('') }
-    })
+    }
+    return arr.join('')
+  }
+  const paint = (points, code, sz) => {
+    if (editing) setEditing((e) => ({ ...e, cells: brushOver(e.cells, points, code, sz) }))
+    else setTerr((t) => ({ ...t, cells: brushOver(t.cells, points, code, sz) }))
   }
   const movePlace = (id, x, y) => setTerr((t) => ({ ...t, places: t.places.map((p) => (p.id === id ? { ...p, x, y } : p)) }))
   const addPlace = () => setTerr((t) => ({ ...t, places: [...t.places, { id: rid(), name: 'New place', x: Math.round(cols / 2), y: Math.round(rows / 2) }] }))
   const addStronghold = () => setTerr((t) => ({ ...t, places: [...t.places, { id: rid(), name: 'Meridian Stronghold', x: Math.round(cols / 2), y: Math.round(rows / 2), hostile: true }] }))
   const setPlace = (id, patch) => setTerr((t) => ({ ...t, places: t.places.map((p) => (p.id === id ? { ...p, ...patch } : p)) }))
   const delPlace = (id) => setTerr((t) => ({ ...t, places: t.places.filter((p) => p.id !== id) }))
-  const clearAll = () => setTerr((t) => ({ ...t, cells: '.'.repeat(cols * rows) }))
+  const clearAll = () => {
+    if (editing) setEditing((e) => ({ ...e, cells: '.'.repeat(cols * rows) }))
+    else setTerr((t) => ({ ...t, cells: '.'.repeat(cols * rows) }))
+  }
 
-  // Publishing the map and recording a replay frame are now SEPARATE, explicit
-  // actions (see CampaignPanel). Saving used to append a replay frame on every
-  // change, which meant routine touch-ups silently became replay steps; the
-  // Record Progress Frame button is now the only thing that adds a frame.
-  const campaign = state.campaign
   const save = () => {
     updateSlice('territory', terr)
     audit('Updated map territory')
     flash()
+  }
+
+  // Load a frame into the shared canvas for repainting. Warns before
+  // discarding unpainted changes if switching away from a frame mid-edit.
+  // `frame` is a { id, order, label, cells } row from CampaignPanel, or null
+  // to stop editing (used by the row's own toggle and the banner's Cancel).
+  const startEdit = async (frame) => {
+    if (editing && editing.id !== frame?.id && editing.cells !== editing.original) {
+      const ok = await confirm({
+        title: 'Discard unsaved frame changes?',
+        message: `Frame ${editing.order + 1} has painted changes that were never saved with "Update Frame". Switch anyway and lose them?`,
+        danger: true,
+        confirmLabel: 'Discard & switch',
+      })
+      if (!ok) return
+    }
+    if (!frame) { setEditing(null); return }
+    setEditing({ id: frame.id, order: frame.order, label: frame.label || '', cells: frame.cells, original: frame.cells })
+  }
+
+  // Write the currently-edited frame's cells back to campaignFrames. Does
+  // NOT touch the live territory.
+  const commitFrameEdit = () => {
+    if (!editing) return
+    const frames = (state.campaignFrames || []).map((f) =>
+      f.id === editing.id ? { ...f, cells: editing.cells, updatedAt: Date.now() } : f)
+    updateSlice('campaignFrames', frames)
+    audit('Updated campaign frame', `frame ${editing.order + 1}`)
+    toast.push(`Frame ${editing.order + 1} updated.`)
+    setEditing(null)
   }
 
   const swatches = [...PAINT, ...(terr.showRHQ ? [RHQ_PAINT] : [])]
@@ -71,11 +111,23 @@ export default function MapEditor() {
         <label className="row center" style={{ gap: 6, fontSize: 11 }}>
           <input type="checkbox" checked={!!terr.showRHQ} onChange={(e) => setTerr((t) => ({ ...t, showRHQ: e.target.checked }))} style={{ width: 'auto' }} /> Show RHQ on map
         </label>
-        <button className="primary" onClick={save}>{saved ? 'Saved ✓' : 'Save map'}</button>
+        <button className="primary" onClick={save} disabled={!!editing} title={editing ? 'Exit frame editing to save the live map' : undefined}>{saved ? 'Saved ✓' : 'Save map'}</button>
       </OpsHeader>
 
+      {editing && (
+        <div className="panel panel-pad row between center wrap" style={{ gap: 10, marginBottom: 10, borderColor: 'var(--accent)', background: 'rgba(54,224,192,0.06)' }}>
+          <div className="mono accent" style={{ fontSize: 12 }}>
+            EDITING {editing.order === 0 ? 'START FRAME' : `FRAME ${editing.order + 1}`} — painting here updates this historical frame, not the live map.
+          </div>
+          <div className="row" style={{ gap: 8 }}>
+            <button className="ghost" onClick={() => startEdit(null)}>Cancel</button>
+            <button className="primary" onClick={commitFrameEdit}>Update Frame</button>
+          </div>
+        </div>
+      )}
+
       <div className="mono dim" style={{ fontSize: 11, marginBottom: 10 }}>
-        Pick a colour, then paint on the map — one finger/click paints, pinch or scroll zooms (anchored under your fingers/cursor), two-finger drag or middle/right-mouse drag pans while zoomed. Ocean tiles (shaded dark) can't be painted. "Full" is solid/firmly held; "Contested" is the lighter, newly-gained/loosely-held variant. Erase removes.
+        Pick a colour, then paint on the map — one finger/click paints, the +/- buttons zoom, two-finger drag or middle/right-mouse drag pans while zoomed. Ocean tiles (shaded dark) can't be painted. "Full" is solid/firmly held; "Contested" is the lighter, newly-gained/loosely-held variant. Erase removes.
       </div>
 
       {[{ label: 'Full', variant: (c) => c }, { label: 'Contested', variant: (c) => c.toLowerCase() }].map(({ label, variant }) => (
@@ -103,9 +155,17 @@ export default function MapEditor() {
         <button className="danger ghost" onClick={clearAll} style={{ marginLeft: 'auto' }}>Clear all</button>
       </div>
 
-      <PixelMap territory={terr} edit brush={brush} brushSize={size} onPaint={paint} onMovePlace={movePlace} />
+      <PixelMap territory={{ ...terr, cells: editing ? editing.cells : terr.cells }} edit brush={brush} brushSize={size} onPaint={paint} onMovePlace={movePlace} />
 
-      <CampaignPanel campaign={campaign} terr={terr} territory={state.territory} />
+      <CampaignPanel
+        frames={state.campaignFrames}
+        defaultStartId={state.campaignDefaultStart}
+        terr={terr}
+        territory={state.territory}
+        editing={editing}
+        onStartEdit={startEdit}
+        onForceClearEdit={() => setEditing(null)}
+      />
 
       <div className="panel panel-pad col" style={{ gap: 8, marginTop: 14 }}>
         <div className="row between center wrap" style={{ gap: 8 }}>
@@ -132,69 +192,125 @@ export default function MapEditor() {
   )
 }
 
-// Campaign replay controls: select/reset the start state, see how many moves
-// have been recorded, and export the whole replay as a video. Lives with the
-// map editor because every "Save map" is what appends a replay move.
-function CampaignPanel({ campaign, terr, territory }) {
+// Campaign replay controls: every frame is its own document, so each can be
+// repainted (via "Edit" -> the shared canvas above), relabelled, duplicated
+// (the way to insert a new frame mid-sequence), reordered or deleted
+// independently — no more diff-chain, no more "re-recording the start wipes
+// everything after it".
+function CampaignPanel({ frames, defaultStartId, terr, territory, editing, onStartEdit, onForceClearEdit }) {
   const { updateSlice } = useData()
   const audit = useAudit()
   const confirm = useConfirm()
   const toast = useToast()
   const { cols, rows } = terr
-  const active = campaignValid(campaign, cols, rows)
-  const moves = active ? campaign.timeline.length : 0
+  const sorted = sortFrames(frames || [])
+  const active = framesValid(frames, cols, rows)
+  const count = sorted.length
+  const hasRecentFrame = sorted.some((f) => f.ts >= Date.now() - WEEK_MS)
 
-  const [label, setLabel] = useState('')
   const [exporting, setExporting] = useState(false)
   const [exportPct, setExportPct] = useState(0)
   const [exportErr, setExportErr] = useState('')
   const job = useRef(null)
 
-  // Both recording actions publish the current painting first, so the live map
-  // can never drift from the frame that was just recorded.
-  const selectStart = async () => {
+  const [imgBusy, setImgBusy] = useState(false)
+  const [imgErr, setImgErr] = useState('')
+  // Headline printed across the top of the weekly image. Seeded with the
+  // generated "PROGRESS UPDATE — 28 Jul TO 4 Aug" wording and editable, so a
+  // week's image can be titled for what actually happened. Blank falls back to
+  // the generated text at render time.
+  const [imgTitle, setImgTitle] = useState('')
+  useEffect(() => {
+    if (hasRecentFrame) setImgTitle((t) => t || defaultProgressTitle({ frames: sorted }))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasRecentFrame])
+
+  const persist = (nextSorted, message, detail) => {
+    updateSlice('campaignFrames', renumberFrames(nextSorted))
+    audit(message, detail)
+  }
+
+  // Snapshot the current live painting as a new frame at the end.
+  const addFromLive = () => {
+    const frame = { id: rid(), order: count, cells: terr.cells, label: '', ts: Date.now(), updatedAt: Date.now() }
+    persist([...sorted, frame], count === 0 ? 'Added campaign start frame' : 'Added campaign frame from live map', `frame ${count + 1}`)
+    toast.push(count === 0 ? 'Start frame recorded.' : `Frame ${count + 1} recorded.`)
+  }
+
+  // Insert a copy of frame i right after it — the way to add a step mid-sequence.
+  const duplicate = (i) => {
+    const copy = { ...sorted[i], id: rid(), ts: Date.now(), updatedAt: Date.now() }
+    const next = [...sorted.slice(0, i + 1), copy, ...sorted.slice(i + 1)]
+    persist(next, 'Duplicated campaign frame', `frame ${i + 1}`)
+    toast.push(`Frame ${i + 1} duplicated.`)
+  }
+
+  const relabel = (i, label) => {
+    const next = sorted.map((f, k) => (k === i ? { ...f, label, updatedAt: Date.now() } : f))
+    updateSlice('campaignFrames', next)
+    audit('Relabelled campaign frame', `frame ${i + 1}`)
+  }
+
+  const move = (i, dir) => {
+    const j = i + dir
+    if (j < 0 || j >= sorted.length) return
+    const next = [...sorted]
+    ;[next[i], next[j]] = [next[j], next[i]]
+    persist(next, 'Reordered campaign frames', `frame ${i + 1} moved ${dir < 0 ? 'earlier' : 'later'}`)
+  }
+
+  const del = async (i) => {
+    const f = sorted[i]
     const ok = await confirm({
-      title: active ? 'Re-record start state' : 'Select start state',
-      message: active
-        ? `Overwrite the campaign baseline with the map AS CURRENTLY PAINTED HERE? The ${moves} recorded progress frame${moves === 1 ? '' : 's'} will be erased and the replay restarts from this state.`
-        : 'Set the map AS CURRENTLY PAINTED HERE as the campaign start state? You can then record progress frames as the campaign advances.',
-      danger: active,
-      confirmLabel: active ? 'Re-record start state' : 'Select start state',
+      title: 'Delete campaign frame',
+      message: `Remove frame ${i + 1}${f.label ? ` (“${f.label}”)` : ''}? This cannot be undone.`,
+      danger: true,
+      confirmLabel: 'Delete frame',
     })
     if (!ok) return
-    updateSlice('territory', terr)
-    updateSlice('campaign', { start: { cells: terr.cells, ts: Date.now() }, timeline: [] })
-    audit(active ? 'Re-recorded campaign start state' : 'Selected campaign start state')
-    toast.push(active ? 'Start state re-recorded — progress frames cleared.' : 'Start state recorded.')
+    if (editing?.id === f.id) onForceClearEdit()
+    if (defaultStartId === f.id) updateSlice('campaignDefaultStart', null)
+    persist(sorted.filter((_, k) => k !== i), 'Deleted campaign frame', `frame ${i + 1}`)
+    toast.push(`Frame ${i + 1} deleted.`)
   }
 
-  // Append the current painting to the replay timeline. Leaves the start
-  // state untouched — this is the "capture an incremental change" action.
-  // The optional label is shown as a caption while that move plays back.
-  const recordProgress = () => {
-    const next = appendSave(campaign, terr.cells, Date.now(), label)
-    if (!next) {
-      toast.push('No changes since the last frame — nothing recorded.', { type: 'error' })
-      return
-    }
-    updateSlice('territory', terr)
-    updateSlice('campaign', next)
-    const n = next.timeline.length
-    audit('Recorded campaign progress frame', `frame ${n}${label.trim() ? ` — ${label.trim()}` : ''}`)
-    toast.push(`Progress frame ${n} recorded${label.trim() ? `: “${label.trim()}”` : ''}.`)
-    setLabel('')
-  }
-
-  const clearHistory = async () => {
+  const clearAll = async () => {
     const ok = await confirm({
       title: 'Clear campaign replay',
-      message: 'Remove the start state and all recorded moves? The public map goes back to showing the current state with no replay animation. This cannot be undone.',
+      message: 'Remove every recorded frame? The public map goes back to showing the current state with no replay animation. This cannot be undone.',
       danger: true,
       confirmLabel: 'Clear replay',
     })
     if (!ok) return
-    updateSlice('campaign', EMPTY_CAMPAIGN)
+    onForceClearEdit()
+    updateSlice('campaignFrames', [])
+    updateSlice('campaignDefaultStart', null)
     audit('Cleared campaign replay history')
+  }
+
+  // Where the public replay's AUTO-PLAY begins (earlier frames stay archived
+  // and reachable via the replay's own "jump to frame" picker). Clicking the
+  // current default again clears it back to "earliest frame" (the original
+  // behaviour).
+  const setDefaultStart = (id) => {
+    const next = defaultStartId === id ? null : id
+    updateSlice('campaignDefaultStart', next)
+    audit(next ? 'Set campaign default start frame' : 'Cleared campaign default start frame')
+    toast.push(next ? 'Default start frame set.' : 'Default start cleared — replay starts from the earliest frame again.')
+  }
+
+  const doExportImage = async () => {
+    setImgErr('')
+    setImgBusy(true)
+    try {
+      const { blob } = await exportProgressImage({ territory, frames: sorted, title: imgTitle })
+      downloadBlob(blob, `campaign-progress-${new Date().toISOString().slice(0, 10)}.png`)
+      audit('Exported weekly progress image')
+    } catch (e) {
+      setImgErr(e?.message || 'Image export failed.')
+    } finally {
+      setImgBusy(false)
+    }
   }
 
   const doExport = async () => {
@@ -203,11 +319,11 @@ function CampaignPanel({ campaign, terr, territory }) {
     setExportPct(0)
     // Export replays against the SAVED territory (what the public sees), not
     // unsaved editor strokes.
-    job.current = exportCampaignReplay({ territory, campaign, onProgress: setExportPct })
+    job.current = exportCampaignReplay({ territory, frames: sorted, onProgress: setExportPct })
     try {
       const { blob, ext } = await job.current.promise
       downloadBlob(blob, `campaign-replay.${ext}`)
-      audit('Exported campaign replay', `${moves} moves, .${ext}`)
+      audit('Exported campaign replay', `${count} frames, .${ext}`)
     } catch (e) {
       if (!e?.cancelled) setExportErr(e?.message || 'Export failed.')
     } finally {
@@ -220,68 +336,34 @@ function CampaignPanel({ campaign, terr, territory }) {
     <div className="panel panel-pad col" style={{ gap: 8, marginTop: 14 }}>
       <div className="row between center wrap" style={{ gap: 8 }}>
         <strong className="head" style={{ fontSize: 14 }}>Campaign replay</strong>
-        {active && (
-          <span className="mono dim" style={{ fontSize: 10 }}>
-            START {new Date(campaign.start.ts).toLocaleDateString()} · {moves} PROGRESS FRAME{moves === 1 ? '' : 'S'} RECORDED
-          </span>
-        )}
+        {active && <span className="mono dim" style={{ fontSize: 10 }}>{count} FRAME{count === 1 ? '' : 'S'} RECORDED</span>}
       </div>
       <div className="mono dim" style={{ fontSize: 11 }}>
         {active
-          ? 'Replay is live — visitors watch the conquest animate from the start state when the map loads. "Save map" only publishes your painting; use Record Progress Frame below to add a step to that animation.'
-          : 'No start state selected. Pick one to start recording campaign history — you can then record a progress frame each time the campaign advances.'}
+          ? 'Replay is live — visitors watch the conquest animate through every frame below when the map loads (or jump to any frame themselves via the picker on the Home page). Each frame can be repainted, relabelled, reordered, duplicated or deleted independently. "Set as Default Start" picks which frame the auto-play begins from — earlier frames stay archived and reachable via the picker either way.'
+          : 'No frames recorded yet. Paint the map above, then add it as the campaign start frame — you can add more as the campaign advances.'}
       </div>
-      {active && (
-        <div className="mono dim" style={{ fontSize: 11, lineHeight: 1.7, borderLeft: '2px solid var(--line)', paddingLeft: 10 }}>
-          <span className="accent">Record Progress Frame</span> — adds the current map as the next step in the replay. Start state untouched. Use this as the campaign advances.<br />
-          <span className="hostile">Re-record Start State</span> — replaces the baseline with the current map and <strong>erases all progress frames</strong>. Only for redefining where the campaign begins.
-        </div>
-      )}
-      {active && (
-        <label className="col" style={{ gap: 4 }}>
-          <span className="mono dim" style={{ fontSize: 10, letterSpacing: 2 }}>
-            LABEL FOR THIS FRAME (OPTIONAL)
-          </span>
-          <input
-            value={label}
-            onChange={(e) => setLabel(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') recordProgress() }}
-            maxLength={80}
-            placeholder="e.g. Week 3 — Bravo retakes Singleton"
-          />
-          <span className="mono dim" style={{ fontSize: 10 }}>
-            Shown on screen (and in the exported video) while this move plays back.
-          </span>
-        </label>
-      )}
       <div className="row wrap center" style={{ gap: 8 }}>
-        {active ? (
-          <>
-            <button
-              className="primary"
-              onClick={recordProgress}
-              title="Append the current map to the replay timeline as the next step, with the label above. Does not change the start state."
-            >
-              + Record Progress Frame
-            </button>
-            <button
-              className="danger ghost"
-              onClick={selectStart}
-              title="Overwrite the campaign baseline with the current map. Erases every recorded progress frame."
-            >
-              ⟲ Re-record Start State
-            </button>
-          </>
-        ) : (
-          <button className="ghost" onClick={selectStart} title="Set the current map as the campaign baseline (frame 0).">Select Start State</button>
+        <button className="primary" onClick={addFromLive} title="Snapshot the current live painting as a new frame at the end of the timeline.">
+          + Add Frame from Live Map
+        </button>
+        {active && <button className="danger ghost" onClick={clearAll}>Clear replay history</button>}
+        {active && (
+          <button
+            className="ghost"
+            onClick={doExportImage}
+            disabled={!hasRecentFrame || imgBusy}
+            title={!hasRecentFrame ? 'No frames recorded in the last 7 days' : 'Download a still image highlighting this week’s gains'}
+          >
+            {imgBusy ? 'Rendering…' : '🖼 Export Weekly Update Image'}
+          </button>
         )}
-        {active && <button className="danger ghost" onClick={clearHistory}>Clear replay history</button>}
         {active && !exporting && (
           <button
             className="ghost"
             onClick={doExport}
-            disabled={moves === 0 || !exportSupported()}
-            title={!exportSupported() ? 'This browser cannot record video' : moves === 0 ? 'No moves recorded yet' : 'Render the replay to a video file'}
+            disabled={count === 0 || !exportSupported()}
+            title={!exportSupported() ? 'This browser cannot record video' : count === 0 ? 'No frames recorded yet' : 'Render the replay to a video file'}
           >
             ⬇ Export Campaign Replay
           </button>
@@ -293,28 +375,90 @@ function CampaignPanel({ campaign, terr, territory }) {
           </>
         )}
       </div>
-      {/* Recorded timeline, so RHQ can see what the replay will play back. */}
-      {active && moves > 0 && (
-        <div className="col" style={{ gap: 3, marginTop: 4 }}>
-          <div className="mono dim" style={{ fontSize: 10, letterSpacing: 2 }}>RECORDED TIMELINE</div>
-          <div className="mono dim" style={{ fontSize: 11 }}>
-            <span className="accent">START</span> · {new Date(campaign.start.ts).toLocaleDateString()}
-          </div>
-          {campaign.timeline.map((e, i) => (
-            <div key={i} className="mono dim" style={{ fontSize: 11 }}>
-              <span className="accent">{String(i + 1).padStart(2, '0')}</span>
-              {' · '}{new Date(e.ts).toLocaleDateString()}
-              {e.label ? <> · <span style={{ color: 'var(--text)' }}>{e.label}</span></> : ' · (unlabelled)'}
-            </div>
+      {active && hasRecentFrame && (
+        <label className="row center wrap" style={{ gap: 8 }}>
+          <span className="mono dim" style={{ fontSize: 10, letterSpacing: 1, flex: '0 0 auto' }}>IMAGE HEADLINE</span>
+          <input
+            value={imgTitle}
+            onChange={(e) => setImgTitle(e.target.value)}
+            placeholder={defaultProgressTitle({ frames: sorted })}
+            maxLength={90}
+            style={{ flex: '1 1 240px' }}
+            title="Printed across the top of the weekly update image. Leave blank for the generated dates."
+          />
+        </label>
+      )}
+      {imgErr && <div className="mono" style={{ fontSize: 11, color: 'var(--hostile)' }}>{imgErr}</div>}
+
+      {active && (
+        <div className="col" style={{ gap: 4, marginTop: 4 }}>
+          <div className="mono dim" style={{ fontSize: 10, letterSpacing: 2 }}>FRAMES</div>
+          {sorted.map((f, i) => (
+            <FrameRow
+              key={f.id}
+              f={f}
+              index={i}
+              isFirst={i === 0}
+              isLast={i === sorted.length - 1}
+              isEditing={editing?.id === f.id}
+              isDefaultStart={defaultStartId === f.id}
+              onMove={(dir) => move(i, dir)}
+              onEdit={() => onStartEdit(editing?.id === f.id ? null : { id: f.id, order: i, label: f.label || '', cells: f.cells })}
+              onDuplicate={() => duplicate(i)}
+              onDelete={() => del(i)}
+              onRelabel={(label) => relabel(i, label)}
+              onSetDefaultStart={() => setDefaultStart(f.id)}
+            />
           ))}
         </div>
       )}
+
       {exporting && (
         <div className="mono dim" style={{ fontSize: 10 }}>
           The video records in real time — keep this tab visible until it finishes. MP4 where the browser supports it, otherwise WebM.
         </div>
       )}
       {exportErr && <div className="mono" style={{ fontSize: 11, color: 'var(--hostile)' }}>{exportErr}</div>}
+    </div>
+  )
+}
+
+// One frame row. Keeps its own local label text so typing doesn't fire a
+// Firestore write per keystroke — the label only commits (onRelabel) when
+// the field loses focus or Enter is pressed, and only if it actually changed.
+function FrameRow({ f, index, isFirst, isLast, isEditing, isDefaultStart, onMove, onEdit, onDuplicate, onDelete, onRelabel, onSetDefaultStart }) {
+  const [label, setLabel] = useState(f.label || '')
+  useEffect(() => { setLabel(f.label || '') }, [f.label])
+  const commit = () => { if (label !== (f.label || '')) onRelabel(label) }
+
+  return (
+    <div className="row center wrap" style={{ gap: 8, borderTop: '1px solid var(--line)', paddingTop: 6,
+      background: isEditing ? 'rgba(54,224,192,0.08)' : undefined }}>
+      <span className="mono accent" style={{ fontSize: 11, flex: '0 0 auto' }}>{index === 0 ? 'START' : String(index + 1).padStart(2, '0')}</span>
+      <input
+        value={label}
+        onChange={(e) => setLabel(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur() }}
+        placeholder={index === 0 ? 'Campaign baseline' : 'e.g. Week 3 — Bravo retakes Singleton'}
+        maxLength={80}
+        style={{ flex: '1 1 160px' }}
+      />
+      {isDefaultStart && <span className="tag" style={{ fontSize: 9, flex: '0 0 auto', color: 'var(--accent)', borderColor: 'var(--accent)' }}>DEFAULT START</span>}
+      <span className="mono dim" style={{ fontSize: 10, flex: '0 0 auto' }}>{new Date(f.ts).toLocaleDateString()}</span>
+      <div className="row" style={{ gap: 4, flex: '0 0 auto' }}>
+        <button className="ghost" style={{ padding: '3px 8px' }} onClick={() => onMove(-1)} disabled={isFirst} title="Move earlier">↑</button>
+        <button className="ghost" style={{ padding: '3px 8px' }} onClick={() => onMove(1)} disabled={isLast} title="Move later">↓</button>
+        <button className={isEditing ? 'primary' : 'ghost'} style={{ padding: '3px 8px' }} onClick={onEdit} title="Load this frame into the canvas above to repaint it">
+          {isEditing ? 'Editing…' : 'Edit'}
+        </button>
+        <button className="ghost" style={{ padding: '3px 8px' }} onClick={onDuplicate} title="Insert a copy of this frame right after it">Duplicate</button>
+        <button className={isDefaultStart ? 'primary' : 'ghost'} style={{ padding: '3px 8px' }} onClick={onSetDefaultStart}
+          title={isDefaultStart ? 'Clear default start — the public replay will start from the earliest frame again' : "Public replay's auto-play will start from here (earlier frames stay archived, still reachable via its frame picker)"}>
+          {isDefaultStart ? 'Default ✓' : 'Set as Default Start'}
+        </button>
+        <button className="danger ghost" style={{ padding: '3px 8px' }} onClick={onDelete}>Delete</button>
+      </div>
     </div>
   )
 }

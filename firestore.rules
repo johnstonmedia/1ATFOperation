@@ -4,11 +4,17 @@ rules_version = '2';
 //
 //  - Public operational content (content/*) is world-readable; only RHQ writes.
 //    Covers every single-value slice in store.js SINGLE_SLICES — narrative,
-//    territory, campaign (replay history), classified, branding, companyPages,
-//    video, intel, intelIntro, briefings. Adding a slice there needs NO rules
-//    change; it is already covered by this block.
+//    territory, classified, branding, companyPages, video, intel, intelIntro,
+//    briefings. Adding a slice there needs NO rules change; it is already
+//    covered by this block.
+//  - campaignFrames: the campaign replay history, one document per frame
+//    (full cell snapshot + label + order) so RHQ can edit/reorder/delete any
+//    frame independently. World-readable like content/*; only RHQ writes.
 //  - intelSubmissions: the Company Commander approval queue — a commander
 //    reads/writes only their own company's submissions, RHQ manages all.
+//  - intelStats: anonymous per-company decrypt counts. Public read AND public
+//    create/increment (the Intel tab has no login), locked to a fixed shape
+//    carrying no identity — see the block below for exactly what that allows.
 //  - roster: RHQ reads all; a signed-in member may additionally read ONLY their
 //    own record (matched via their auth email against the record's idNumber) —
 //    this is what temporary-password registration relies on, before the member
@@ -64,6 +70,14 @@ service cloud.firestore {
     // ------------------------------------------------------- public site content
     // Anyone can read; RHQ edits.
     match /content/{doc} {
+      allow read: if true;
+      allow write: if isRHQ();
+    }
+
+    // ---------------------------------------------------- campaign replay frames
+    // One document per frame (full cell snapshot). Anyone can read; RHQ edits,
+    // reorders, duplicates or deletes any frame independently.
+    match /campaignFrames/{id} {
       allow read: if true;
       allow write: if isRHQ();
     }
@@ -161,6 +175,35 @@ service cloud.firestore {
       allow update: if isRHQ() || (isCommanderOf(resource.data.company)
                                    && request.resource.data.company == resource.data.company);
       allow delete: if isRHQ() || isCommanderOf(resource.data.company);
+    }
+
+    // ------------------------------------------------- anonymous decrypt counts
+    // How many devices have solved each intel fragment, per company. The Intel
+    // tab has no login, so this MUST be writable by an unauthenticated visitor
+    // — which is why the document is constrained to a fixed shape carrying
+    // nothing but a company code, a fragment id, a count and two timestamps.
+    // There is no identity here to protect.
+    //
+    // create: the first solve, which must start the count at exactly 1.
+    // update: exactly +1, and may not rewrite which company/fragment the doc
+    //         is about — so the worst an abusive client can do is inflate one
+    //         counter one request at a time, never forge or move a total.
+    // Deletes are RHQ-only (resetting a term's counts).
+    function statsShapeOk(d) {
+      return d.keys().hasOnly(['company','fragmentId','solves','lastAt'])
+        && d.company is string && d.company.size() <= 8
+        && d.fragmentId is string && d.fragmentId.size() <= 64
+        && d.lastAt is number;
+    }
+    match /intelStats/{id} {
+      allow read:   if true;
+      allow create: if statsShapeOk(request.resource.data)
+        && request.resource.data.solves == 1;
+      allow update: if statsShapeOk(request.resource.data)
+        && request.resource.data.solves == resource.data.solves + 1
+        && request.resource.data.company == resource.data.company
+        && request.resource.data.fragmentId == resource.data.fragmentId;
+      allow delete: if isRHQ();
     }
 
     // ------------------------------------------------------------- default deny

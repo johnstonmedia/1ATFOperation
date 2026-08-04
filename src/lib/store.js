@@ -18,12 +18,11 @@ import {
   DEFAULT_ACTIVITY,
 } from '../firebase/seed'
 import { TERR_COLS, TERR_ROWS } from './territory'
-import { EMPTY_CAMPAIGN, campaignValid } from './campaign'
 
 const LS_KEY = '1atf-state-v1'
 const LS_AUTHIDX = '1atf-authindex'
-const SINGLE_SLICES = ['narrative', 'territory', 'classified', 'branding', 'companyPages', 'video', 'intel', 'intelIntro', 'briefings', 'campaign']
-const COLLECTION_SLICES = ['roster', 'tasks', 'activity', 'support', 'resetRequests', 'audit']
+const SINGLE_SLICES = ['narrative', 'territory', 'classified', 'branding', 'companyPages', 'video', 'intel', 'intelIntro', 'briefings', 'campaignDefaultStart']
+const COLLECTION_SLICES = ['roster', 'tasks', 'activity', 'support', 'resetRequests', 'audit', 'campaignFrames']
 
 export const isContentSlice = (slice) => SINGLE_SLICES.includes(slice)
 
@@ -37,13 +36,18 @@ const DEFAULT_STATE = {
   intel: DEFAULT_INTEL,
   intelIntro: DEFAULT_INTEL_INTRO,
   briefings: DEFAULT_BRIEFINGS,
-  campaign: EMPTY_CAMPAIGN,
+  // Frame id the public replay's auto-play starts from (null = the earliest
+  // frame, i.e. the original behaviour). Earlier frames still exist and
+  // remain reachable via the replay's manual frame picker — this only
+  // controls where the AUTO-PLAY begins.
+  campaignDefaultStart: null,
   roster: FIREBASE_ENABLED ? [] : DEMO_ROSTER,
   tasks: [],
   activity: FIREBASE_ENABLED ? [] : DEFAULT_ACTIVITY,
   support: [],
   resetRequests: [],
   audit: [],
+  campaignFrames: [],
   // Per-content-slice metadata, e.g. { zones: { updatedAt } }. Populated from
   // the Firestore docs (or localStorage) so the UI can show "last updated".
   contentMeta: {},
@@ -161,22 +165,22 @@ function normalizeNarrative(state) {
   return state
 }
 
-// Same idea for the campaign replay history: a start state recorded against a
-// different grid resolution can't be replayed over the current art. Treat an
-// invalid campaign as "none recorded" — RHQ re-selects a start state in the
-// map editor to begin a fresh history.
-function normalizeCampaign(state) {
-  const c = state.campaign
-  const valid = campaignValid(c, state.territory.cols, state.territory.rows)
-  state.campaign = valid
-    ? { start: c.start, timeline: Array.isArray(c.timeline) ? c.timeline : [] }
-    : structuredClone(EMPTY_CAMPAIGN)
+// Same idea for the campaign replay frames: a frame recorded against a
+// different grid resolution can't be replayed over the current art. Drop the
+// whole set rather than render a broken/mixed-resolution replay — RHQ adds a
+// fresh frame from the current map to begin a new history.
+function normalizeCampaignFrames(state) {
+  const frames = Array.isArray(state.campaignFrames) ? state.campaignFrames : []
+  const size = state.territory.cols * state.territory.rows
+  state.campaignFrames = frames.every((f) => typeof f.cells === 'string' && f.cells.length === size)
+    ? frames
+    : []
   return state
 }
 
 export async function loadState() {
   const state = await (FIREBASE_ENABLED ? loadFirebase() : loadLocal())
-  return normalizeNarrative(normalizeCampaign(normalizeTerritory(state)))
+  return normalizeNarrative(normalizeCampaignFrames(normalizeTerritory(state)))
 }
 
 export async function persistSlice(state, slice) {

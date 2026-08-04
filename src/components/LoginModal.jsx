@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
 import { useDialog } from '../hooks/useDialog'
-import SupportModal from './SupportModal'
 
 // Access modal with three modes:
 //  - login:  ID number + password (default).
@@ -17,7 +16,6 @@ export default function LoginModal({ onClose, onAuthed, initialMode = 'login' })
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
   const [info, setInfo] = useState('')
-  const [support, setSupport] = useState(false)
   const [showPw, setShowPw] = useState(false)
   const [capsOn, setCapsOn] = useState(false)
   const [remember, setRemember] = useState(true)
@@ -128,13 +126,8 @@ export default function LoginModal({ onClose, onAuthed, initialMode = 'login' })
               Forgot password?
             </button>
           )}
-          <button className="ghost" style={{ width: '100%' }} onClick={() => setSupport(true)}>
-            Help &amp; Support
-          </button>
         </div>
       </div>
-
-      {support && <SupportModal onClose={() => setSupport(false)} />}
     </div>
   )
 }

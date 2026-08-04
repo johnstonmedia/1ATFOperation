@@ -1,127 +1,48 @@
 import { PAINT, RHQ_PAINT, colorOf, coyLabelOf } from './territory'
 
-// Campaign replay timeline. The campaign is stored as ONE content slice
-// (`content/campaign`) shaped as:
+// Campaign replay frames. The campaign is stored as its OWN Firestore
+// collection (`campaignFrames`), one document per frame:
 //
-//   {
-//     start:    { cells: <cols*rows string>, ts } | null   // frame 0
-//     timeline: [ { ts, diff } ]                           // one entry per RHQ save
-//   }
+//   { id, order, cells: <cols*rows string>, label, ts, updatedAt }
 //
-// Each timeline entry is a DIFF against the previous frame, not a full
-// snapshot — a full 216x112 grid is ~24 KB, so storing every save verbatim
-// would blow through Firestore's 1 MiB doc limit after ~40 saves. A diff only
-// records the runs of cells that actually changed, so hundreds of ordinary
-// paint sessions fit comfortably in the single doc. Frames are reconstructed
-// at replay time by applying the diffs in order (see buildFrames).
-//
-// Diff encoding: `<index36>:<replacement>` segments joined by ';', where
-// <replacement> is the literal run of new cell codes starting at that index.
-// Cell codes are [.A-Za-z] so ':' and ';' can never collide with content.
+// Each frame is a FULL snapshot, not a diff — unlike the old single-doc
+// diff-chain, every frame is independently readable and editable: RHQ can
+// jump to frame 5 and repaint it without needing to replay anything before
+// it, reorder frames, duplicate one to insert a new step, or delete one, all
+// as plain per-document operations. `order` is kept as a contiguous 0..N-1
+// index (see renumberFrames) so "the sequence" is just "sort by order".
 
-export const EMPTY_CAMPAIGN = { start: null, timeline: [] }
+/* -------------------------------- ordering ------------------------------- */
 
-// Stay well under Firestore's 1 MiB per-document cap; when the campaign doc
-// would outgrow this, the OLDEST timeline entries are folded into the start
-// state (the replay simply begins one move later — see appendSave).
-const MAX_CAMPAIGN_BYTES = 700_000
-
-/* ------------------------------ diff codec ------------------------------ */
-
-// Encode the change from `prev` to `next` (equal-length cell strings) as
-// compact runs. Returns '' when nothing changed.
-export function diffCells(prev, next) {
-  if (prev === next) return ''
-  const runs = []
-  let i = 0
-  const n = next.length
-  while (i < n) {
-    if (prev[i] === next[i]) { i++; continue }
-    let j = i + 1
-    while (j < n && prev[j] !== next[j]) j++
-    runs.push(i.toString(36) + ':' + next.slice(i, j))
-    i = j
-  }
-  return runs.join(';')
+export function sortFrames(frames) {
+  return [...(frames || [])].sort((a, b) => a.order - b.order)
 }
 
-export function applyDiff(cells, diff) {
-  if (!diff) return cells
-  let out = cells
-  for (const seg of diff.split(';')) {
-    const k = seg.indexOf(':')
-    const i = parseInt(seg.slice(0, k), 36)
-    const s = seg.slice(k + 1)
-    out = out.slice(0, i) + s + out.slice(i + s.length)
-  }
-  return out
+// Re-assign contiguous order values 0..N-1 to an array already in the
+// desired sequence. Call this right before persisting any structural change
+// (add/duplicate/delete/reorder) so order never drifts or collides.
+export function renumberFrames(frames) {
+  return frames.map((f, i) => ({ ...f, order: i }))
 }
 
-/* ------------------------------- timeline ------------------------------- */
-
-// True when the campaign has a start state that fits the current grid.
-export function campaignValid(campaign, cols, rows) {
-  return !!(
-    campaign &&
-    campaign.start &&
-    typeof campaign.start.cells === 'string' &&
-    campaign.start.cells.length === cols * rows
-  )
+// True when there's at least one frame and every frame's cell string fits
+// the current grid resolution (a frame recorded against an old map size
+// can't be replayed over the current art — see store.js normalizeFrames).
+export function framesValid(frames, cols, rows) {
+  return Array.isArray(frames) && frames.length > 0 &&
+    frames.every((f) => typeof f.cells === 'string' && f.cells.length === cols * rows)
 }
 
-// Reconstruct every frame: [startCells, afterSave1, afterSave2, ...].
-export function buildFrames(campaign) {
-  const frames = [campaign.start.cells]
-  let cur = campaign.start.cells
-  for (const entry of campaign.timeline || []) {
-    cur = applyDiff(cur, entry.diff)
-    frames.push(cur)
-  }
-  return frames
+// Ordered cell-strings, frame 0 = the campaign start state.
+export function frameCells(frames) {
+  return sortFrames(frames).map((f) => f.cells)
 }
 
-// Caption for each recorded move, aligned with the transitions returned by
-// buildFrames (transition k plays timeline[k]). '' when unlabelled.
-export function frameLabels(campaign) {
-  return (campaign.timeline || []).map((e) => e.label || '')
-}
-
-// The latest reconstructed state (what the last save left the map as).
-export function latestFrame(campaign) {
-  let cur = campaign.start.cells
-  for (const entry of campaign.timeline || []) cur = applyDiff(cur, entry.diff)
-  return cur
-}
-
-// Record a save as a new timeline point. Returns the new campaign object, or
-// null when the save didn't change any cells (no point in an empty frame).
-// If the doc would outgrow the Firestore size budget, the oldest entries are
-// folded into the start state — history quietly loses its earliest move(s)
-// rather than the save failing outright.
-export function appendSave(campaign, newCells, ts = Date.now(), label = '') {
-  const prev = latestFrame(campaign)
-  const diff = diffCells(prev, newCells)
-  if (!diff) return null
-  const entry = { ts, diff }
-  // Optional caption shown while this move plays back (and in the export).
-  if (label && label.trim()) entry.label = label.trim().slice(0, 80)
-  let next = {
-    start: campaign.start,
-    timeline: [...(campaign.timeline || []), entry],
-  }
-  while (campaignByteSize(next) > MAX_CAMPAIGN_BYTES && next.timeline.length > 1) {
-    const [oldest, ...rest] = next.timeline
-    next = {
-      start: { cells: applyDiff(next.start.cells, oldest.diff), ts: oldest.ts },
-      timeline: rest,
-    }
-  }
-  return next
-}
-
-export function campaignByteSize(campaign) {
-  // Close enough to the Firestore serialized size for budgeting purposes.
-  return JSON.stringify(campaign).length
+// Caption per transition, aligned with frameCells: transition k plays INTO
+// frame k+1, captioned with that frame's label. Frame 0 (the start state)
+// has no caption of its own.
+export function frameCaptions(frames) {
+  return sortFrames(frames).slice(1).map((f) => f.label || '')
 }
 
 /* --------------------------- replay transitions -------------------------- */

@@ -1,12 +1,25 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import PixelMap from './PixelMap'
-import { campaignValid, buildFrames, frameLabels, transitionPlan, transitionDuration } from '../lib/campaign'
+import MapLegend from './MapLegend'
+import { framesValid, frameCells, frameCaptions, sortFrames, transitionPlan, transitionDuration } from '../lib/campaign'
 import { renderWaveLayer } from '../lib/terrainRender'
 
-// Campaign replay wrapper around PixelMap. On load it replays the campaign
-// history — start state, then every saved move in order — as an animated
-// conquest wave, then rests on the live territory. Falls back to the plain
-// static map when no campaign has been recorded.
+// Campaign replay wrapper around PixelMap. On load it auto-plays the
+// campaign history — from RHQ's chosen default start frame (or the earliest
+// one) through to the live territory — as an animated conquest wave, then
+// rests on the live state.
+//
+// The transport is a TIMELINE RAIL: one bubble per recorded frame on a single
+// line, filling left-to-right as the replay advances. Hovering a bubble names
+// that frame ("Week 5"); clicking one cuts straight to it — an instant swap of
+// the map, never an animated replay of everything in between, because
+// browsing history should be immediate. Playback itself has no pause: ▶ PLAY
+// runs from RHQ's default start frame through to the live state, and clicking
+// any bubble mid-play simply snaps there and stops. Frames before the default
+// start stay on the rail and stay clickable; they're just skipped by the
+// automatic playback.
+//
+// Falls back to the plain static map when no campaign has been recorded.
 //
 // Animation architecture (the performance-critical part):
 //  - PixelMap renders only the COMMITTED frame (its hatch+border composite is
@@ -24,48 +37,97 @@ const OVERLAY_SCALE = 4 // overlay buffer pixels per grid cell
 const HOLD_MS = 380 // pause between timeline moves
 const START_DELAY_MS = 700 // beat after mount before the auto-replay begins
 
-const btnStyle = { padding: '3px 10px', fontSize: 11 }
-
-export default function CampaignReplayMap({ territory, campaign, maxWidth }) {
-  const { cols, rows } = territory
-
-  // Frames: campaign start + one per save. If the live territory has drifted
-  // from the last recorded frame (saves made before the campaign existed, or
-  // history folded for size), append it as a final synthetic move so the
-  // replay always ends exactly on the live map.
-  const frames = useMemo(() => {
-    if (!campaignValid(campaign, cols, rows)) return null
-    const f = buildFrames(campaign)
-    if (f[f.length - 1] !== territory.cells) f.push(territory.cells)
-    return f.length >= 2 ? f : null
-  }, [campaign, territory.cells, cols, rows])
-
-  // Captions per transition (transition k plays timeline[k]); a synthetic
-  // final frame from live drift has no label.
-  const captions = useMemo(
-    () => (campaignValid(campaign, cols, rows) ? frameLabels(campaign) : []),
-    [campaign, cols, rows],
-  )
-
-  if (!frames) return <PixelMap territory={territory} maxWidth={maxWidth} />
-  return <Replay territory={territory} frames={frames} captions={captions} maxWidth={maxWidth} />
+const playBtnStyle = {
+  padding: '5px 14px',
+  fontSize: 12,
+  fontWeight: 700,
+  letterSpacing: 2,
+  flex: '0 0 auto',
+  display: 'flex',
+  alignItems: 'center',
+  gap: 7,
 }
 
-function Replay({ territory, frames, captions, maxWidth }) {
+export default function CampaignReplayMap({ territory, frames: campaignFrames, defaultStartId, maxWidth }) {
+  const { cols, rows } = territory
+
+  // Frames: one per recorded frame, sorted by order. If the live territory
+  // has drifted from the last frame (a live save made without updating the
+  // replay), append it as a final synthetic move so the replay always ends
+  // exactly on the live map.
+  const frames = useMemo(() => {
+    if (!framesValid(campaignFrames, cols, rows)) return null
+    const f = frameCells(campaignFrames)
+    if (f[f.length - 1] !== territory.cells) f.push(territory.cells)
+    return f.length >= 2 ? f : null
+  }, [campaignFrames, territory.cells, cols, rows])
+
+  // Captions per transition (transition k plays into frame k+1); a synthetic
+  // final frame from live drift has no label.
+  const captions = useMemo(
+    () => (framesValid(campaignFrames, cols, rows) ? frameCaptions(campaignFrames) : []),
+    [campaignFrames, cols, rows],
+  )
+
+  // Per-frame id + label for the manual picker — includes frame 0's own
+  // label (frameCaptions deliberately drops it, since it has no TRANSITION
+  // caption). Index i here lines up 1:1 with frames[i] for every REAL frame;
+  // a synthetic live-drift frame (if any) sits one past the end of this list.
+  const frameMeta = useMemo(
+    () => (framesValid(campaignFrames, cols, rows) ? sortFrames(campaignFrames).map((f) => ({ id: f.id, label: f.label || '' })) : []),
+    [campaignFrames, cols, rows],
+  )
+
+  // Where the auto-play begins. RHQ's chosen default frame, or the earliest
+  // one if unset or since-deleted — earlier frames stay archived and
+  // reachable through the picker either way, they're just skipped by the
+  // automatic replay.
+  const startIdx = useMemo(() => {
+    if (!defaultStartId) return 0
+    const i = frameMeta.findIndex((f) => f.id === defaultStartId)
+    return i < 0 ? 0 : i
+  }, [frameMeta, defaultStartId])
+
+  if (!frames) {
+    return (
+      <div className="col" style={{ gap: 10 }}>
+        <PixelMap territory={territory} maxWidth={maxWidth} showCompanyLabels />
+        <MapLegend showRHQ={territory.showRHQ} />
+      </div>
+    )
+  }
+  return (
+    <Replay
+      territory={territory}
+      frames={frames}
+      captions={captions}
+      frameMeta={frameMeta}
+      startIdx={startIdx}
+      maxWidth={maxWidth}
+    />
+  )
+}
+
+function Replay({ territory, frames, captions, frameMeta, startIdx, maxWidth }) {
   const { cols, rows } = territory
   const transitions = frames.length - 1
   const perMs = useMemo(() => transitionDuration(transitions), [transitions])
 
   const [committed, setCommitted] = useState(frames[frames.length - 1])
   const [playing, setPlaying] = useState(false)
-  const [done, setDone] = useState(true)
   const [labels, setLabels] = useState([]) // conquest name flashes
-  const [progress, setProgress] = useState(1) // 0..1 across the whole replay
   const [moveIdx, setMoveIdx] = useState(-1) // transition being played (-1 = at rest)
+  // Which bubble is lit: the frame being shown at rest, or (while playing) the
+  // frame the current transition is moving OUT of.
+  const [activeIdx, setActiveIdx] = useState(frames.length - 1)
+  // Rail fill, 0..1 across the WHOLE timeline (not just the played range) —
+  // the bubbles before the default start are real history, so the rail should
+  // read as already behind us when playback opens partway along.
+  const [rail, setRail] = useState(1)
 
   const overlayRef = useRef(null)
   // Mutable engine state, outside React so the rAF loop never re-renders.
-  const eng = useRef({ k: 0, t: 0, raf: 0, last: 0, plan: null, committedIdx: frames.length - 1 })
+  const eng = useRef({ k: startIdx, t: 0, raf: 0, last: 0, plan: null, committedIdx: frames.length - 1 })
 
   const clearOverlay = () => {
     const cv = overlayRef.current
@@ -77,33 +139,48 @@ function Replay({ territory, frames, captions, maxWidth }) {
     setCommitted(frames[idx])
   }, [frames])
 
-  // Jump straight to the final live state (skip button / reduced motion).
-  const skipToEnd = useCallback(() => {
+  // Rest on a specific frame index — an instant cut, no animation. This is
+  // what a bubble click does, and where playback lands when it finishes.
+  const restOn = useCallback((idx) => {
     const e = eng.current
-    e.k = transitions
+    e.k = idx
     e.t = 0
     e.plan = null
     clearOverlay()
     setLabels([])
     setMoveIdx(-1)
-    commitFrame(transitions)
+    commitFrame(idx)
     setPlaying(false)
-    setDone(true)
-    setProgress(1)
-  }, [transitions, commitFrame])
+    setActiveIdx(idx)
+    setRail(transitions ? idx / transitions : 1)
+  }, [commitFrame, transitions])
 
-  const startReplay = useCallback(() => {
+  // PLAY resumes from whichever frame is on screen, so clicking a bubble and
+  // then PLAY continues the campaign from there rather than throwing the
+  // visitor back to the beginning. The one exception is pressing PLAY while
+  // already at the end (the live state), where "continue" would mean nothing —
+  // that restarts from RHQ's default start frame.
+  const playFrom = useCallback((idx) => {
     const e = eng.current
-    e.k = 0
+    e.k = idx
     e.t = 0
     e.plan = null
     clearOverlay()
     setLabels([])
     setMoveIdx(-1)
-    commitFrame(0)
-    setDone(false)
+    commitFrame(idx)
+    setActiveIdx(idx)
+    setRail(transitions ? idx / transitions : 0)
     setPlaying(true)
-  }, [commitFrame])
+  }, [commitFrame, transitions])
+
+  const play = useCallback(() => {
+    playFrom(activeIdx >= transitions ? startIdx : activeIdx)
+  }, [playFrom, activeIdx, transitions, startIdx])
+
+  // On mount the map is resting on the live state, so this starts from the
+  // default start frame by the rule above.
+  const startReplay = useCallback(() => playFrom(startIdx), [playFrom, startIdx])
 
   // Auto-play once on mount. Users who ask for reduced motion get the final
   // state immediately (the controls still let them play it manually).
@@ -130,8 +207,8 @@ function Replay({ territory, frames, captions, maxWidth }) {
 
       if (e.k >= transitions) {
         setPlaying(false)
-        setDone(true)
-        setProgress(1)
+        setRail(1)
+        setActiveIdx(transitions)
         setMoveIdx(-1)
         return
       }
@@ -147,6 +224,7 @@ function Replay({ territory, frames, captions, maxWidth }) {
           .map((c, i) => ({ id: `${e.k}-${i}`, x: c.cx, y: c.cy, text: c.label, color: c.color }))
         setLabels(flashes)
         setMoveIdx(e.k)
+        setActiveIdx(e.k)
       }
 
       // Progress runs 0..1 over the wave, then holds briefly before the next
@@ -159,7 +237,7 @@ function Replay({ territory, frames, captions, maxWidth }) {
         ctx.clearRect(0, 0, cv.width, cv.height)
         renderWaveLayer(ctx, e.plan, waveT, { cols, rows, w: cv.width, h: cv.height })
       }
-      setProgress((e.k + waveT) / transitions)
+      setRail(transitions ? (e.k + waveT) / transitions : 1)
 
       if (e.t >= 1 + HOLD_MS / perMs) {
         commitFrame(e.k + 1)
@@ -175,7 +253,18 @@ function Replay({ territory, frames, captions, maxWidth }) {
     return () => { live = false; cancelAnimationFrame(e.raf) }
   }, [playing, frames, transitions, cols, rows, perMs, commitFrame])
 
+  // Name for every bubble on the rail. Indices line up 1:1 with `frames`; a
+  // synthetic live-drift frame (one past the end of frameMeta) is "Current
+  // state". RHQ's own label wins wherever they set one.
+  const frameName = useCallback((i) => {
+    if (i >= frameMeta.length) return 'Current state'
+    return frameMeta[i].label || (i === 0 ? 'Campaign baseline' : `Frame ${i + 1}`)
+  }, [frameMeta])
+
   const caption = moveIdx >= 0 ? (captions[moveIdx] || '') : ''
+  // At rest anywhere other than the live state, name the frame on screen so a
+  // visitor who clicked a bubble knows what they're looking at.
+  const restingLabel = playing || activeIdx >= frames.length - 1 ? null : frameName(activeIdx)
 
   const overlay = (
     <>
@@ -190,35 +279,82 @@ function Replay({ territory, frames, captions, maxWidth }) {
           {l.text}
         </div>
       ))}
-      {/* RHQ's caption for the move currently playing back. */}
-      {caption && <div key={moveIdx} className="replay-caption">{caption}</div>}
+      {/* RHQ's caption for the move currently playing back, or the name of
+          whatever historical frame a visitor has clicked to. */}
+      {caption && <div key={`c${moveIdx}`} className="replay-caption">{caption}</div>}
+      {!caption && restingLabel && <div key={`v${activeIdx}`} className="replay-caption">VIEWING: {restingLabel}</div>}
     </>
   )
 
   return (
-    <div className="col" style={{ gap: 8 }}>
-      <PixelMap territory={{ ...territory, cells: committed }} maxWidth={maxWidth} overlay={overlay} />
+    <div className="col" style={{ gap: 10 }}>
+      <PixelMap
+        territory={{ ...territory, cells: committed }}
+        maxWidth={maxWidth}
+        overlay={overlay}
+        showCompanyLabels
+      />
 
-      {/* Replay transport — play/pause, restart, skip, and a timeline bar. */}
-      <div className="row center wrap" style={{ gap: 8 }}>
-        <span className="tag" style={{ flex: '0 0 auto' }}>CAMPAIGN REPLAY</span>
-        {done ? (
-          <button className="ghost" style={btnStyle} onClick={startReplay} title="Replay campaign history">⟲ Replay</button>
-        ) : (
-          <>
-            <button className="ghost" style={btnStyle} onClick={() => setPlaying((p) => !p)}>
-              {playing ? '❚❚ Pause' : '▶ Play'}
-            </button>
-            <button className="ghost" style={btnStyle} onClick={skipToEnd} title="Skip to current state">≫ Skip</button>
-          </>
-        )}
-        <div style={{ flex: '1 1 120px', height: 4, borderRadius: 2, background: 'var(--line)', overflow: 'hidden' }}>
-          <div style={{ width: `${Math.round(progress * 100)}%`, height: '100%', background: 'var(--accent)', transition: 'width 120ms linear' }} />
-        </div>
-        <span className="mono dim" style={{ fontSize: 10, flex: '0 0 auto' }}>
-          {done ? 'CURRENT STATE' : `MOVE ${Math.min(transitions, eng.current.k + 1)} / ${transitions}`}
-        </span>
+      {/* Transport: ▶ PLAY, then the timeline rail — one bubble per frame. */}
+      <div className="row center wrap" style={{ gap: 12 }}>
+        <button
+          className="ghost"
+          style={playBtnStyle}
+          onClick={play}
+          title={activeIdx >= transitions
+            ? 'Replay the campaign from the start through to the current state'
+            : 'Play on from this frame through to the current state'}
+        >
+          <span aria-hidden="true" style={{ fontSize: 13 }}>▶</span> PLAY
+        </button>
+        <FrameRail
+          count={frames.length}
+          activeIdx={activeIdx}
+          rail={rail}
+          nameAt={frameName}
+          onPick={restOn}
+        />
       </div>
+
+      <MapLegend showRHQ={territory.showRHQ} />
+    </div>
+  )
+}
+
+// The "train line": one bubble per frame, evenly spaced along a single rail
+// that fills up to wherever playback has reached. Bubbles are real buttons —
+// hover or keyboard focus names the frame, click cuts straight to it.
+//
+// The first and last bubbles are inset by half a bubble so neither hangs off
+// the end of the rail, and the fill is drawn between those same insets so it
+// lands exactly on a bubble rather than short of it.
+function FrameRail({ count, activeIdx, rail, nameAt, onPick }) {
+  const INSET = 9 // px — half a bubble plus its ring
+  const posOf = (i) => `calc(${INSET}px + (100% - ${INSET * 2}px) * ${count > 1 ? i / (count - 1) : 0})`
+
+  return (
+    <div className="replay-rail" role="group" aria-label="Campaign timeline">
+      <div className="replay-rail-line" style={{ left: INSET, right: INSET }} />
+      <div
+        className="replay-rail-fill"
+        style={{ left: INSET, width: `calc((100% - ${INSET * 2}px) * ${Math.max(0, Math.min(1, rail))})` }}
+      />
+      {Array.from({ length: count }, (_, i) => {
+        const name = nameAt(i)
+        return (
+          <button
+            key={i}
+            type="button"
+            className={`replay-bubble${i < activeIdx ? ' is-played' : ''}${i === activeIdx ? ' is-current' : ''}`}
+            style={{ left: posOf(i) }}
+            onClick={() => onPick(i)}
+            aria-label={`Show ${name}`}
+            aria-current={i === activeIdx ? 'true' : undefined}
+          >
+            <span className="replay-bubble-tip">{name}</span>
+          </button>
+        )
+      })}
     </div>
   )
 }

@@ -8,6 +8,7 @@ import Logo from '../components/Logo'
 import LoginModal from '../components/LoginModal'
 import DocEmbed from '../components/DocEmbed'
 import LanguageWarning from '../components/LanguageWarning'
+import IntelPreview from '../components/IntelPreview'
 import { Field } from './ops/NarrativeEditor'
 import { PHONETIC } from '../firebase/seed'
 import {
@@ -62,7 +63,7 @@ export default function CommanderPanel() {
   const liveIds = new Set(liveIntel.map((f) => f.id))
   const newPending = subs.filter((s) => s.status === 'pending' && !liveIds.has(s.fragment?.id))
 
-  const blank = () => ({ id: rid(), company, title: '', prompt: '', answer: '', reveal: '', resources: [], docUrl: '', ts: Date.now() })
+  const blank = () => ({ id: rid(), company, title: '', prompt: '', answer: '', hint: '', reveal: '', resources: [], docUrl: '', ts: Date.now() })
 
   // Submit an add/edit. If a pending submission already targets this fragment,
   // update it in place so the queue keeps one entry per fragment.
@@ -210,6 +211,7 @@ function CoyBuilder({ fragment, coyName, note, onCancel, onSubmit }) {
   const [f, setF] = useState({ ...fragment, resources: fragment.resources || [] })
   const set = (k, v) => setF((p) => ({ ...p, [k]: v }))
   const [resDraft, setResDraft] = useState({ title: '', url: '' })
+  const [preview, setPreview] = useState(false)
 
   const addLink = () => {
     if (!resDraft.url.trim()) return
@@ -226,17 +228,31 @@ function CoyBuilder({ fragment, coyName, note, onCancel, onSubmit }) {
   }
   const delRes = (id) => set('resources', f.resources.filter((r) => r.id !== id))
 
+  // See the same puzzle a recruit will — worth doing before submitting to RHQ,
+  // since a wrong solution string only shows up as the wrong number of answer
+  // boxes. Records nothing.
+  if (preview) {
+    return (
+      <div className="container" style={{ padding: '24px 20px', maxWidth: 1000 }}>
+        <IntelPreview fragment={f} onBack={() => setPreview(false)} backLabel="← Back to draft" />
+      </div>
+    )
+  }
+
   return (
     <div className="container" style={{ padding: '24px 20px', maxWidth: 760 }}>
-      <div className="row between center" style={{ marginBottom: 18 }}>
+      <div className="row between center wrap" style={{ marginBottom: 18, gap: 10 }}>
         <div>
           <div className="mono accent" style={{ fontSize: 10, letterSpacing: 3 }}>COY CENTRE · {coyName?.toUpperCase()} · DRAFT</div>
           <h1 style={{ margin: '4px 0 0', fontSize: 22, color: '#fff' }}>Edit fragment</h1>
         </div>
-        <button className="ghost" onClick={onCancel}>← Back</button>
+        <div className="row" style={{ gap: 8 }}>
+          <button className="ghost" onClick={() => setPreview(true)}>👁 Preview as recruit</button>
+          <button className="ghost" onClick={onCancel}>← Back</button>
+        </div>
       </div>
 
-      <LanguageWarning texts={[f.title, f.prompt, f.answer, f.reveal]} style={{ marginBottom: 14 }} />
+      <LanguageWarning texts={[f.title, f.prompt, f.answer, f.hint, f.reveal]} style={{ marginBottom: 14 }} />
 
       <div className="panel panel-pad col" style={{ marginBottom: 16 }}>
         <div className="mono dim" style={{ fontSize: 11 }}>Audience: <span className="accent">{coyName} (your company)</span></div>
@@ -246,6 +262,9 @@ function CoyBuilder({ fragment, coyName, note, onCancel, onSubmit }) {
         </Field>
         <Field label="Solution (the decoded words — cadet gets one box per word)">
           <input className="mono" value={f.answer} onChange={(e) => set('answer', e.target.value)} placeholder="e.g. CAMP AT SINGLETON" />
+        </Field>
+        <Field label="Hint (optional — cadets reveal it themselves with a button)">
+          <textarea rows={2} value={f.hint || ''} onChange={(e) => set('hint', e.target.value)} placeholder="e.g. Each group of dots and dashes is one letter." />
         </Field>
         <Field label="Revealed intel (shown once they decode it)">
           <textarea rows={3} value={f.reveal} onChange={(e) => set('reveal', e.target.value)} placeholder="e.g. Depart 0700 Sat 12 Apr, Singleton. Bring webbing + boots." />

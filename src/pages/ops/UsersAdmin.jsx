@@ -368,17 +368,25 @@ function UserModal({ rec, onClose, onSave, onDelete, used }) {
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(2,4,9,0.8)', zIndex: 900, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
       <div ref={dialogRef} className="panel panel-pad col" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={rec.name ? 'Edit user' : 'New user'} style={{ width: 420, maxWidth: '100%' }}>
         <h2 className="accent" style={{ margin: 0, fontSize: 18 }}>{rec.name ? 'Edit User' : 'New User'}</h2>
-        <Field label="Name"><input value={u.name} onChange={set('name')} /></Field>
+        {/* autoComplete="off" throughout is load-bearing, not tidiness.
+            Name + student ID + email together is exactly the cluster Chrome's
+            address/contact autofill recognises, so without this it offers to
+            "save your info" — and the details in this dialog are some OTHER
+            cadet's, which would file a member's name, ID and email into the
+            RHQ staffer's own Google autofill profile and sync it to their
+            account. Unlike the password exception, Chrome does honour
+            autocomplete="off" for contact autofill. */}
+        <Field label="Name"><input value={u.name} onChange={set('name')} autoComplete="off" /></Field>
         <div className="row" style={{ gap: 10 }}>
           <Field label="Rank">
-            <select value={rankShort(u.rank)} onChange={set('rank')}>
+            <select value={rankShort(u.rank)} onChange={set('rank')} autoComplete="off">
               <option value="">— Select rank —</option>
               {RANKS.map((r) => <option key={r.short} value={r.short}>{r.long} ({r.short})</option>)}
             </select>
           </Field>
-          <Field label="Student ID number"><input value={u.idNumber} onChange={set('idNumber')} placeholder="e.g. 183271" /></Field>
+          <Field label="Student ID number"><input value={u.idNumber} onChange={set('idNumber')} placeholder="e.g. 183271" autoComplete="off" /></Field>
         </div>
-        <Field label="Email"><input value={u.email} onChange={set('email')} /></Field>
+        <Field label="Email"><input value={u.email} onChange={set('email')} autoComplete="off" /></Field>
         <div className="row" style={{ gap: 10 }}>
           <Field label="Company">
             <select value={u.company} onChange={set('company')}>
@@ -386,14 +394,16 @@ function UserModal({ rec, onClose, onSave, onDelete, used }) {
             </select>
           </Field>
           <Field label="Role">
-            <select value={u.role} onChange={set('role')}>
+            <select value={u.role} onChange={set('role')} autoComplete="off">
               {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
             </select>
           </Field>
         </div>
         <Field label="Temporary password">
           <div className="row" style={{ gap: 8 }}>
-            <input className="mono" value={u.tempPassword || ''} onChange={(e) => setU({ ...u, tempPassword: e.target.value, tempIssuedAt: Date.now() })} />
+            {/* Deliberately a plain text input, and it stays one: this is a
+                password RHQ is ISSUING to someone else, not signing in with. */}
+            <input className="mono" autoComplete="off" value={u.tempPassword || ''} onChange={(e) => setU({ ...u, tempPassword: e.target.value, tempIssuedAt: Date.now() })} />
             <button className="ghost" type="button" onClick={() => setU({ ...u, tempPassword: genTempPassword(), tempIssuedAt: Date.now() })}>Regenerate</button>
           </div>
         </Field>

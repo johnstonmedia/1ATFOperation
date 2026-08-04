@@ -278,6 +278,23 @@ export const DEFAULT_NARRATIVE = {
       Support: 'Logistics, signals and sustainment from the Logistics Hub.',
     },
   },
+  // Short log of what each company actually DID to move the line, shown above
+  // the company-roles box on the home page. The roles box says what a company
+  // is FOR; this says what it has done — which is the bit that explains why
+  // the map looks like it does this week. RHQ can hide the whole box with
+  // `show: false` (e.g. between updates, so it never sits there stale).
+  movements: {
+    show: true,
+    title: 'RECENT MOVEMENTS',
+    intro: 'Company actions behind the latest changes to the operational map.',
+    entries: [
+      { id: 'mv-a', company: 'A', text: 'Pushed the northern screen forward and held the gained ground through the week.' },
+      { id: 'mv-b', company: 'B', text: 'Cleared the approach to Singleton, forcing the Meridian line back off the ridge.' },
+      { id: 'mv-c', company: 'C', text: 'Consolidated the coastal corridor; no ground lost during the period.' },
+      { id: 'mv-e', company: 'E', text: 'Reinforced the Southern Line after Bravo’s advance opened a gap.' },
+      { id: 'mv-s', company: 'S', text: 'Moved the forward supply point up behind the new front, sustaining the advance.' },
+    ],
+  },
   meridian: {
     title: 'MERIDIAN // THREAT',
     threatLevel: 'SEVERE',
@@ -308,6 +325,21 @@ export function smeacOf(narrative) {
     ...DEFAULT_NARRATIVE.smeac,
     mission: narrative?.oneatf?.mission || DEFAULT_NARRATIVE.smeac.mission,
     ...(narrative?.smeac || {}),
+  }
+}
+
+// Same idea for the movements box: a narrative saved before this key existed
+// has no `movements`, so fall back to the seed rather than rendering an empty
+// panel. `entries` is defaulted separately because a narrative CAN legitimately
+// have an empty list (RHQ deleted every row) and that must not silently
+// resurrect the filler text — only a missing key does.
+export function movementsOf(narrative) {
+  const m = narrative?.movements
+  if (!m) return DEFAULT_NARRATIVE.movements
+  return {
+    ...DEFAULT_NARRATIVE.movements,
+    ...m,
+    entries: Array.isArray(m.entries) ? m.entries : DEFAULT_NARRATIVE.movements.entries,
   }
 }
 

@@ -57,7 +57,7 @@ export const isRHQCode = (code) => !!code && code.toUpperCase() === 'R'
 // stronghold reads as a unit-wide win at a glance. Single source of truth:
 // change this one value to restyle every recaptured stronghold.
 export const ASSURE_BLUE = '#1e9bff'
-export const SCU_LABEL = 'SCU'
+export const SCU_LABEL = '1ATF'
 
 export const isMeridianCode = (code) => !!code && code.toUpperCase() === 'M'
 // Everything that isn't Meridian or empty belongs to SCU / 1ATF.
@@ -109,7 +109,8 @@ export function occupierAt(territory, x, y, { radius = 3, showRHQ = true } = {})
 
 // Everything the UI needs to draw one place's occupier beacon.
 // `stronghold` marks a Meridian stronghold (place.hostile) — once SCU holds
-// the ground under one, it flips to the assure-blue "SCU" recaptured state.
+// the ground under one, it flips to the assure-blue "1ATF" recaptured state
+// (SCU_LABEL — the on-map tag, distinct from the unit's own SCU name).
 export function beaconStateFor(territory, place, { showRHQ = true } = {}) {
   const owner = occupierAt(territory, place.x, place.y, { showRHQ })
   const stronghold = !!place.hostile

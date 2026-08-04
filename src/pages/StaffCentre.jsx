@@ -6,8 +6,9 @@ import Logo from '../components/Logo'
 import VideoEmbed from '../components/VideoEmbed'
 import DocEmbed from '../components/DocEmbed'
 import PixelMap from '../components/PixelMap'
-import { COMPANIES, PHONETIC, smeacOf } from '../firebase/seed'
-import { campaignValid } from '../lib/campaign'
+import MapLegend from '../components/MapLegend'
+import { COMPANIES, PHONETIC, smeacOf, movementsOf } from '../firebase/seed'
+import { framesValid, sortFrames } from '../lib/campaign'
 import { listSubmissions } from '../lib/submissions'
 
 // Staff Centre — a read-only overview of everything RHQ and the Company
@@ -105,8 +106,8 @@ function StaffDashboard({ onLock }) {
   const activity = state.activity || []
   const video = state.video || {}
   const briefings = state.briefings || {}
-  const campaign = state.campaign
-  const hasCampaign = campaignValid(campaign, state.territory.cols, state.territory.rows)
+  const campaignFrames = state.campaignFrames
+  const hasCampaign = framesValid(campaignFrames, state.territory.cols, state.territory.rows)
   const scheduled = video.live && video.publishAt && video.publishAt > Date.now()
 
   const SECTIONS = [
@@ -141,7 +142,7 @@ function StaffDashboard({ onLock }) {
       id: 'map',
       title: 'Operational Map',
       sub: 'Territory & campaign replay',
-      stat: hasCampaign ? `${campaign.timeline.length} frame${campaign.timeline.length === 1 ? '' : 's'}` : 'no replay',
+      stat: hasCampaign ? `${campaignFrames.length} frame${campaignFrames.length === 1 ? '' : 's'}` : 'no replay',
     },
     {
       id: 'activity',
@@ -221,7 +222,7 @@ function StaffDashboard({ onLock }) {
           {view === 'intel' && <IntelDetail intel={intel} updatedAt={meta.intel?.updatedAt} intro={state.intelIntro} />}
           {view === 'video' && <VideoDetail video={video} briefings={briefings} />}
           {view === 'briefings' && <BriefingsDetail briefings={briefings} updatedAt={meta.briefings?.updatedAt} />}
-          {view === 'map' && <MapDetail territory={state.territory} campaign={campaign} hasCampaign={hasCampaign} updatedAt={meta.territory?.updatedAt} />}
+          {view === 'map' && <MapDetail territory={state.territory} campaignFrames={campaignFrames} hasCampaign={hasCampaign} updatedAt={meta.territory?.updatedAt} />}
           {view === 'activity' && <ActivityDetail activity={activity} />}
           {view === 'narrative' && <NarrativeDetail narrative={state.narrative} classified={state.classified} />}
           {view === 'freshness' && <FreshnessDetail meta={meta} />}
@@ -394,11 +395,13 @@ function BriefingsDetail({ briefings, updatedAt }) {
   )
 }
 
-function MapDetail({ territory, campaign, hasCampaign, updatedAt }) {
+function MapDetail({ territory, campaignFrames, hasCampaign, updatedAt }) {
+  const sorted = hasCampaign ? sortFrames(campaignFrames) : []
   return (
     <>
-      <Muted>Territory last updated {when(updatedAt)}. Live state shown — pinch/scroll to zoom.</Muted>
-      <PixelMap territory={territory} />
+      <Muted>Territory last updated {when(updatedAt)}. Live state shown — use +/- to zoom.</Muted>
+      <PixelMap territory={territory} showCompanyLabels />
+      <MapLegend showRHQ={territory.showRHQ} />
       <Panel>
         <div className="mono accent" style={{ fontSize: 10, letterSpacing: 2 }}>NAMED PLACES</div>
         {!(territory.places || []).length && <Muted>No place labels.</Muted>}
@@ -414,22 +417,13 @@ function MapDetail({ territory, campaign, hasCampaign, updatedAt }) {
       <Panel>
         <div className="mono accent" style={{ fontSize: 10, letterSpacing: 2 }}>CAMPAIGN REPLAY TIMELINE</div>
         {!hasCampaign && <Muted>No campaign replay recorded — the map shows the current state only.</Muted>}
-        {hasCampaign && (
-          <>
-            <div className="row between center wrap" style={{ gap: 8, borderTop: '1px solid var(--line)', paddingTop: 6 }}>
-              <span className="mono accent" style={{ fontSize: 11 }}>START</span>
-              <span style={{ fontSize: 13, flex: '1 1 120px' }}>Campaign baseline</span>
-              <span className="mono dim" style={{ fontSize: 10 }}>{when(campaign.start.ts)}</span>
-            </div>
-            {campaign.timeline.map((e, i) => (
-              <div key={i} className="row between center wrap" style={{ gap: 8, borderTop: '1px solid var(--line)', paddingTop: 6 }}>
-                <span className="mono accent" style={{ fontSize: 11 }}>{String(i + 1).padStart(2, '0')}</span>
-                <span style={{ fontSize: 13, flex: '1 1 120px' }}>{e.label || '(unlabelled move)'}</span>
-                <span className="mono dim" style={{ fontSize: 10 }}>{when(e.ts)}</span>
-              </div>
-            ))}
-          </>
-        )}
+        {sorted.map((f, i) => (
+          <div key={f.id} className="row between center wrap" style={{ gap: 8, borderTop: '1px solid var(--line)', paddingTop: 6 }}>
+            <span className="mono accent" style={{ fontSize: 11 }}>{i === 0 ? 'START' : String(i).padStart(2, '0')}</span>
+            <span style={{ fontSize: 13, flex: '1 1 120px' }}>{f.label || (i === 0 ? 'Campaign baseline' : '(unlabelled move)')}</span>
+            <span className="mono dim" style={{ fontSize: 10 }}>{when(f.ts)}</span>
+          </div>
+        ))}
       </Panel>
     </>
   )
@@ -465,6 +459,7 @@ function ActivityDetail({ activity }) {
 function NarrativeDetail({ narrative, classified }) {
   const s = smeacOf(narrative)
   const m = narrative.meridian || {}
+  const movements = movementsOf(narrative)
   const rows = [
     ['S — SITUATION', s.situation],
     ['M — MISSION', s.mission],
@@ -481,10 +476,25 @@ function NarrativeDetail({ narrative, classified }) {
       <Panel tone="hostile">
         <div className="mono hostile" style={{ fontSize: 10, letterSpacing: 2 }}>{m.title || 'MERIDIAN'}</div>
         <Field label="THREAT LEVEL">{m.threatLevel || '—'}</Field>
-        {m.motive && <Field label={m.motiveHeading || 'MOTIVE'}>{m.motive}</Field>}
+        {/* Mirrors the public box: two headings, with whyStop running on under
+            MOTIVE rather than carrying a heading of its own. */}
         {m.objective && <Field label={m.objectiveHeading || 'OBJECTIVE'}>{m.objective}</Field>}
-        {m.whyStop && <Field label={m.whyHeading || 'WHY WE STOP THEM'}>{m.whyStop}</Field>}
+        {(m.motive || m.whyStop) && (
+          <Field label={m.motiveHeading || 'MOTIVE'}>
+            {[m.motive, m.whyStop].filter(Boolean).join('\n\n')}
+          </Field>
+        )}
       </Panel>
+      {movements.show && movements.entries.length > 0 && (
+        <Panel>
+          <div className="mono accent" style={{ fontSize: 10, letterSpacing: 2 }}>
+            {movements.title || 'RECENT MOVEMENTS'}
+          </div>
+          {movements.entries.filter((e) => String(e.text || '').trim()).map((e) => (
+            <Field key={e.id} label={`${e.company}-COY`}>{e.text}</Field>
+          ))}
+        </Panel>
+      )}
       <Panel>
         <div className="mono accent" style={{ fontSize: 10, letterSpacing: 2 }}>COMPANY ROLES</div>
         <Field label="RECRUIT COMPANIES (A–D)">{narrative.oneatf?.recruitRole || '—'}</Field>

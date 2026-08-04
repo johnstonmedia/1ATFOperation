@@ -38,8 +38,15 @@ Three **public, no-login** tabs behind the main shell, plus chrome-less
 routes — see [src/App.jsx](src/App.jsx):
 - `/` **Home** — hero + unread-content alert banners (red, above the map —
   see `useUnseen` below) + pixel territory map + **SMEAC operation brief**
-  (`smeacOf()` in seed.js merges older stored narratives) + company roles +
-  Meridian brief. Public nav is responsive: pinned left rail ≥768px,
+  (`smeacOf()` in seed.js merges older stored narratives) + **Recent
+  Movements** + company roles + Meridian brief. *Recent Movements* is
+  `narrative.movements` (`{ show, title, intro, entries: [{ id, company, text
+  }] }`, merged by `movementsOf()` the same way) — short notes on what each
+  company DID to change the map, sitting above the roles box; RHQ toggles the
+  whole box off with `show`, and an empty entry list hides it too. The
+  **Meridian brief is ONE box with exactly two headings** (2026-08-04):
+  `whyStop` still publishes but runs on under MOTIVE, so `whyHeading` is no
+  longer rendered anywhere — don't reintroduce a third heading. Public nav is responsive: pinned left rail ≥768px,
   hamburger drawer below (`NavContent` in Sidebar.jsx is shared by both);
   the Ops Centre is the inverse — rail pinned on desktop, ☰ MENU drawer
   ≤820px. **Unread tracking** (`src/hooks/useUnseen.js`, device-local, no
@@ -62,14 +69,27 @@ routes — see [src/App.jsx](src/App.jsx):
   the boot gate, changeable from the nav dropdown; device-local, no auth —
   [CompanyContext](src/context/CompanyContext.jsx)).
   Fragments are decrypt-style puzzles (fill in redacted words) with optional
-  linked docs/images.
+  `hint`, linked docs/images. **Intel is a fun optional side activity, not a
+  delivery channel for must-know unit admin** — that's why hints are opt-in and
+  there's deliberately no forced reveal. Keep it that way: if a reveal ever
+  carries real logistics, being stuck starts costing attendance.
+  **Decrypt progress** ([src/lib/intelProgress.js](src/lib/intelProgress.js)) is
+  device-local like `useUnseen` — solved fragment ids in localStorage, counted
+  only over fragments that have an answer and that this visitor can see. Drives
+  the `04 / 07` meter on the Intel tab, the ✓ ticks on fragment cards, and the
+  Home banners (red = RHQ posted something new; the quiet accent variant =
+  you have puzzles left). **Anonymous solve counts**
+  ([src/lib/intelStats.js](src/lib/intelStats.js)) go to the `intelStats`
+  collection — see "Data model" and the privacy notice.
 - `/briefings` **Briefings** — a video embed + free text, admin-edited.
 - `/privacy` **Privacy Notice** — small static member-facing privacy policy
   ([src/pages/Privacy.jsx](src/pages/Privacy.jsx)), linked from the footer in
   [Layout.jsx](src/components/Layout.jsx). Deliberately repo-versioned, not an
   RHQ-editable slice.
 - `/Classified` (and `/classified`) — the original standalone landing page
-  cadets are sent to; "Continue" starts temp-password registration.
+  cadets are sent to. Purely a splash screen now (2026-08-04): "Continue"
+  goes straight into the public portal at `/` — it no longer connects to
+  member login/registration or Help & Support.
 - `/operations-centre/*` — **RHQ-only** admin console (see below). URL-only,
   not linked from nav.
 - `/staff-centre` — **Staff Centre**: URL-only, read-only unit overview
@@ -142,15 +162,32 @@ assuming a page exists).
 ## Data model
 - Firestore single-value docs under `content/{slice}`: `narrative`, `territory`,
   `classified`, `branding`, `companyPages`, `video`, `intel`, `intelIntro`,
-  `briefings`, `campaign` (public read, RHQ write) — see `SINGLE_SLICES` in
-  [src/lib/store.js](src/lib/store.js). `campaign` is the territory replay
-  history: `{ start: { cells, ts }, timeline: [{ ts, diff }] }` with
-  run-length diffs, managed by [src/lib/campaign.js](src/lib/campaign.js)
-  (see "Campaign replay" below).
-- Collections: `roster`, `tasks`, `activity`, `support`, `resetRequests`, `audit`
-  — see `COLLECTION_SLICES` in the same file. Plus `intelSubmissions` (the
-  Company Commander approval queue), managed directly via
-  [src/lib/submissions.js](src/lib/submissions.js), not through `store.js`.
+  `briefings`, `campaignDefaultStart` (public read, RHQ write) — see
+  `SINGLE_SLICES` in [src/lib/store.js](src/lib/store.js).
+  `campaignDefaultStart` is just a frame id (or `null`) — see "Campaign
+  replay" below.
+- Collections: `roster`, `tasks`, `activity`, `support`, `resetRequests`,
+  `audit`, `campaignFrames` — see `COLLECTION_SLICES` in the same file.
+  `campaignFrames` is the territory replay history (see "Campaign replay"
+  below): one document per frame, `{ order, cells, label, ts, updatedAt }` —
+  each frame a full grid snapshot, not a diff, so RHQ can edit/reorder/
+  duplicate/delete any single frame independently via
+  [src/lib/campaign.js](src/lib/campaign.js)'s pure `sortFrames`/
+  `framesValid`/`frameCells`/`frameCaptions`/`renumberFrames` helpers. Plus
+  two collections managed directly, not through `store.js`:
+  `intelSubmissions` (the Company Commander approval queue, via
+  [src/lib/submissions.js](src/lib/submissions.js)) and **`intelStats`**
+  (anonymous decrypt counts, via
+  [src/lib/intelStats.js](src/lib/intelStats.js)) — one doc per
+  (company, fragment), `{ company, fragmentId, solves, lastAt }`, written by
+  UNAUTHENTICATED visitors with a merge + `increment(1)` (the Intel tab has no
+  login, so public write is unavoidable). It carries **no identity of any
+  kind**, and the rules pin it to exactly those four fields with create-at-1 /
+  update-by-exactly-+1 so the worst case is inflating one counter one request
+  at a time. Treat it as an engagement signal, never a score: it counts
+  devices, not people. Surfaced in Ops Centre → Intercepted Intelligence
+  ("Decrypts"), and described in [Privacy.jsx](src/pages/Privacy.jsx) —
+  **update that notice if the shape ever changes**.
 - Data layer in `src/lib/store.js` (mode-agnostic: same async API over
   Firestore or localStorage). `DataContext` provides `updateSlice`,
   `replaceRoster`, `append`, `reportError`, `reload`, `logAudit`.
@@ -181,14 +218,21 @@ assuming a page exists).
   outline per edge — deliberately not per-side coloured, since that
   previously let whichever neighbour rasterised later silently overwrite the
   other's line), `image-rendering: pixelated` throughout for a crisp
-  pixel-art look. No scrollbar/zoom buttons — panning and zooming are
-  gesture-driven (one-finger/mouse drag pans in read-only mode; pinch or
-  wheel zooms everywhere; edit mode reserves one-finger/click for painting
-  and uses two-finger touch or middle/right-mouse drag to pan instead, so
-  painting and navigating never fight over the same gesture). Read-only by
-  default; pass `edit`/`brush`/`brushSize`/`onPaint` to enable painting,
-  `onMovePlace` to drag place-name labels, `oceanMask` to block/shade ocean
-  cells while editing.
+  pixel-art look. **Zoom is an explicit +/- button pair** (bottom-right,
+  turquoise-on-translucent-grey, `ZoomControls` in PixelMap.jsx) — no wheel
+  or pinch zoom (removed 2026-08-04; used to fight with page scroll and
+  painting). Panning is still gesture-driven: one-finger/mouse drag pans in
+  read-only mode once zoomed in; edit mode reserves one-finger/click for
+  painting and uses two-finger touch or middle/right-mouse drag to pan
+  instead, so painting and navigating never fight over the same gesture.
+  Read-only by default; pass `edit`/`brush`/`brushSize`/`onPaint` to enable
+  painting, `onMovePlace` to drag place-name labels, `oceanMask` to
+  block/shade ocean cells while editing.
+- **Place-label markers own their own positioning** ([Beacon.jsx](src/components/Beacon.jsx)):
+  the dot is pinned to `(x, y)` via its own transform, and the name/tag flow
+  right from a separately-positioned span. Don't go back to centring dot +
+  name + tag as one flex row — that makes the dot's apparent position drift
+  depending on the label text length instead of staying on the real point.
 - Authored entirely in-app via **Operations Centre → Map: Territory**
   ([MapEditor.jsx](src/pages/ops/MapEditor.jsx)) — pick a colour swatch (solid
   or light variant), paint with a sized brush, add/drag/rename place labels,
@@ -201,31 +245,102 @@ assuming a page exists).
   in territory.js) so occupancy is legible statically, not just during the
   conquest animation. A place flagged `hostile` (the editor's "Meridian
   stronghold" tick) that sits on 1ATF-held ground flips to the assure-blue
-  **SCU** recaptured state (`ASSURE_BLUE` — one constant restyles them all).
+  **1ATF** recaptured state (`ASSURE_BLUE`/`SCU_LABEL` in territory.js — one
+  constant restyles/relabels them all).
   All derived at render time, so it tracks replays frame-by-frame with no
   reload.
-- **Campaign replay** (v2.2): RHQ presses **Select Start State** in the
-  Map: Territory editor's "Campaign replay" panel, then explicitly presses
-  **Record Progress Frame** (with an optional per-frame **label**, shown as a
-  caption during playback and in the export) to append each diff move to the
-  `campaign` slice
-  (**"Save map" does NOT record a frame** — that was the pre-2026-07-30
-  behaviour); **Re-record Start State** overwrites the baseline and clears
-  every frame
-  ([src/lib/campaign.js](src/lib/campaign.js) — run-length diffs, oldest
-  moves auto-fold into the start state near Firestore's doc-size cap). The
-  Home map then renders through
+- **Company name labels & map key** (2026-08-04): the grid has no zone
+  entities, so each company's name is PLACED BY DERIVATION every render —
+  [src/lib/companyLabels.js](src/lib/companyLabels.js) takes the owner's
+  largest connected component and puts the label at its **pole of
+  inaccessibility** (deepest cell by BFS inward from the component's
+  boundary). Don't swap this for a mean-of-coordinates centroid: that lands
+  outside concave / ring / split holdings, which is the normal case here.
+  Holdings under `MIN_LABEL_CELLS` get no name. Rendered as DOM (`.company-label`)
+  on screen and via `drawCompanyLabels()` on canvas for the exports.
+  Shown on the public map, the Staff Centre map and both exports, and
+  deliberately **off in the ops Map: Territory editor** (`showCompanyLabels`
+  prop on PixelMap, default false) — a label over cells you're painting is in
+  the way. The **map key** ([MapLegend.jsx](src/components/MapLegend.jsx) /
+  `drawLegend()`) draws its swatches with the SAME cached hatch pattern the
+  territory layer fills with, via `renderHatchSwatch()` — one renderer for page
+  and exports so they can't drift. The key is **static**: `legendCodes()`
+  returns the full fixed roster, NOT whoever currently holds ground, so it
+  never reshuffles or drops rows as the replay animates. RHQ is the one
+  conditional entry (hidden when `showRHQ` is off, since it isn't drawn then).
+- **Campaign replay** (v2.3, 2026-08-04): every frame is its OWN Firestore
+  document in the `campaignFrames` collection —
+  `{ id, order, cells, label, ts, updatedAt }`, a full grid snapshot, not a
+  diff against the previous frame (that was v2.2's design; see CHANGELOG for
+  why it was replaced). In **Map: Territory**'s "Campaign replay" panel:
+  **+ Add Frame from Live Map** snapshots the current painting onto the end
+  of the timeline (the first frame added becomes the start; there's no
+  separate "select start state" step anymore). Each frame row supports
+  **Edit** (loads that frame's cells into the SAME paint canvas used for the
+  live map — a banner above it makes clear you're editing a historical frame,
+  not the live one; **Update Frame** saves back to just that frame, "Save
+  map" still only ever publishes the live territory), an inline **label**
+  field (commits on blur/Enter), **↑/↓** reorder, **Duplicate** (inserts a
+  copy right after — the way to add a step mid-sequence), and **Delete**.
+  `order` is kept contiguous 0..N-1 by `renumberFrames()`, reassigned on every
+  structural change. Because frames don't chain, editing frame 0 no longer
+  wipes anything after it — that was only ever a limitation of the old
+  diff-chain. Each row also has **Set as Default Start**, which writes the
+  frame's id to the single-value `campaignDefaultStart` slice (`null` =
+  "earliest frame", the original behaviour) — this is where the PUBLIC
+  replay's auto-play begins; frames before it are untouched, just skipped by
+  the automatic playback, and stay reachable through the picker described
+  below. [src/lib/campaign.js](src/lib/campaign.js) holds only pure helpers
+  over a frames array (`sortFrames`, `framesValid`, `frameCells`,
+  `frameCaptions`, `renumberFrames`) plus the animation math
+  (`transitionPlan`/`transitionDuration`, unchanged).
+  The Home map renders through
   [CampaignReplayMap](src/components/CampaignReplayMap.jsx): an auto-playing
   conquest animation (per-owner BFS wave on a cheap flat-tint overlay; the
-  expensive hatch layer commits once per move), company-name flashes at each
-  captured cluster, play/pause/replay/skip controls, resting on the live
-  state. No campaign → plain static PixelMap, exactly as before. The hatch
-  renderer lives in [src/lib/terrainRender.js](src/lib/terrainRender.js),
-  shared with **Export Campaign Replay**
-  ([src/lib/replayExport.js](src/lib/replayExport.js)): offscreen re-render
-  recorded in real time via MediaRecorder to MP4 (WebM on browsers that
-  can't mux MP4). `campaign` is invalidated on grid-resolution change, like
-  `territory`. No firestore.rules impact (it's a `content/*` slice).
+  expensive hatch layer commits once per frame) starting from the default
+  frame, company-name flashes at each captured cluster, resting on the live
+  state. The transport (rewritten 2026-08-04) is a **▶ PLAY button plus a
+  timeline rail with one bubble per frame** — hover names the frame, click cuts
+  straight to it (an instant swap, never an animated replay of everything in
+  between), and the rail fills as playback advances. **Playback does not
+  pause**, and **PLAY resumes from the frame on screen** — click a bubble then
+  PLAY and it continues from there; only pressing PLAY while already at the
+  live state restarts from the default start frame. A bubble click mid-play
+  snaps there and stops. This replaced the old play/pause + skip buttons, progress
+  bar and "Jump to a frame…" dropdown — don't reintroduce them. Frames before
+  the default start stay on the rail and stay clickable; they're just skipped
+  by the automatic playback. No frames → plain static PixelMap, exactly as
+  before.
+  The hatch renderer lives in
+  [src/lib/terrainRender.js](src/lib/terrainRender.js), shared with two
+  exports in [src/lib/replayExport.js](src/lib/replayExport.js):
+  **Export Campaign Replay** (offscreen re-render recorded in real time via
+  MediaRecorder to MP4, WebM on browsers that can't mux MP4 — 1944×1008,
+  20 Mbps: hatch fills are fine high-contrast repeating lines, exactly what
+  video codecs blur worst, so this needs to run well above a typical
+  screen-recording bitrate to stay sharp; it also **pauses the recorder while
+  the tab is hidden**, since `requestAnimationFrame` halts in a backgrounded
+  tab and the frozen canvas was producing intermittent 0-byte files, and it
+  errors loudly rather than downloading an empty blob) and **Export Weekly
+  Update Image** (a still PNG of the current state + place names + whatever
+  changed in the last 7 days highlighted as a settled wave overlay, with ONE
+  merged name per company that gained ground — not the video's per-cluster
+  flashes, which stacked the same names all over the map — under an RHQ-
+  editable headline; disabled when nothing was recorded in that window). Its
+  "before" state is the last frame before the cutoff, or the campaign's start
+  frame — never a blank grid, which used to make the entire campaign count as
+  one week's progress. Both share `renderBaseMap()`, which
+  applies the map art's CSS-style filter at native resolution FIRST and only
+  then upscales with smoothing off — applying the filter during the scaled
+  draw (the original approach) silently re-enabled smoothing in some
+  browsers' filter raster path regardless of `imageSmoothingEnabled`, which
+  was the source of blurry exported video/images; don't recombine those two
+  steps. Frames whose length doesn't match the current grid are dropped
+  wholesale on load (`normalizeCampaignFrames` in store.js), like `territory`.
+  `campaignFrames` needs its own `firestore.rules` block (it's a top-level
+  collection, not a `content/*` slice — public read, RHQ write, same shape as
+  the others); `campaignDefaultStart` is a normal `SINGLE_SLICES` entry so
+  it's already covered by the generic `content/*` rule.
 - Changing grid resolution means updating `TERR_COLS`/`TERR_ROWS` **and** the
   seed's `territory.cells` string together (length must equal `cols * rows`).
 - Always reference `MAP_IMAGE` via `import.meta.env.BASE_URL` (as
@@ -268,22 +383,44 @@ styles — there is no CSS-in-JS or component library.
 1. Authentication → enable **Email/Password**. Add the custom domain under
    **Settings → Authorized domains** or sign-ins fail there.
 2. Firestore → create DB → publish [firestore.rules](firestore.rules).
-   ⚠️ **STILL PENDING (user action):** the rules in the repo are current and
-   emulator-verified, but must be **re-published in the Firebase Console** to
-   take effect live. Two changes are waiting on that republish: the
-   `intelSubmissions` block (COY-intel approval workflow) and the roster
-   read lockdown (RHQ + own-record only). Until then, live Firebase still
-   runs the older rules.
+   ⚠️ **STILL PENDING (user action):** the rules in the repo are current, but
+   must be **re-published in the Firebase Console** to take effect live.
+   Four changes are waiting on that republish: the `intelSubmissions` block
+   (COY-intel approval workflow), the roster read lockdown (RHQ + own-record
+   only), the `campaignFrames` collection block, and the `intelStats` block
+   (both 2026-08-04 — see below). Until then, live Firebase still runs the
+   older rules, so against the live project RHQ can't write campaign frames at
+   all and every anonymous decrypt count is silently rejected (by design the
+   write failure is swallowed, so the puzzle still works — the counts just
+   stay at zero).
 3. Storage is **not used** (logo and map image are repo files under `public/`).
 
 **Rules coverage** — every collection/doc the app touches has a block:
-`content/*` (all `SINGLE_SLICES`, incl. `campaign` — adding a slice needs no
-rules change), `roster`, `tasks`, `activity`, `users`, `support`,
-`resetRequests`, `audit`, `authIndex`, `intelSubmissions`; everything else
-default-denies. Verified against the real rules engine via the `firebase-tools`
-Firestore emulator + `@firebase/rules-unit-testing` (19 checks: roster
-own-record vs others, tasks/activity RHQ-only, campaign public-read/RHQ-write,
-COY submission scoping).
+`content/*` (all `SINGLE_SLICES` — adding a slice needs no rules change),
+`campaignFrames`, `roster`, `tasks`, `activity`, `users`, `support`,
+`resetRequests`, `audit`, `authIndex`, `intelSubmissions`, `intelStats`;
+everything else default-denies. The `content/*`/`roster`/`intelSubmissions`
+blocks were
+verified against the real rules engine via the `firebase-tools` Firestore
+emulator + `@firebase/rules-unit-testing` in an earlier session (19 checks:
+roster own-record vs others, tasks/activity RHQ-only, public-read/RHQ-write
+content, COY submission scoping) — no committed test suite reproduces that
+run, though. The `campaignFrames` block added 2026-08-04 mirrors that same
+already-verified public-read/RHQ-write shape exactly, but hasn't itself been
+run through the emulator — worth doing before relying on it for anything
+sensitive. The **`intelStats`** block (also 2026-08-04) is the only one that
+grants an unauthenticated caller a WRITE, so it is the one most worth running
+through the emulator: it needs create to be rejected unless `solves == 1`,
+update to be rejected unless it's exactly +1 with `company`/`fragmentId`
+unchanged, and any extra field to be rejected outright. It relies on the rules
+engine seeing `increment()` already resolved in `request.resource.data`, which
+is documented behaviour but untested here.
+
+## Handover
+[HANDOVER.md](HANDOVER.md) is the standing "what's still outstanding" brief —
+blockers, unverified work and the agreed-but-unbuilt roadmap. Read it after
+this file and the CHANGELOG; update it as items land rather than letting it go
+stale.
 
 ## Known privacy gaps / TODO (discussed, not yet done)
 - ✅ **Fixed 2026-07-23**: `roster` reads are now RHQ **or own-record only**

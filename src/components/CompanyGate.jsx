@@ -21,10 +21,6 @@ export default function CompanyGate() {
       <div className="divider" style={{ maxWidth: 420, width: '100%' }} />
 
       <div className="head" style={{ fontSize: 16, color: '#fff', letterSpacing: 2 }}>IDENTIFY YOUR COMPANY</div>
-      <div className="mono dim" style={{ fontSize: 11, maxWidth: 420, lineHeight: 1.6 }}>
-        Your company decides which intelligence you receive. Asked once — you can
-        change it any time from the menu.
-      </div>
 
       <div className="row wrap center" style={{ gap: 10, maxWidth: 460, justifyContent: 'center' }}>
         {companies.map((c) => (
@@ -52,7 +48,7 @@ export default function CompanyGate() {
       {/* Not in a company (staff, parents, visitors) — records the choice so
           they aren't asked again; they still see all unit-wide content. */}
       <button className="ghost" onClick={() => setCompany('')} style={{ fontSize: 11, marginTop: 4 }}>
-        Skip — show unit-wide content only
+        Skip
       </button>
     </div>
   )
