@@ -17,6 +17,45 @@ keep entries short and focused on what a new collaborator needs to know.
 
 ---
 
+## 2026-08-04 (ops) — Drag-and-drop briefing video upload
+- **You can now drag a video file straight into Ops Centre → Briefings.**
+  Previously the only option was pasting a URL, which meant uploading to
+  YouTube first. The link field is **still there** and still the better choice
+  for anything long (see the caveat below) — the drop zone sits above it.
+- New [VideoDropZone.jsx](src/components/VideoDropZone.jsx): drag a file, click
+  to browse, or drop a *link* (dragging a video's address bar works). Upload
+  progress + Cancel, inline errors, preview, Remove.
+  - It installs a **window-level `dragover`/`drop` guard** while mounted. A file
+    dropped just outside the zone otherwise makes the browser navigate to it,
+    binning every unsaved edit in the editor.
+- New [videoUpload.js](src/lib/videoUpload.js): the app's **first and only** use
+  of Firebase Storage — every other asset is a repo file under `public/`.
+  Uploads to `briefings/<timestamp>-<name>`, 512 MB cap, resumable + cancellable.
+  Non-MP4/WebM files upload but raise a playback warning rather than being
+  blocked. LOCAL MODE hands back an object URL so the UI is testable offline,
+  with a loud "this cannot be published" note.
+- New **[storage.rules](storage.rules)** — public read on `briefings/*`, RHQ
+  write/delete (RHQ read from the Firestore user profile, same definition as
+  `firestore.rules`), size + content-type pinned, everything else denied.
+- ⚠️ **Two console actions before this works live** (neither is a code change):
+  enable Storage for the project, then publish `storage.rules`. Until then
+  uploads fail with `storage/unauthorized` and the drop zone says so and points
+  at the link field — it degrades to exactly the old behaviour, nothing breaks.
+  Note Firebase now requires the **Blaze** plan to enable Storage on projects
+  created after Oct 2024; this project's `.firebasestorage.app` bucket name
+  suggests it is one.
+- `briefings.videoPath` added to the slice — the Storage object path when the
+  video was uploaded here, empty for an external link. Used only to label the
+  file and to tidy up *this session's* abandoned uploads; the already-published
+  object is never auto-deleted (the RHQ user may walk away without saving).
+- `resolveVideo()` in [VideoEmbed.jsx](src/components/VideoEmbed.jsx) now
+  recognises `firebasestorage.googleapis.com` / `storage.googleapis.com` by
+  **host**: the filename is inside the escaped object path and an uploaded file
+  may have no extension at all, so the old `\.mp4$`-on-pathname test would have
+  rendered an uploaded video as a bare "Open video ↗" link. Also added
+  `mov`/`m4v`/`ogv` and `blob:` (the LOCAL MODE preview).
+- Not browser-verified — no browser automation here. See HANDOVER §3.
+
 ## 2026-08-04 (home page) — Recent Movements box, Meridian boxes merged
 - **New "Recent Movements" box** on the home page, above the company-roles box.
   Short entries — one per company action that actually moved the line — so the

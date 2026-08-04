@@ -4,12 +4,16 @@ import { useAudit } from '../../hooks/useAudit'
 import { useConfirm } from '../../context/ConfirmContext'
 import { OpsHeader, useSaved } from './OperationsCentre'
 import { Field } from './NarrativeEditor'
-import VideoEmbed from '../../components/VideoEmbed'
+import VideoDropZone from '../../components/VideoDropZone'
 import { DEFAULT_BRIEFINGS } from '../../firebase/seed'
 
-// Editor for the recruit-facing Briefings tab: a video link, the numbered
-// briefing sections (title + optional highlighted callout + body), and a
-// closing quote.
+// Editor for the recruit-facing Briefings tab: a video (dragged in as a file or
+// pasted as a link), the numbered briefing sections (title + optional
+// highlighted callout + body), and a closing quote.
+//
+// `videoPath` is the Firebase Storage object path when the video was uploaded
+// here, empty when it's an external link. Stored alongside the URL purely so
+// the editor can label and tidy up its own uploads.
 export default function BriefingsEditor() {
   const { state, updateSlice } = useData()
   const audit = useAudit()
@@ -19,6 +23,7 @@ export default function BriefingsEditor() {
     const stored = state.briefings || {}
     return {
       video: stored.video || '',
+      videoPath: stored.videoPath || '',
       sections: stored.sections?.length ? stored.sections : DEFAULT_BRIEFINGS.sections,
       closingQuote: stored.closingQuote ?? DEFAULT_BRIEFINGS.closingQuote,
     }
@@ -45,6 +50,7 @@ export default function BriefingsEditor() {
     if (!ok) return
     setB((cur) => ({
       video: cur.video,
+      videoPath: cur.videoPath,
       sections: structuredClone(DEFAULT_BRIEFINGS.sections),
       closingQuote: DEFAULT_BRIEFINGS.closingQuote,
     }))
@@ -60,8 +66,13 @@ export default function BriefingsEditor() {
       </OpsHeader>
 
       <div className="panel panel-pad col" style={{ maxWidth: 720, marginBottom: 18 }}>
-        <Field label="Video link (YouTube, Vimeo, or a direct .mp4)"><input value={b.video} onChange={set('video')} placeholder="https://…" /></Field>
-        {b.video.trim() && <VideoEmbed url={b.video} />}
+        <VideoDropZone
+          value={b.video}
+          path={b.videoPath}
+          onChange={(video, meta) => setB((cur) => ({ ...cur, video, videoPath: meta?.path || '' }))}
+          folder="briefings"
+          label="Briefing video"
+        />
       </div>
 
       {b.sections.map((s, i) => (

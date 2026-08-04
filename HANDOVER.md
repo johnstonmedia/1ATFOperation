@@ -28,12 +28,31 @@ Four separate changes are stuck behind it:
 **How to do it:** Firebase Console → Firestore → Rules → paste
 [firestore.rules](firestore.rules) → Publish. No code change needed.
 
+### While you're in there: Storage (added 2026-08-04)
+
+The Briefings editor now takes a **dragged-in video file**, which is the app's
+only use of Cloud Storage. It needs its own two console actions:
+
+1. **Storage → enable the default bucket.** Firebase requires the **Blaze**
+   plan for this on projects created after Oct 2024, and the bucket name in
+   [config.js](src/firebase/config.js) (`…firebasestorage.app`) is the
+   post-Oct-2024 format, so expect a billing prompt. If that's not acceptable,
+   the feature simply stays unavailable — RHQ pastes a YouTube link exactly as
+   before, and the drop zone says so rather than failing silently.
+2. **Storage → Rules → paste [storage.rules](storage.rules) → Publish.**
+
+Failure mode until both are done: `storage/unauthorized`, surfaced in the drop
+zone as "Firebase Storage may not be enabled… paste a video link instead".
+Nothing else on the site is affected.
+
 **Verify after publishing**, in this order:
 1. Sign in as RHQ (`190990`), Ops Centre → Map: Territory → add a campaign
    frame. It should persist across reload.
 2. On the public Intel tab, solve a fragment. Ops Centre → Intercepted
    Intelligence → Decrypts → Refresh should show 1.
 3. Sign in as a Company Commander, submit an intel change, approve it as RHQ.
+4. Ops Centre → Briefings → drag an MP4 into the drop zone. It should upload,
+   preview, and survive Save + reload on the public `/briefings` tab.
 
 ---
 
@@ -149,6 +168,20 @@ QA pass available.
 
 ### Home (2026-08-04)
 - Recent Movements box + its ops editor; merged Meridian box.
+
+### Briefings video drag-and-drop (2026-08-04)
+[VideoDropZone.jsx](src/components/VideoDropZone.jsx) /
+[videoUpload.js](src/lib/videoUpload.js). Only `resolveVideo()` was checked
+with a throwaway harness (Storage/blob/YouTube/Vimeo/extension cases). Untested
+in a browser, and the upload path cannot be tested at all until Storage is
+enabled (§0). Specifically worth driving:
+- drag enter/leave counting — nested children fire `dragleave`, hence the depth
+  counter; check the highlight doesn't flicker
+- dropping a **link** rather than a file (drag a YouTube tab's address bar)
+- Cancel mid-upload, then re-drop the *same* file (the file input is reset for
+  exactly this)
+- the window-level drop guard: drop a file on the sidebar and confirm the
+  browser does **not** navigate away from the editor
 
 ---
 
