@@ -93,7 +93,6 @@ export default function PixelMap({
       const cell = (rect.width * dpr) / cols
       const w = Math.max(1, Math.round(cols * cell))
       const h = Math.max(1, Math.round(rows * cell))
-      setMapW(rect.width)
 
       // Redraw only what actually changed. A brush stroke touches a handful
       // of cells, but a full redraw costs a whole-grid pass plus several
