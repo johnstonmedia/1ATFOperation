@@ -95,22 +95,59 @@ routes — see [src/App.jsx](src/App.jsx):
   member login/registration or Help & Support.
 - `/operations-centre/*` — **RHQ-only** admin console (see below). URL-only,
   not linked from nav.
-- `/staff-centre` — **Staff Centre**: URL-only, read-only unit overview
-  ([src/pages/StaffCentre.jsx](src/pages/StaffCentre.jsx)) behind ONE shared
-  password (`SCUNARRATIVE`, in the client bundle — a latch, not a secret; the
-  page only shows already-public `content/*` data and no PII). Shows pending
+- `/staff-centre` — **Staff Centre**: URL-only unit overview
+  ([src/pages/StaffCentre.jsx](src/pages/StaffCentre.jsx)). **Two ways in**
+  (2026-08-05): a signed-in `Staff` / `RHQ Staff` account, or the shared staff
+  password — which is no longer hard-coded, it lives in the `staffAccess` slice
+  and is changed by ID **190990 only** in Ops Centre → Users. Moving it out of
+  the bundle did NOT make it a secret (`content/*` is world-readable); it is
+  still a latch, acceptable because the page only shows already-public
+  `content/*` data and no PII. Shows pending
   COY approvals, scheduled video distribution, intel per company, the campaign
   timeline and content freshness — as an overview of clickable cards, each
   opening a detail view with the real content (intel fragments incl. answers,
   the video playing, the live map, activity feed, full SMEAC/briefing text).
-  NOTE: `intelSubmissions` is RHQ/own-commander
-  only under the rules, so the approvals list is empty-with-a-notice for a
-  password-only visitor against live Firebase (works in LOCAL MODE / when
-  signed in).
+  NOTE: `intelSubmissions` is RHQ / RHQ Staff / own-commander only under the
+  rules, so the approvals list is empty-with-a-notice for a password-only
+  visitor against live Firebase (works in LOCAL MODE / when signed in).
 - `/company-command` — **Company Commander-only** "COY Centre"
   ([src/pages/CommanderPanel.jsx](src/pages/CommanderPanel.jsx)). URL-only;
   reached via the role-aware **COY CENTRE** button shown once a commander signs
   in. See "Company Commander & intel approval" below.
+
+## Staff roles & the Staff Centre (v2.4, 2026-08-05)
+- Two roles whose only home is `/staff-centre` — neither is `isRHQ`, so neither
+  can ever reach the Operations Centre or the COY Centre:
+  - **`Staff`** — the read-only overview, but signed in and attributable.
+  - **`RHQ Staff`** — the same, **plus a working COY intel approval queue** for
+    **every** company: approve, edit-then-approve, dismiss.
+- `useAuth()` exposes `isStaff` (either staff role), `isRHQStaff`, and
+  **`isAdmin`** (ID `190990`). All are suppressed while emulating, like `isRHQ`.
+- **Only ID 190990 may create staff logins.** Any other RHQ sees a role
+  dropdown with `Staff`/`RHQ Staff` filtered out, and opening an existing staff
+  user shows the role frozen rather than missing — dropping the option silently
+  would let a save rewrite their role to whatever landed in an empty `<select>`.
+  Enforced in the **UI only**; the rules do not distinguish one RHQ from
+  another. Spreadsheet import can't mint staff either (it hard-codes
+  `COMMANDER_ROLE`).
+- The **shared staff password** moved from a `const` in StaffCentre.jsx to the
+  `staffAccess` single-value slice, edited in the `StaffAccessPanel` in
+  Ops Centre → Users (administrator only). A **missing doc keeps the seed
+  default**, so `SCUNARRATIVE` still works until it's changed — nobody is
+  locked out by deploying this. An **empty** stored password matches nothing,
+  so a misconfigured slice fails closed rather than opening the door.
+- The approval queue is ONE component,
+  [src/components/ApprovalsQueue.jsx](src/components/ApprovalsQueue.jsx), used
+  by both Ops Centre → Approvals and Staff Centre → Approvals. Only the page
+  chrome differs, via a `Header` prop taking `{ title, sub, children }` (pass
+  `OpsHeader`, or `StaffSectionHeader`). `SubmissionsEditor.jsx` is now a
+  three-line wrapper — put queue changes in the shared component, not there.
+- **Rules**: `isRHQStaff()` in [firestore.rules](firestore.rules) grants exactly
+  three things — read/write `intelSubmissions`, write **`content/intel` only**
+  (an extra `match /content/intel` block; overlapping matches are OR'd, so every
+  other `content/*` doc stays RHQ-write-only), and **create-only** on `audit`
+  (it logs what it approved but can't read the log back). ⚠️ Needs the pending
+  rules republish — until then RHQ Staff approvals fail live.
 
 ## Company Commander & intel approval (v2.1)
 - **Company Commander** is a role (now the **default** at user creation), bound
@@ -157,7 +194,9 @@ assuming a page exists).
   Reads still run under the real RHQ session; only a genuine RHQ user can
   trigger it.
 - Roles: **Company Commander** (default at creation, company-bound), **RHQ**,
-  and legacy **General** (`ROLES`/`COMMANDER_ROLE` in `src/firebase/seed.js`).
+  **RHQ Staff**, **Staff**, and legacy **General** (`ROLES`/`COMMANDER_ROLE`/
+  `STAFF_ROLE`/`RHQ_STAFF_ROLE`/`RESTRICTED_ROLES`/`isStaffRole` in
+  `src/firebase/seed.js`) — see "Staff roles" below.
   Companies (phonetic letters): A Alpha, B Bravo, C Charlie, D Delta, E Echo,
   S Support. Meridian is the threat force (red on the map; code keeps
   `hostile` as an identifier — user-visible copy says "threat").
@@ -426,10 +465,11 @@ styles — there is no CSS-in-JS or component library.
 2. Firestore → create DB → publish [firestore.rules](firestore.rules).
    ⚠️ **STILL PENDING (user action):** the rules in the repo are current, but
    must be **re-published in the Firebase Console** to take effect live.
-   Four changes are waiting on that republish: the `intelSubmissions` block
+   Five changes are waiting on that republish: the `intelSubmissions` block
    (COY-intel approval workflow), the roster read lockdown (RHQ + own-record
-   only), the `campaignFrames` collection block, and the `intelStats` block
-   (both 2026-08-04 — see below). Until then, live Firebase still runs the
+   only), the `campaignFrames` collection block, the `intelStats` block (both
+   2026-08-04 — see below), and `isRHQStaff()` (2026-08-05 — without it RHQ
+   Staff accounts cannot approve anything live). Until then, live Firebase still runs the
    older rules, so against the live project RHQ can't write campaign frames at
    all and every anonymous decrypt count is silently rejected (by design the
    write failure is swallowed, so the puzzle still works — the counts just
@@ -444,7 +484,8 @@ styles — there is no CSS-in-JS or component library.
 **Rules coverage** — every collection/doc the app touches has a block:
 `content/*` (all `SINGLE_SLICES` — adding a slice needs no rules change),
 `campaignFrames`, `roster`, `tasks`, `activity`, `users`, `support`,
-`resetRequests`, `audit`, `authIndex`, `intelSubmissions`, `intelStats`;
+`resetRequests`, `audit`, `authIndex`, `intelSubmissions`, `intelStats`
+(plus a narrower `content/intel` override for RHQ Staff);
 everything else default-denies. The `content/*`/`roster`/`intelSubmissions`
 blocks were
 verified against the real rules engine via the `firebase-tools` Firestore

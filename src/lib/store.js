@@ -13,6 +13,7 @@ import {
   DEFAULT_INTEL,
   DEFAULT_INTEL_INTRO,
   DEFAULT_BRIEFINGS,
+  DEFAULT_STAFF_ACCESS,
   DEFAULT_TERRITORY,
   DEMO_ROSTER,
   DEFAULT_ACTIVITY,
@@ -21,7 +22,7 @@ import { TERR_COLS, TERR_ROWS } from './territory'
 
 const LS_KEY = '1atf-state-v1'
 const LS_AUTHIDX = '1atf-authindex'
-const SINGLE_SLICES = ['narrative', 'territory', 'classified', 'branding', 'companyPages', 'video', 'intel', 'intelIntro', 'briefings', 'campaignDefaultStart']
+const SINGLE_SLICES = ['narrative', 'territory', 'classified', 'branding', 'companyPages', 'video', 'intel', 'intelIntro', 'briefings', 'campaignDefaultStart', 'staffAccess']
 const COLLECTION_SLICES = ['roster', 'tasks', 'activity', 'support', 'resetRequests', 'audit', 'campaignFrames']
 
 export const isContentSlice = (slice) => SINGLE_SLICES.includes(slice)
@@ -41,6 +42,7 @@ const DEFAULT_STATE = {
   // remain reachable via the replay's manual frame picker — this only
   // controls where the AUTO-PLAY begins.
   campaignDefaultStart: null,
+  staffAccess: DEFAULT_STAFF_ACCESS,
   roster: FIREBASE_ENABLED ? [] : DEMO_ROSTER,
   tasks: [],
   activity: FIREBASE_ENABLED ? [] : DEFAULT_ACTIVITY,

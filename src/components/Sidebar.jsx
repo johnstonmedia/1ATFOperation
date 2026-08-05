@@ -9,7 +9,7 @@ import { COMPANIES } from '../firebase/seed'
 // navigation/action (the drawer passes its close handler; the pinned rail
 // passes nothing).
 export function NavContent({ onAuth, onNavigate = () => {} }) {
-  const { isRHQ, isCommander } = useAuth()
+  const { isRHQ, isCommander, isStaff } = useAuth()
   const { company, setCompany } = useCompany()
   const navigate = useNavigate()
   const location = useLocation()
@@ -38,6 +38,8 @@ export function NavContent({ onAuth, onNavigate = () => {} }) {
         ? <button className="ghost" onClick={() => go('/operations-centre')}>OPS CENTRE</button>
         : isCommander
         ? <button className="ghost" onClick={() => go('/company-command')}>COY CENTRE</button>
+        : isStaff
+        ? <button className="ghost" onClick={() => go('/staff-centre')}>STAFF CENTRE</button>
         : <button className="ghost" onClick={() => { onNavigate(); onAuth() }} style={{ fontSize: 11 }}>Access</button>}
       <Link to="/" onClick={onNavigate} className="mono dim" style={{ fontSize: 10, marginTop: 10 }}>
         LUCET PER MINISTERIUM

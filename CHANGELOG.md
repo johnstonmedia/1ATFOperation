@@ -17,6 +17,54 @@ keep entries short and focused on what a new collaborator needs to know.
 
 ---
 
+## 2026-08-05 (access) — Staff roles, RHQ Staff approvals, password out of code
+- **The Staff Centre password is no longer hard-coded.** It moved from a
+  `const STAFF_PASSWORD` in StaffCentre.jsx to the new `staffAccess` single-value
+  slice, edited in **Ops Centre → Users** by the bootstrap administrator (ID
+  190990) only — nobody else, including other RHQ accounts, even sees the panel.
+  - A **missing doc falls back to the seed default**, so `SCUNARRATIVE` keeps
+    working until it's changed — deploying this locks nobody out.
+  - An **empty** stored password matches nothing, so a misconfigured slice fails
+    closed instead of becoming an open door.
+  - ⚠️ This did **not** make it a secret. `content/*` is world-readable (the
+    public site must work signed-out), so it is exactly as recoverable as it was
+    in the JS bundle. Still fine for the same reason as before — the page shows
+    only already-public content, no PII, no write access — but it is a latch,
+    and anything needing real authority now uses an account instead.
+- **Two new roles** (`ROLES` in seed.js), both of which land in the Staff Centre
+  and **neither of which is `isRHQ`**, so neither can reach the Ops Centre or
+  the COY Centre:
+  - **`Staff`** — the read-only overview, signed in and attributable.
+  - **`RHQ Staff`** — the same PLUS a working COY intel approval queue across
+    **every** company: approve, edit-then-approve, dismiss.
+- **Only ID 190990 can create staff logins.** Other RHQ accounts get the role
+  dropdown with both filtered out; opening an existing staff user shows the role
+  **frozen rather than absent**, because silently dropping the option would let
+  a save rewrite their role to whatever landed in the empty `<select>`. Enforced
+  in the **UI only** — the rules don't distinguish one RHQ from another. The
+  spreadsheet import can't mint staff either (it hard-codes `COMMANDER_ROLE`).
+- **Approval queue extracted** to [ApprovalsQueue.jsx](src/components/ApprovalsQueue.jsx),
+  used by BOTH Ops Centre → Approvals and Staff Centre → Approvals; only the page
+  chrome differs, via a `Header` prop taking `{ title, sub, children }`.
+  `SubmissionsEditor.jsx` is now a three-line wrapper — **put queue changes in the
+  shared component**, or the two surfaces drift.
+- `useAuth()` gains `isStaff`, `isRHQStaff` and `isAdmin` (ID 190990), all
+  suppressed while emulating like `isRHQ`. `ADMIN_ID` is now exported.
+  TopBar/Sidebar gain a role-aware **STAFF CENTRE** button.
+- The Staff Centre gate now offers **Sign in** alongside the password box, and a
+  signed-in account gets **Sign out** where the password visitor gets **Lock**
+  (that page has no TopBar, so there was otherwise no way out).
+- **`firestore.rules`**: new `isRHQStaff()` granting exactly three things —
+  read/write `intelSubmissions`; write **`content/intel` only**, via an extra
+  `match /content/intel` block (overlapping matches are OR'd, so every other
+  `content/*` doc stays RHQ-write-only); and **create-only** on `audit`, so it
+  logs what it approved but can't read the log back.
+- ⚠️ **RHQ Staff approvals do not work live until the rules are republished** —
+  the same pending console action as everything else in HANDOVER §0. Approving
+  will fail with a permission error against the live project until then. The
+  audit write is best-effort and already swallowed, so that part degrades quietly.
+- Not browser-verified. See HANDOVER §3.
+
 ## 2026-08-04 (ops) — Drag-and-drop briefing video upload
 - **You can now drag a video file straight into Ops Centre → Briefings.**
   Previously the only option was pasting a URL, which meant uploading to

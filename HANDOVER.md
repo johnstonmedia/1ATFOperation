@@ -16,7 +16,7 @@ into a list of things that were already done.
 Console.** The live project is still running an older ruleset. This is a manual
 console action nobody has done, and it is the single highest-value task here.
 
-Four separate changes are stuck behind it:
+Five separate changes are stuck behind it:
 
 | Block | Consequence of not republishing |
 |---|---|
@@ -24,6 +24,7 @@ Four separate changes are stuck behind it:
 | `intelStats` | Every anonymous decrypt count is rejected. Writes are deliberately swallowed, so the puzzles still work — the Ops Centre "Decrypts" panel just reads zero forever, which looks like "nobody is playing" rather than "this is broken". |
 | `intelSubmissions` | The COY-intel approval workflow doesn't work live. |
 | `roster` read lockdown | Roster reads are still on the old, looser rule (RHQ + own-record only is what the repo has). |
+| `isRHQStaff` (2026-08-05) | **RHQ Staff accounts cannot approve anything live.** The role exists, the UI works, but publishing an approved fragment writes `content/intel` and clears `intelSubmissions` — both denied for that role until the republish. |
 
 **How to do it:** Firebase Console → Firestore → Rules → paste
 [firestore.rules](firestore.rules) → Publish. No code change needed.
@@ -53,6 +54,9 @@ Nothing else on the site is affected.
 3. Sign in as a Company Commander, submit an intel change, approve it as RHQ.
 4. Ops Centre → Briefings → drag an MP4 into the drop zone. It should upload,
    preview, and survive Save + reload on the public `/briefings` tab.
+5. As 190990, create an **RHQ Staff** user. Sign in as them, open
+   `/staff-centre` → Approvals, and approve a commander's submission. Confirm
+   they are bounced from `/operations-centre` and `/company-command`.
 
 ---
 
@@ -121,6 +125,12 @@ in the same commit.** It is a static repo-versioned page precisely so it can't
 drift silently.
 
 ### Open gaps (known, accepted, not yet fixed)
+- **The shared Staff Centre password is world-readable** (2026-08-05). It lives
+  in `content/staffAccess`, and `content/*` is public-read so the signed-out site
+  works. This is not a regression — it was previously compiled into the JS
+  bundle, which is equally readable — but it does mean the latch cannot be made
+  into a lock without moving the Staff Centre behind real auth. `Staff` /
+  `RHQ Staff` accounts exist for anyone who needs actual authority.
 - **Temp passwords are stored plain text** in the `roster` collection.
   Consider hashing and only revealing at generation/download time.
 - **Residual own-record leak**: an *unregistered* member who knows their own ID
@@ -165,6 +175,21 @@ QA pass available.
   phone**, that's where it's least certain.
 - "Preview as recruit" in both editors.
 - Telemetry end-to-end (blocked on §0).
+
+### Staff roles & RHQ Staff approvals (2026-08-05)
+[ApprovalsQueue.jsx](src/components/ApprovalsQueue.jsx), the two new roles, and
+the `staffAccess` password slice. Untested in a browser; the approval path can't
+be tested against live Firebase until §0 is done. Worth driving:
+- an RHQ Staff account **cannot** reach `/operations-centre` or
+  `/company-command` (both should show the clearance-denied screen)
+- a non-190990 RHQ opening an existing staff user: role select shows the current
+  role and is **disabled**, and saving does not change it
+- Ops Centre → Approvals and Staff Centre → Approvals behave identically now
+  they share a component — check the "Review / edit first" sub-view header and
+  its back button in BOTH
+- changing the staff password in Users actually locks out the old one (the gate
+  reads live slice state, so an open tab picks it up on reload)
+- `staffAccess` with an empty/missing password: must fail closed, not open
 
 ### Home (2026-08-04)
 - Recent Movements box + its ops editor; merged Meridian box.
