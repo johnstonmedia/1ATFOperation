@@ -1,14 +1,14 @@
 import { useState, useMemo, useEffect } from 'react'
 import * as XLSX from 'xlsx'
 import { useData } from '../../context/DataContext'
-import { useAuth } from '../../context/AuthContext'
+import { useAuth, ADMIN_ID } from '../../context/AuthContext'
 import { useConfirm } from '../../context/ConfirmContext'
 import { useToast } from '../../context/ToastContext'
 import { useAudit } from '../../hooks/useAudit'
 import { useDialog } from '../../hooks/useDialog'
 import { OpsHeader } from './OperationsCentre'
 import { Field } from './NarrativeEditor'
-import { COMPANIES, ROLES, COMMANDER_ROLE, RANKS, PHONETIC, rankShort, normalizeRank } from '../../firebase/seed'
+import { COMPANIES, ROLES, COMMANDER_ROLE, RESTRICTED_ROLES, RANKS, PHONETIC, rankShort, normalizeRank, isStaffRole } from '../../firebase/seed'
 import { genTempPassword } from '../../lib/passwords'
 import { getAuthVersion, setAuthVersion } from '../../lib/store'
 import { sendMemberEmail } from '../../lib/notify'
@@ -22,7 +22,7 @@ const cleanId = (s) => String(s).trim().toLowerCase().replace(/[^a-z0-9]/g, '')
 // sets their own password. Role (RHQ / General) is chosen here, not imported.
 export default function UsersAdmin() {
   const { state, updateSlice, replaceRoster, makeId } = useData()
-  const { realUser } = useAuth()
+  const { realUser, isAdmin } = useAuth()
   const confirm = useConfirm()
   const { push } = useToast()
   const audit = useAudit()
@@ -245,6 +245,8 @@ export default function UsersAdmin() {
         <button className="primary" onClick={() => setEditing(newUser(makeId))}>+ New user</button>
       </OpsHeader>
 
+      {isAdmin && <StaffAccessPanel />}
+
       {importInfo && (
         <div className="panel panel-pad" style={{ marginBottom: 14, borderColor: 'var(--accent)' }}>
           <span className="accent mono">
@@ -311,7 +313,7 @@ export default function UsersAdmin() {
         {filtered.length > 300 && <div className="mono dim panel-pad">Showing first 300 of {filtered.length}. Refine your search.</div>}
       </div>
 
-      {editing && <UserModal rec={editing} used={isUsed(editing)} onClose={() => setEditing(null)} onSave={upsert} onDelete={remove} />}
+      {editing && <UserModal rec={editing} used={isUsed(editing)} canGrantStaff={isAdmin} onClose={() => setEditing(null)} onSave={upsert} onDelete={remove} />}
     </div>
   )
 }
@@ -344,15 +346,85 @@ function EmulateMenu() {
   )
 }
 
+// Shared Staff Centre password. Bootstrap administrator only — everyone else
+// (including other RHQ accounts) never sees this panel. It is a latch on a page
+// of already-public content, NOT a secret: `content/*` is world-readable, so
+// treat it as "keep the casual visitor out" and nothing more. Real authority
+// lives in the 'Staff' / 'RHQ Staff' accounts below.
+function StaffAccessPanel() {
+  const { state, updateSlice } = useData()
+  const audit = useAudit()
+  const { push } = useToast()
+  const current = state.staffAccess?.password || ''
+  const [pw, setPw] = useState(current)
+  const [show, setShow] = useState(false)
+  // Re-sync if another session changed it while this page was open.
+  useEffect(() => { setPw(current) }, [current])
+
+  const save = () => {
+    const next = pw.trim()
+    if (!next) { push('Staff password cannot be empty', { type: 'error' }); return }
+    updateSlice('staffAccess', { ...(state.staffAccess || {}), password: next })
+    audit('Changed Staff Centre password')
+    push('Staff password updated')
+  }
+
+  return (
+    <div className="panel panel-pad col" style={{ marginBottom: 14, maxWidth: 720, borderColor: 'var(--accent)' }}>
+      <div className="row between center wrap" style={{ gap: 10 }}>
+        <div className="mono accent" style={{ fontSize: 10, letterSpacing: 2 }}>STAFF CENTRE ACCESS</div>
+        <span className="tag">ADMINISTRATOR ONLY</span>
+      </div>
+      <div className="mono dim" style={{ fontSize: 11, lineHeight: 1.6 }}>
+        The shared password for <span className="accent">/staff-centre</span>. Anyone with it gets the
+        read-only overview. Changing it locks out everyone still using the old one.
+        Staff who need to be named, or to approve company submissions, need a
+        <span className="accent"> Staff</span> or <span className="accent">RHQ Staff</span> account instead — add one with “+ New user”.
+      </div>
+      <div className="row wrap" style={{ gap: 8, alignItems: 'flex-end' }}>
+        <div className="grow" style={{ minWidth: 200 }}>
+          <Field label="Shared staff password">
+            <input
+              className="mono"
+              type={show ? 'text' : 'password'}
+              value={pw}
+              onChange={(e) => setPw(e.target.value)}
+              autoComplete="off"
+              data-1p-ignore
+              data-lpignore
+            />
+          </Field>
+        </div>
+        <button className="ghost" type="button" onClick={() => setShow((v) => !v)}>{show ? 'Hide' : 'Show'}</button>
+        <button className="primary" type="button" onClick={save} disabled={pw.trim() === current}>Save password</button>
+      </div>
+      <div className="mono dim" style={{ fontSize: 10 }}>
+        Case-insensitive on entry. It is stored in world-readable content, so it can be
+        recovered by anyone determined — never reuse a password from anywhere else here.
+      </div>
+    </div>
+  )
+}
+
 function newUser(makeId) {
   return { _id: makeId(), name: '', idNumber: '', email: '', company: 'A', role: COMMANDER_ROLE, rank: '', tempPassword: genTempPassword(), tempIssuedAt: Date.now() }
 }
 
-function UserModal({ rec, onClose, onSave, onDelete, used }) {
+function UserModal({ rec, onClose, onSave, onDelete, used, canGrantStaff }) {
   const [u, setU] = useState(rec)
   const confirm = useConfirm()
   const dialogRef = useDialog(onClose)
   const set = (k) => (e) => setU({ ...u, [k]: e.target.value })
+
+  // Staff logins are the bootstrap administrator's to hand out, so every other
+  // RHQ account gets a role list without them. If such an account opens an
+  // EXISTING staff user, the role is shown but frozen — dropping the option
+  // silently would otherwise let a save rewrite their role to whatever landed
+  // in the empty select.
+  const grantable = canGrantStaff ? ROLES : ROLES.filter((r) => !RESTRICTED_ROLES.includes(r))
+  const roleOptions = grantable.includes(u.role) ? grantable : [u.role, ...grantable]
+  const roleLocked = !canGrantStaff && RESTRICTED_ROLES.includes(rec.role)
+  const staffAccount = isStaffRole(u.role)
   const del = async () => {
     const ok = await confirm({
       title: 'Remove member',
@@ -394,8 +466,8 @@ function UserModal({ rec, onClose, onSave, onDelete, used }) {
             </select>
           </Field>
           <Field label="Role">
-            <select value={u.role} onChange={set('role')} autoComplete="off">
-              {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+            <select value={u.role} onChange={set('role')} autoComplete="off" disabled={roleLocked}>
+              {roleOptions.map((r) => <option key={r} value={r}>{r}</option>)}
             </select>
           </Field>
         </div>
@@ -407,6 +479,19 @@ function UserModal({ rec, onClose, onSave, onDelete, used }) {
             <button className="ghost" type="button" onClick={() => setU({ ...u, tempPassword: genTempPassword(), tempIssuedAt: Date.now() })}>Regenerate</button>
           </div>
         </Field>
+        {roleLocked && (
+          <div className="warn mono" style={{ fontSize: 10 }}>
+            This is a staff login. Only the unit administrator (ID {ADMIN_ID}) can change its role.
+          </div>
+        )}
+        {staffAccount && (
+          <div className="mono dim" style={{ fontSize: 10, lineHeight: 1.6 }}>
+            {u.role === 'RHQ Staff'
+              ? 'RHQ Staff: the Staff Centre overview PLUS the company intel approval queue — they can approve, edit-then-approve or dismiss submissions from every company. No Operations Centre access.'
+              : 'Staff: the read-only Staff Centre only. No Operations Centre, no COY Centre, no approvals.'}
+            {' '}Company is not used for staff accounts.
+          </div>
+        )}
         {used && (
           <div className="warn mono" style={{ fontSize: 10 }}>
             This temporary password has already been used to activate the account.

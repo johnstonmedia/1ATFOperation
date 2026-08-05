@@ -3,7 +3,7 @@ import { FIREBASE_ENABLED, auth, db } from '../firebase/config'
 import { useData } from './DataContext'
 import { getAuthVersion } from '../lib/store'
 import { appError } from '../lib/errors'
-import { COMPANIES, PHONETIC } from '../firebase/seed'
+import { COMPANIES, PHONETIC, RHQ_STAFF_ROLE, isStaffRole } from '../firebase/seed'
 
 // RHQ "view as" emulation. A new tab opened with ?emulate=<company|GENERAL>
 // overlays a synthetic General member on top of the real (RHQ) session, so RHQ
@@ -35,8 +35,9 @@ export const useAuth = () => useContext(AuthContext)
 const LS_USER = '1atf-current-user'
 
 // Bootstrap administrator: signs in directly (no temporary password), even
-// before any roster has been imported.
-const ADMIN_ID = '190990'
+// before any roster has been imported. Also the ONLY account that may create
+// staff logins or change the shared Staff Centre password (see UsersAdmin).
+export const ADMIN_ID = '190990'
 const ADMIN_PROFILE = { name: 'Unit Administrator', company: 'S', role: 'RHQ', email: '', rank: '' }
 
 const cleanId = (id) => String(id).trim().toLowerCase().replace(/[^a-z0-9]/g, '')
@@ -291,6 +292,15 @@ export function AuthProvider({ children }) {
     isRHQ: !emulated && effUser?.role === 'RHQ',
     // A Company Commander may reach the COY Centre for their own company only.
     isCommander: !emulated && effUser?.role === 'Company Commander',
+    // Staff Centre accounts. `isStaff` covers both staff roles (they share the
+    // same read-only overview); `isRHQStaff` additionally unlocks the COY
+    // approval queue inside it. Neither implies isRHQ — a staff account must
+    // never reach the Operations Centre.
+    isStaff: !emulated && isStaffRole(effUser?.role),
+    isRHQStaff: !emulated && effUser?.role === RHQ_STAFF_ROLE,
+    // The bootstrap administrator. The only account that may create or edit
+    // staff logins, or change the shared Staff Centre password.
+    isAdmin: !emulated && String(effUser?.idNumber || '').trim() === ADMIN_ID,
   }
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

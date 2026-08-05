@@ -10,41 +10,65 @@ import MapLegend from '../components/MapLegend'
 import { COMPANIES, PHONETIC, smeacOf, movementsOf } from '../firebase/seed'
 import { framesValid, sortFrames } from '../lib/campaign'
 import { listSubmissions } from '../lib/submissions'
+import LoginModal from '../components/LoginModal'
+import ApprovalsQueue from '../components/ApprovalsQueue'
 
 // Staff Centre — a read-only overview of everything RHQ and the Company
 // Commanders are doing, for unit staff who don't need (or shouldn't have) an
-// editing account. URL-only at /staff-centre, gated by one shared password.
+// editing account. URL-only at /staff-centre.
 //
 // Structure: an overview of clickable section cards, each opening a detail
 // view with the actual content (the intel fragments themselves, the briefing
 // text, the video playing, the live map, the activity feed…). Nothing here is
-// editable — RHQ edits in the Ops Centre, commanders in the COY Centre.
+// editable — RHQ edits in the Ops Centre, commanders in the COY Centre — with
+// ONE exception: an 'RHQ Staff' account gets the working COY approval queue
+// (see ApprovalsQueue), because approving is the whole point of that role.
 //
-// ⚠️ SECURITY MODEL, deliberately modest: the password below ships in the
-// client bundle, so it is a "keep the casual visitor out" latch, NOT a real
-// secret — anyone determined can read it out of the JS. That is acceptable
-// *because this page only ever displays content that is already public*
-// (everything under content/* is world-readable by design so the public site
-// works signed-out). It grants no write access and shows no personal data:
-// the roster, help inbox and audit log are never touched here.
-const STAFF_PASSWORD = 'SCUNARRATIVE'
+// TWO WAYS IN, deliberately:
+//
+//  1. A signed-in 'Staff' / 'RHQ Staff' account (created in Ops Centre → Users
+//     by the bootstrap administrator only). Attributable, and the only path
+//     that can carry approval rights — approving writes to Firestore, which
+//     needs a real authenticated session, not a client-side password check.
+//     RHQ and Company Commanders are let straight in too; they can already see
+//     all of this in their own consoles.
+//
+//  2. The shared staff password, now stored in the `staffAccess` slice and
+//     changed by the administrator in Ops Centre → Users rather than compiled
+//     in. ⚠️ Moving it out of the bundle did NOT make it a secret: `content/*`
+//     is world-readable so the public site works signed-out, so the password is
+//     still recoverable by anyone determined. It stays acceptable for exactly
+//     the reason it always was — this page only ever displays content that is
+//     already public, grants no write access, and shows no personal data (the
+//     roster, help inbox and audit log are never touched here). A
+//     password-only visitor NEVER gets approval powers, whatever they type.
 const LS_KEY = '1atf-staff-ok'
 
 export default function StaffCentre() {
+  const { state } = useData()
+  const { isStaff, isRHQ, isCommander } = useAuth()
   const [ok, setOk] = useState(() => {
     try { return localStorage.getItem(LS_KEY) === '1' } catch { return false }
   })
-  if (!ok) return <StaffGate onPass={() => setOk(true)} />
+
+  const signedIn = isStaff || isRHQ || isCommander
+  if (!signedIn && !ok) {
+    return <StaffGate password={state.staffAccess?.password || ''} onPass={() => setOk(true)} />
+  }
   return <StaffDashboard onLock={() => { try { localStorage.removeItem(LS_KEY) } catch { /* ignore */ } setOk(false) }} />
 }
 
-function StaffGate({ onPass }) {
+function StaffGate({ password, onPass }) {
   const [pw, setPw] = useState('')
   const [err, setErr] = useState('')
+  const [loginOpen, setLoginOpen] = useState(false)
 
   const submit = (e) => {
     e.preventDefault()
-    if (pw.trim().toUpperCase() !== STAFF_PASSWORD) {
+    // Case-insensitive, as it always was. An empty stored password must never
+    // match an empty box — that would turn a misconfigured slice into an open door.
+    const expected = String(password || '').trim().toUpperCase()
+    if (!expected || pw.trim().toUpperCase() !== expected) {
       setErr('Incorrect password.')
       return
     }
@@ -71,7 +95,12 @@ function StaffGate({ onPass }) {
         {err && <div className="mono" style={{ fontSize: 11, color: 'var(--hostile)' }}>{err}</div>}
         <button className="primary" type="submit">Enter</button>
       </form>
+      <div className="mono dim" style={{ fontSize: 11, maxWidth: 380, lineHeight: 1.6 }}>
+        Have a staff account? <button className="ghost" style={{ fontSize: 11, padding: '2px 8px' }} onClick={() => setLoginOpen(true)}>Sign in</button>
+        {' '}— required to approve company submissions.
+      </div>
       <Link to="/" className="mono dim" style={{ fontSize: 11 }}>← Return to portal</Link>
+      {loginOpen && <LoginModal onClose={() => setLoginOpen(false)} />}
     </div>
   )
 }
@@ -83,16 +112,18 @@ const whenShort = (t) => (t ? new Date(t).toLocaleDateString() : '—')
 
 function StaffDashboard({ onLock }) {
   const { state } = useData()
-  const { isRHQ, isCommander, user } = useAuth()
+  const { isRHQ, isCommander, isRHQStaff, isStaff, user, logout } = useAuth()
+  // RHQ Staff (and RHQ) don't just watch the queue here — they work it.
+  const canApprove = isRHQStaff || isRHQ
   const [view, setView] = useState(null) // null = overview, else section id
   const [subs, setSubs] = useState(null) // null loading | [] none | false denied
 
-  // The approval queue lives in `intelSubmissions`, which the security rules
-  // restrict to RHQ / the owning commander — a password-only staff visitor is
-  // not signed in to Firebase at all, so this read legitimately fails against
-  // live Firebase. Try anyway (works in LOCAL MODE, and when an RHQ or
-  // commander session already exists in this browser) and show an honest
-  // notice rather than a misleading empty list.
+  // Card-level count only — the working queue is ApprovalsQueue, which does its
+  // own fetch. `intelSubmissions` is restricted by the rules to RHQ / RHQ Staff
+  // / the owning commander, and a password-only visitor is not signed in to
+  // Firebase at all, so this read legitimately fails against live Firebase.
+  // Try anyway (it works in LOCAL MODE and for any signed-in session) and show
+  // an honest "restricted" stat rather than a misleading zero.
   useEffect(() => {
     let live = true
     listSubmissions(isCommander && user?.company ? { company: user.company } : {})
@@ -114,7 +145,7 @@ function StaffDashboard({ onLock }) {
     {
       id: 'approvals',
       title: 'Approvals',
-      sub: 'Company intel awaiting RHQ',
+      sub: canApprove ? 'Review and approve company intel' : 'Company intel awaiting RHQ',
       tone: 'hostile',
       stat: subs === false ? 'restricted' : subs === null ? '…' : `${subs.length} pending`,
       alert: Array.isArray(subs) && subs.length > 0,
@@ -173,12 +204,19 @@ function StaffDashboard({ onLock }) {
           <Logo size={42} />
           <div>
             <div className="head accent" style={{ fontSize: 16 }}>STAFF CENTRE</div>
-            <div className="mono dim" style={{ fontSize: 10 }}>READ-ONLY UNIT OVERVIEW</div>
+            <div className="mono dim" style={{ fontSize: 10 }}>
+              {canApprove ? 'UNIT OVERVIEW · APPROVALS' : 'READ-ONLY UNIT OVERVIEW'}
+              {user?.name ? ` · ${user.name.toUpperCase()}` : ''}
+            </div>
           </div>
         </div>
         <div className="row center wrap" style={{ gap: 8 }}>
           <Link to="/" className="mono dim" style={{ fontSize: 11 }}>← Portal</Link>
-          <button className="ghost" onClick={onLock} style={{ fontSize: 11 }}>Lock</button>
+          {/* The Staff Centre has no TopBar, so a signed-in account needs its
+              own way out. "Lock" only ever means "forget the shared password". */}
+          {isStaff || isRHQ || isCommander
+            ? <button className="ghost" onClick={logout} style={{ fontSize: 11 }}>Sign out</button>
+            : <button className="ghost" onClick={onLock} style={{ fontSize: 11 }}>Lock</button>}
         </div>
       </div>
 
@@ -205,20 +243,26 @@ function StaffDashboard({ onLock }) {
           <div className="mono dim" style={{ fontSize: 10, marginTop: 16, lineHeight: 1.6 }}>
             Select a section for full detail. Read-only — RHQ edits in the Ops Centre,
             commanders in the COY Centre.
-            {(isRHQ || isCommander) && ' You are also signed in, so restricted items are visible.'}
+            {canApprove
+              ? ' Approvals is the exception: you can publish or dismiss company submissions from here.'
+              : (isRHQ || isCommander || isStaff) && ' You are also signed in, so restricted items are visible.'}
           </div>
         </>
       )}
 
       {current && (
         <div className="col" style={{ gap: 12 }}>
-          <div>
-            <div className={`head ${current.tone === 'hostile' ? 'hostile' : 'accent'}`} style={{ fontSize: 18 }}>
-              {current.title}
+          {!(view === 'approvals' && canApprove) && (
+            <div>
+              <div className={`head ${current.tone === 'hostile' ? 'hostile' : 'accent'}`} style={{ fontSize: 18 }}>
+                {current.title}
+              </div>
+              <div className="mono dim" style={{ fontSize: 11 }}>{current.sub}</div>
             </div>
-            <div className="mono dim" style={{ fontSize: 11 }}>{current.sub}</div>
-          </div>
-          {view === 'approvals' && <ApprovalsDetail subs={subs} />}
+          )}
+          {view === 'approvals' && (canApprove
+            ? <ApprovalsQueue Header={StaffSectionHeader} intro="Changes submitted by Company Commanders, across every company. Approve to publish to the public site, or open one to adjust the wording first. Nothing is live until you approve it." />
+            : <ApprovalsDetail subs={subs} />)}
           {view === 'intel' && <IntelDetail intel={intel} updatedAt={meta.intel?.updatedAt} intro={state.intelIntro} />}
           {view === 'video' && <VideoDetail video={video} briefings={briefings} />}
           {view === 'briefings' && <BriefingsDetail briefings={briefings} updatedAt={meta.briefings?.updatedAt} />}
@@ -228,6 +272,20 @@ function StaffDashboard({ onLock }) {
           {view === 'freshness' && <FreshnessDetail meta={meta} />}
         </div>
       )}
+    </div>
+  )
+}
+
+// Header shape ApprovalsQueue expects, in Staff Centre dress rather than Ops
+// Centre dress. Same contract as OpsHeader: { title, sub, children }.
+function StaffSectionHeader({ title, sub, children }) {
+  return (
+    <div className="row between center wrap" style={{ gap: 10 }}>
+      <div>
+        <div className="head hostile" style={{ fontSize: 18 }}>{title}</div>
+        <div className="mono dim" style={{ fontSize: 11 }}>{sub}</div>
+      </div>
+      <div className="row" style={{ gap: 8 }}>{children}</div>
     </div>
   )
 }

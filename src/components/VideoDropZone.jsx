@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import VideoEmbed from './VideoEmbed'
+import VideoEmbed, { resolveVideo, embedSrcFrom } from './VideoEmbed'
 import { useToast } from '../context/ToastContext'
 import { useData } from '../context/DataContext'
 import {
@@ -7,25 +7,45 @@ import {
   playbackWarning, uploadVideo, validateVideo,
 } from '../lib/videoUpload'
 
-// Drag-and-drop video field for the Ops Centre. Drop a file from the desktop
-// and it uploads to Firebase Storage; drop (or paste) a YouTube/Vimeo link and
-// it is used as-is. Both paths end at the same thing — a URL handed back
-// through onChange — so nothing downstream needs to know which was used.
+// Drag-and-drop video field for the Ops Centre. Three ways to fill it:
+//   - drop/choose a FILE      → uploads to Firebase Storage
+//   - drop/paste a LINK       → used as-is (YouTube, Vimeo, Drive, direct .mp4)
+//   - paste an EMBED CODE     → the <iframe …> from a provider's Share → Embed
+// All three end as one string handed back through onChange, resolved for
+// display by resolveVideo — so nothing downstream needs to know which was used.
 //
-// The link box is deliberately kept: uploads need Storage enabled in the
-// Firebase console (see src/lib/videoUpload.js), and a YouTube link costs the
-// unit no bandwidth, so it stays the better option for anything long.
+// The text box is deliberately kept alongside the drop zone: uploads need
+// Storage enabled in the Firebase console (see src/lib/videoUpload.js), and a
+// YouTube link costs the unit no bandwidth, so it stays the better option for
+// anything long.
 
 const DROP_MIN_HEIGHT = 150
 
-// Pull a usable URL out of a drop that carried a link rather than a file
-// (dragging a video's address bar / a link off a page).
+// Pull something usable out of a drop that carried text rather than a file —
+// a dragged link, or a selected embed code. An embed snippet spans lines and
+// is not a URL, so it is tried whole before falling back to line-by-line.
 function urlFromDrop(dt) {
-  const raw = dt.getData('text/uri-list') || dt.getData('text/plain') || ''
+  const raw = (dt.getData('text/uri-list') || dt.getData('text/plain') || '').trim()
+  if (!raw) return ''
+  if (resolveVideo(raw)) return raw
   const first = raw.split(/[\r\n]+/).find((l) => l && !l.startsWith('#'))
-  if (!first) return ''
-  try { new URL(first.trim()) } catch { return '' }
-  return first.trim()
+  return first && resolveVideo(first.trim()) ? first.trim() : ''
+}
+
+// Tell RHQ what the field actually resolved to, so a bad paste is obvious in
+// the editor rather than on the live site.
+function linkNote(value) {
+  const raw = (value || '').trim()
+  if (!raw) return 'Paste a YouTube/Vimeo link, a Share → Embed code, a Google Drive file link, or a direct .mp4 URL.'
+  const v = resolveVideo(raw)
+  if (!v) {
+    return embedSrcFrom(raw)
+      ? '⚠ That embed code has no usable https address in its src.'
+      : '⚠ Not a usable video address — nothing will show on the Briefings tab.'
+  }
+  if (v.type === 'link') return '⚠ This provider is not recognised, so it will show as an “Open video ↗” link rather than a player. Paste its embed code instead to frame it in the page.'
+  if (embedSrcFrom(raw)) return '✓ Embed code recognised — playing its src below.'
+  return v.type === 'video' ? '✓ Direct video file — playing below.' : '✓ Embedded player — preview below.'
 }
 
 export default function VideoDropZone({
@@ -188,7 +208,7 @@ export default function VideoDropZone({
             </div>
             <div className="dim" style={{ fontSize: 11, lineHeight: 1.6, maxWidth: 420 }}>
               …or click to choose one. MP4 or WebM, up to {formatBytes(MAX_VIDEO_BYTES)}.
-              A YouTube or Vimeo link can be dropped or pasted below instead — better for
+              A link or an embed code can be dropped or pasted below instead — better for
               anything long, and it costs the unit no storage.
             </div>
           </>
@@ -213,12 +233,19 @@ export default function VideoDropZone({
       )}
 
       <div className="col" style={{ gap: 4 }}>
-        <label style={{ fontSize: 11 }}>Video link (YouTube, Vimeo, or a direct .mp4)</label>
-        <input
+        <label style={{ fontSize: 11 }}>Video link or embed code</label>
+        <textarea
+          rows={2}
+          className="mono"
+          style={{ fontSize: 12, resize: 'vertical' }}
           value={value}
           onChange={(e) => onChange(e.target.value, { path: '', local: false })}
-          placeholder="https://…"
+          placeholder={'https://…    or    <iframe src="https://…"></iframe>'}
+          spellCheck={false}
         />
+        <div className="mono dim" style={{ fontSize: 10, lineHeight: 1.6 }}>
+          {linkNote(value)}
+        </div>
       </div>
 
       {value.trim() && (

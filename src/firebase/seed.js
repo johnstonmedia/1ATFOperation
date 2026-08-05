@@ -28,8 +28,36 @@ export const PHONETIC = {
 // Account roles. 'Company Commander' is the default for a new account: it is
 // bound to a single company and may submit intel for that company (subject to
 // RHQ approval). 'RHQ' is full control. 'General' is retained for legacy rows.
-export const ROLES = ['Company Commander', 'RHQ', 'General']
+//
+// The two staff roles reach ONLY the Staff Centre — never the Ops Centre, never
+// the COY Centre:
+//   'Staff'     — read-only. The same overview a shared-password visitor gets,
+//                 but signed in, so it is attributable.
+//   'RHQ Staff' — read-only PLUS the Company Commander approval queue: they can
+//                 approve, edit-then-approve or dismiss submissions from any
+//                 company, exactly as RHQ does in Ops Centre → Approvals.
+// Both are created only by the bootstrap administrator (ADMIN_ID in
+// AuthContext) — see STAFF_CREATOR_ID / UsersAdmin.
+export const ROLES = ['Company Commander', 'RHQ', 'RHQ Staff', 'Staff', 'General']
 export const COMMANDER_ROLE = 'Company Commander'
+export const STAFF_ROLE = 'Staff'
+export const RHQ_STAFF_ROLE = 'RHQ Staff'
+// Roles that only the bootstrap administrator may hand out.
+export const RESTRICTED_ROLES = [RHQ_STAFF_ROLE, STAFF_ROLE]
+// True for any account whose home is the Staff Centre.
+export const isStaffRole = (role) => role === STAFF_ROLE || role === RHQ_STAFF_ROLE
+
+// Shared Staff Centre password, now editable by the bootstrap administrator in
+// Ops Centre → Users rather than hard-coded in the page.
+//
+// ⚠️ This is a LATCH, NOT A SECRET, and moving it into Firestore does not
+// change that: `content/*` is world-readable (the public site has to work
+// signed-out), so the password is as readable as it was when it shipped in the
+// JS bundle. It is acceptable for exactly the same reason as before — the
+// Staff Centre only ever displays content that is already public, grants no
+// write access, and shows no personal data. Anyone who needs real authority
+// (approving COY submissions) needs a real 'RHQ Staff' account instead.
+export const DEFAULT_STAFF_ACCESS = { password: 'SCUNARRATIVE' }
 
 // Unit ranks, each with a long and short (abbreviated) form. The roster stores
 // the short code; helpers below resolve either form for display.

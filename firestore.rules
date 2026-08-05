@@ -11,7 +11,9 @@ rules_version = '2';
 //    (full cell snapshot + label + order) so RHQ can edit/reorder/delete any
 //    frame independently. World-readable like content/*; only RHQ writes.
 //  - intelSubmissions: the Company Commander approval queue — a commander
-//    reads/writes only their own company's submissions, RHQ manages all.
+//    reads/writes only their own company's submissions, RHQ manages all, and an
+//    'RHQ Staff' account manages all of them from the Staff Centre without
+//    getting any of RHQ's other powers.
 //  - intelStats: anonymous per-company decrypt counts. Public read AND public
 //    create/increment (the Intel tab has no login), locked to a fixed shape
 //    carrying no identity — see the block below for exactly what that allows.
@@ -45,6 +47,16 @@ service cloud.firestore {
         && exists(userDoc())
         && get(userDoc()).data.role == 'RHQ';
     }
+    // An 'RHQ Staff' account: the Staff Centre plus the COY intel approval
+    // queue, for every company. Deliberately NOT isRHQ — it must never reach
+    // the Operations Centre's other slices (branding, territory, users…), so
+    // it is granted only where it is named explicitly: content/intel and
+    // intelSubmissions below, plus writing an audit entry for what it approved.
+    function isRHQStaff() {
+      return isSignedIn()
+        && exists(userDoc())
+        && get(userDoc()).data.role == 'RHQ Staff';
+    }
     // A Company Commander bound to company `coy`. Commanders may only ever act on
     // their own company's data.
     function isCommanderOf(coy) {
@@ -72,6 +84,14 @@ service cloud.firestore {
     match /content/{doc} {
       allow read: if true;
       allow write: if isRHQ();
+    }
+    // Approving a COY submission publishes into content/intel, so RHQ Staff
+    // needs write on THIS slice and no other. Overlapping matches are OR'd in
+    // Firestore, so this widens content/intel only — every other content/*
+    // document stays RHQ-write-only under the rule above.
+    match /content/intel {
+      allow read: if true;
+      allow write: if isRHQ() || isRHQStaff();
     }
 
     // ---------------------------------------------------- campaign replay frames
@@ -148,7 +168,10 @@ service cloud.firestore {
     // Record of RHQ actions. RHQ only — created, read and cleared by RHQ; never
     // edited in place.
     match /audit/{id} {
-      allow read, create, delete: if isRHQ();
+      allow read, delete: if isRHQ();
+      // RHQ Staff may APPEND (every approval it makes is logged) but never read
+      // the log back or delete from it — the Audit Log stays an Ops Centre view.
+      allow create: if isRHQ() || isRHQStaff();
       allow update: if false;
     }
 
@@ -169,12 +192,13 @@ service cloud.firestore {
     // their own company code; RHQ manages the whole queue. Commander list
     // queries must be filtered by company (the app does this) to satisfy read.
     match /intelSubmissions/{id} {
-      allow read:   if isRHQ() || isCommanderOf(resource.data.company);
-      allow create: if isRHQ() || (isCommanderOf(request.resource.data.company)
+      allow read:   if isRHQ() || isRHQStaff() || isCommanderOf(resource.data.company);
+      allow create: if isRHQ() || isRHQStaff() || (isCommanderOf(request.resource.data.company)
                                    && request.resource.data.status == 'pending');
-      allow update: if isRHQ() || (isCommanderOf(resource.data.company)
+      allow update: if isRHQ() || isRHQStaff() || (isCommanderOf(resource.data.company)
                                    && request.resource.data.company == resource.data.company);
-      allow delete: if isRHQ() || isCommanderOf(resource.data.company);
+      // Approving and dismissing both clear the submission.
+      allow delete: if isRHQ() || isRHQStaff() || isCommanderOf(resource.data.company);
     }
 
     // ------------------------------------------------- anonymous decrypt counts

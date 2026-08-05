@@ -17,6 +17,90 @@ keep entries short and focused on what a new collaborator needs to know.
 
 ---
 
+## 2026-08-05 (ops) — Briefings video: paste an embed code
+- **The Briefings video field now takes a full `<iframe …>` embed code**, not
+  just a link. It also stops mangling the cases it always should have handled:
+  a YouTube **Share → Embed URL** (`youtube.com/embed/<id>`), `/shorts/`,
+  `/live/`, `youtube-nocookie.com`, Vimeo's **unlisted** `/<id>/<hash>` form
+  (the hash has to travel as `?h=`, or the embed is refused), and Google Drive
+  `/file/d/<id>/view` → `/preview` (the `/view` page refuses to be framed).
+  Every one of those previously fell through to a bare "Open video ↗" link.
+- **Vimeo specifically** resolves from every shape it hands out: the share link,
+  the unlisted `/<id>/<hash>` link, the `player.vimeo.com` URL, the real embed
+  block (Vimeo wraps its `<iframe>` in a sizing `<div>` and follows it with a
+  `player.js` `<script>` — both are ignored, only the src is read), and the
+  longer paths that bury the id at the end: `manage/videos/<id>` (the dashboard
+  URL, i.e. what's in the address bar while you look at your own video, so the
+  likeliest paste of all), `channels/…`, `groups/…/videos/…`,
+  `showcase/…/video/…`. Live events use their own `/event/<id>/embed` form.
+  `/ondemand` stays a link — it's a purchase page with no plain embed.
+- **The pasted string is stored as-is** and re-resolved at render. That keeps a
+  signal we'd otherwise lose: an embed code is RHQ explicitly saying "this is
+  meant to be framed", which is what lets an **unrecognised** provider
+  (SharePoint, Stream, Canva, anything the unit gets handed) embed properly
+  instead of degrading to a link. The HTML is never injected — only its `src`
+  is read out.
+- ⚠️ **Scheme guard added and load-bearing**: only `http:`/`https:`/`blob:`
+  srcs are accepted. A `javascript:` or `data:` src inside a pasted embed code
+  would otherwise execute in the page's origin. Don't drop it when adding a
+  provider.
+- The link input became a 2-row textarea (an embed code doesn't fit a one-line
+  field) with a live note under it saying what the value resolved to — embed
+  recognised / direct file / unrecognised provider / unusable — so a bad paste
+  shows up in the editor rather than on the live site.
+- Verified with a throwaway harness over 24 inputs: every provider shape above,
+  protocol-relative `//` srcs, `&amp;`-escaped embed params, an iframe with no
+  src, and four hostile inputs (`javascript:`/`data:` in an embed code and
+  bare) which all resolve to `null`.
+
+## 2026-08-05 (access) — Staff roles, RHQ Staff approvals, password out of code
+- **The Staff Centre password is no longer hard-coded.** It moved from a
+  `const STAFF_PASSWORD` in StaffCentre.jsx to the new `staffAccess` single-value
+  slice, edited in **Ops Centre → Users** by the bootstrap administrator (ID
+  190990) only — nobody else, including other RHQ accounts, even sees the panel.
+  - A **missing doc falls back to the seed default**, so `SCUNARRATIVE` keeps
+    working until it's changed — deploying this locks nobody out.
+  - An **empty** stored password matches nothing, so a misconfigured slice fails
+    closed instead of becoming an open door.
+  - ⚠️ This did **not** make it a secret. `content/*` is world-readable (the
+    public site must work signed-out), so it is exactly as recoverable as it was
+    in the JS bundle. Still fine for the same reason as before — the page shows
+    only already-public content, no PII, no write access — but it is a latch,
+    and anything needing real authority now uses an account instead.
+- **Two new roles** (`ROLES` in seed.js), both of which land in the Staff Centre
+  and **neither of which is `isRHQ`**, so neither can reach the Ops Centre or
+  the COY Centre:
+  - **`Staff`** — the read-only overview, signed in and attributable.
+  - **`RHQ Staff`** — the same PLUS a working COY intel approval queue across
+    **every** company: approve, edit-then-approve, dismiss.
+- **Only ID 190990 can create staff logins.** Other RHQ accounts get the role
+  dropdown with both filtered out; opening an existing staff user shows the role
+  **frozen rather than absent**, because silently dropping the option would let
+  a save rewrite their role to whatever landed in the empty `<select>`. Enforced
+  in the **UI only** — the rules don't distinguish one RHQ from another. The
+  spreadsheet import can't mint staff either (it hard-codes `COMMANDER_ROLE`).
+- **Approval queue extracted** to [ApprovalsQueue.jsx](src/components/ApprovalsQueue.jsx),
+  used by BOTH Ops Centre → Approvals and Staff Centre → Approvals; only the page
+  chrome differs, via a `Header` prop taking `{ title, sub, children }`.
+  `SubmissionsEditor.jsx` is now a three-line wrapper — **put queue changes in the
+  shared component**, or the two surfaces drift.
+- `useAuth()` gains `isStaff`, `isRHQStaff` and `isAdmin` (ID 190990), all
+  suppressed while emulating like `isRHQ`. `ADMIN_ID` is now exported.
+  TopBar/Sidebar gain a role-aware **STAFF CENTRE** button.
+- The Staff Centre gate now offers **Sign in** alongside the password box, and a
+  signed-in account gets **Sign out** where the password visitor gets **Lock**
+  (that page has no TopBar, so there was otherwise no way out).
+- **`firestore.rules`**: new `isRHQStaff()` granting exactly three things —
+  read/write `intelSubmissions`; write **`content/intel` only**, via an extra
+  `match /content/intel` block (overlapping matches are OR'd, so every other
+  `content/*` doc stays RHQ-write-only); and **create-only** on `audit`, so it
+  logs what it approved but can't read the log back.
+- ⚠️ **RHQ Staff approvals do not work live until the rules are republished** —
+  the same pending console action as everything else in HANDOVER §0. Approving
+  will fail with a permission error against the live project until then. The
+  audit write is best-effort and already swallowed, so that part degrades quietly.
+- Not browser-verified. See HANDOVER §3.
+
 ## 2026-08-04 (ops) — Drag-and-drop briefing video upload
 - **You can now drag a video file straight into Ops Centre → Briefings.**
   Previously the only option was pasting a URL, which meant uploading to
