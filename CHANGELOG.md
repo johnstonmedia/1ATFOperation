@@ -25,6 +25,15 @@ keep entries short and focused on what a new collaborator needs to know.
   (the hash has to travel as `?h=`, or the embed is refused), and Google Drive
   `/file/d/<id>/view` → `/preview` (the `/view` page refuses to be framed).
   Every one of those previously fell through to a bare "Open video ↗" link.
+- **Vimeo specifically** resolves from every shape it hands out: the share link,
+  the unlisted `/<id>/<hash>` link, the `player.vimeo.com` URL, the real embed
+  block (Vimeo wraps its `<iframe>` in a sizing `<div>` and follows it with a
+  `player.js` `<script>` — both are ignored, only the src is read), and the
+  longer paths that bury the id at the end: `manage/videos/<id>` (the dashboard
+  URL, i.e. what's in the address bar while you look at your own video, so the
+  likeliest paste of all), `channels/…`, `groups/…/videos/…`,
+  `showcase/…/video/…`. Live events use their own `/event/<id>/embed` form.
+  `/ondemand` stays a link — it's a purchase page with no plain embed.
 - **The pasted string is stored as-is** and re-resolved at render. That keeps a
   signal we'd otherwise lose: an embed code is RHQ explicitly saying "this is
   meant to be framed", which is what lets an **unrecognised** provider

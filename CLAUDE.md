@@ -439,10 +439,16 @@ to Firebase Storage via [src/lib/videoUpload.js](src/lib/videoUpload.js).
 One function turns whatever RHQ pasted into `{ type: 'iframe' | 'video' |
 'link', src }`; `null` means unusable, so callers hide the box.
 - Handles YouTube in every shape (watch, `youtu.be`, `/embed/`, `/shorts/`,
-  `/live/`, `youtube-nocookie`), Vimeo (incl. the unlisted `/<id>/<hash>` form,
-  which must become `?h=<hash>`), Google Drive `/file/d/<id>/view` → `/preview`
+  `/live/`, `youtube-nocookie`), Google Drive `/file/d/<id>/view` → `/preview`
   (the `/view` page refuses to be framed), direct video files, and Storage
   uploads.
+- **Vimeo** needs more than one rule: the unlisted `/<id>/<hash>` form must
+  become `?h=<hash>` or the embed is refused; `/event/<id>` embeds as
+  `/event/<id>/embed`, not as a player; and `manage/videos/<id>` (the dashboard
+  URL), `channels/…`, `groups/…/videos/…` and `showcase/…/video/…` all bury the
+  id at the END of the path, so it's taken as the last all-digits segment —
+  after the leading-digits check, since an unlisted hash can itself be numeric.
+  `/ondemand` is excluded on purpose (purchase page, no plain embed).
 - **Storage URLs are matched by HOST, not extension** — the filename is inside
   the escaped `/o/...` path and an upload may have no extension. Don't
   "simplify" that back to a pathname regex.

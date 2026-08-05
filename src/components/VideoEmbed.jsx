@@ -58,10 +58,28 @@ export function resolveVideo(input) {
   if (host === 'youtu.be' && seg[0]) return iframe(`https://www.youtube.com/embed/${seg[0]}`)
 
   if (host === 'player.vimeo.com') return iframe(u.href)
-  if (host === 'vimeo.com' && /^\d+$/.test(seg[0] || '')) {
-    // vimeo.com/<id> or, for an unlisted video, vimeo.com/<id>/<hash> — the
-    // hash has to travel as ?h= or the embed is refused.
-    return iframe(`https://player.vimeo.com/video/${seg[0]}${seg[1] ? `?h=${seg[1]}` : ''}`)
+  if (host === 'vimeo.com') {
+    // A live event's embeddable form is the /embed URL itself, not a player.
+    if (seg[0] === 'event' && seg[1]) return iframe(`https://vimeo.com/event/${seg[1]}/embed`)
+    if (/^\d+$/.test(seg[0] || '')) {
+      // vimeo.com/<id> or, for an unlisted video, vimeo.com/<id>/<hash> — the
+      // hash has to travel as ?h= or the embed is refused. Checked before the
+      // fallback below because an unlisted hash can itself be all digits.
+      return iframe(`https://player.vimeo.com/video/${seg[0]}${seg[1] ? `?h=${seg[1]}` : ''}`)
+    }
+    // Every other Vimeo URL buries the id at the end of a longer path:
+    //   manage/videos/<id>        the dashboard URL — what's in the address bar
+    //                             while you're looking at your own video, so the
+    //                             single most likely thing to be pasted
+    //   channels/<name>/<id>
+    //   groups/<name>/videos/<id>
+    //   showcase/<id>/video/<id>  (and the older album/<id>/video/<id>)
+    // Taking the last all-digits segment covers all of them. /ondemand is
+    // excluded deliberately: it's a purchase page with no plain embed.
+    if (seg[0] !== 'ondemand') {
+      const id = [...seg].reverse().find((p) => /^\d+$/.test(p))
+      if (id) return iframe(`https://player.vimeo.com/video/${id}`)
+    }
   }
 
   // Google Drive share links. The /view page cannot be framed; /preview is the
