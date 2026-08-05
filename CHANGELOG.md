@@ -17,6 +17,33 @@ keep entries short and focused on what a new collaborator needs to know.
 
 ---
 
+## 2026-08-05 (ops) — Briefings video: paste an embed code
+- **The Briefings video field now takes a full `<iframe …>` embed code**, not
+  just a link. It also stops mangling the cases it always should have handled:
+  a YouTube **Share → Embed URL** (`youtube.com/embed/<id>`), `/shorts/`,
+  `/live/`, `youtube-nocookie.com`, Vimeo's **unlisted** `/<id>/<hash>` form
+  (the hash has to travel as `?h=`, or the embed is refused), and Google Drive
+  `/file/d/<id>/view` → `/preview` (the `/view` page refuses to be framed).
+  Every one of those previously fell through to a bare "Open video ↗" link.
+- **The pasted string is stored as-is** and re-resolved at render. That keeps a
+  signal we'd otherwise lose: an embed code is RHQ explicitly saying "this is
+  meant to be framed", which is what lets an **unrecognised** provider
+  (SharePoint, Stream, Canva, anything the unit gets handed) embed properly
+  instead of degrading to a link. The HTML is never injected — only its `src`
+  is read out.
+- ⚠️ **Scheme guard added and load-bearing**: only `http:`/`https:`/`blob:`
+  srcs are accepted. A `javascript:` or `data:` src inside a pasted embed code
+  would otherwise execute in the page's origin. Don't drop it when adding a
+  provider.
+- The link input became a 2-row textarea (an embed code doesn't fit a one-line
+  field) with a live note under it saying what the value resolved to — embed
+  recognised / direct file / unrecognised provider / unusable — so a bad paste
+  shows up in the editor rather than on the live site.
+- Verified with a throwaway harness over 24 inputs: every provider shape above,
+  protocol-relative `//` srcs, `&amp;`-escaped embed params, an iframe with no
+  src, and four hostile inputs (`javascript:`/`data:` in an embed code and
+  bare) which all resolve to `null`.
+
 ## 2026-08-05 (access) — Staff roles, RHQ Staff approvals, password out of code
 - **The Staff Centre password is no longer hard-coded.** It moved from a
   `const STAFF_PASSWORD` in StaffCentre.jsx to the new `staffAccess` single-value

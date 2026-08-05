@@ -82,9 +82,9 @@ routes — see [src/App.jsx](src/App.jsx):
   ([src/lib/intelStats.js](src/lib/intelStats.js)) go to the `intelStats`
   collection — see "Data model" and the privacy notice.
 - `/briefings` **Briefings** — a video embed + free text, admin-edited. The
-  video is either an external link (YouTube/Vimeo/direct file) or a file
-  **dragged into the ops editor** and uploaded to Firebase Storage — see
-  "Briefing video upload" below.
+  video is a link, a **pasted `<iframe>` embed code**, or a file **dragged into
+  the ops editor** and uploaded to Firebase Storage — see "Briefing video
+  upload" and "Video resolution" below.
 - `/privacy` **Privacy Notice** — small static member-facing privacy policy
   ([src/pages/Privacy.jsx](src/pages/Privacy.jsx)), linked from the footer in
   [Layout.jsx](src/components/Layout.jsx). Deliberately repo-versioned, not an
@@ -431,10 +431,30 @@ to Firebase Storage via [src/lib/videoUpload.js](src/lib/videoUpload.js).
   fail `storage/unauthorized`; the drop zone reports it and points at the link
   field, so nothing else breaks. Note Storage now needs the **Blaze** plan on
   projects created after Oct 2024.
-- `resolveVideo()` in [VideoEmbed.jsx](src/components/VideoEmbed.jsx) matches
-  Storage download URLs by **host**, not by file extension — the filename is
-  inside the escaped `/o/...` path and may have no extension. Don't "simplify"
-  that back to a pathname regex.
+- The text box takes a **link OR a full `<iframe …>` embed code** (Share →
+  Embed). `resolveVideo()` in [VideoEmbed.jsx](src/components/VideoEmbed.jsx)
+  handles both — see "Video resolution" below.
+
+### Video resolution (`resolveVideo` in VideoEmbed.jsx)
+One function turns whatever RHQ pasted into `{ type: 'iframe' | 'video' |
+'link', src }`; `null` means unusable, so callers hide the box.
+- Handles YouTube in every shape (watch, `youtu.be`, `/embed/`, `/shorts/`,
+  `/live/`, `youtube-nocookie`), Vimeo (incl. the unlisted `/<id>/<hash>` form,
+  which must become `?h=<hash>`), Google Drive `/file/d/<id>/view` → `/preview`
+  (the `/view` page refuses to be framed), direct video files, and Storage
+  uploads.
+- **Storage URLs are matched by HOST, not extension** — the filename is inside
+  the escaped `/o/...` path and an upload may have no extension. Don't
+  "simplify" that back to a pathname regex.
+- **The raw pasted string is what gets stored**, embed snippet and all, and is
+  re-resolved at render. That preserves one signal: an embed code is RHQ saying
+  "this is meant to be framed", which is what lets an *unrecognised* provider
+  (SharePoint, Stream, Canva…) still embed instead of degrading to a link. We
+  never inject the pasted HTML — only its `src` is read.
+- ⚠️ **The scheme guard is load-bearing**: only `http:`/`https:`/`blob:` srcs
+  are accepted. A `javascript:` or `data:` src in a pasted embed code would
+  otherwise run in the page's origin. Don't drop that check when adding a
+  provider.
 
 ### Users / spreadsheet import
 Captures only **name, ID number, company, email** (fuzzy `COLUMN_HINTS` in
