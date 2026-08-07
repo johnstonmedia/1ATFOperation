@@ -14,6 +14,8 @@ rules_version = '2';
 //    reads/writes only their own company's submissions, RHQ manages all, and an
 //    'RHQ Staff' account manages all of them from the Staff Centre without
 //    getting any of RHQ's other powers.
+//  - backups: version history of the content/* slices (see lib/backups.js).
+//    RHQ-only read AND write — never public, unlike the documents it snapshots.
 //  - intelStats: anonymous per-company decrypt counts. Public read AND public
 //    create/increment (the Intel tab has no login), locked to a fixed shape
 //    carrying no identity — see the block below for exactly what that allows.
@@ -167,6 +169,19 @@ service cloud.firestore {
     // ------------------------------------------------------------- audit log
     // Record of RHQ actions. RHQ only — created, read and cleared by RHQ; never
     // edited in place.
+    // Version history of the content slices. RHQ-only in BOTH directions —
+    // unlike the content/* documents it snapshots, this is never public, which
+    // is also what makes it safe for the staffAccess slice. Immutable once
+    // written: a backup that can be edited is not a backup.
+    match /backups/{id} {
+      allow read:   if isRHQ();
+      // RHQ Staff writes content/intel when it approves a submission, so it has
+      // to be able to leave the restore point behind for that save.
+      allow create: if isRHQ() || isRHQStaff();
+      allow update: if false;
+      allow delete: if isRHQ();
+    }
+
     match /audit/{id} {
       allow read, delete: if isRHQ();
       // RHQ Staff may APPEND (every approval it makes is logged) but never read

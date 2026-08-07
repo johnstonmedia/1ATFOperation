@@ -403,10 +403,41 @@ assuming a page exists).
 Side-rail sections (see `SECTIONS` in [OperationsCentre.jsx](src/pages/ops/OperationsCentre.jsx)):
 Map: Narrative, Map: Territory, Intercepted Intelligence, **Approvals (COY
 intel)**, Briefings, Welcome Page (Classified), Branding & Assets, Users, Help,
-Audit Log. Every section edits exactly one data slice (or the
+**Backups**, Audit Log. Every section edits exactly one data slice (or the
 roster/support/`intelSubmissions` collections) via `updateSlice`/`replaceRoster`,
 and most log an audit entry via `useAudit()`. **Approvals** is the RHQ side of
 the Company Commander workflow (see "Company Commander & intel approval" above).
+
+### Backups / version history (2026-08-05)
+[src/lib/backups.js](src/lib/backups.js) + the **Backups** section
+([BackupsPanel.jsx](src/pages/ops/BackupsPanel.jsx)).
+- **Capture is automatic and has ONE hook**: `DataContext.updateSlice` files the
+  value it is about to overwrite into the `backups` collection before writing
+  the new one. Every editor already saves through `updateSlice`, so nothing per
+  editor is needed — and a new editor gets history for free.
+- Skipped when the value is unchanged (repeated Saves don't pile up duplicates),
+  when it's `undefined`, or when it exceeds `MAX_BACKUP_BYTES` (600 KB, well
+  under Firestore's 1 MiB doc limit). `recordBackup` **never throws** — a failed
+  backup must not be what stops RHQ saving.
+- `BACKUP_KEEP` = 20 versions per slice; `prune()` drops the rest on each write.
+- **Queries deliberately use a single field at a time.** `where('slice','==',…)`
+  plus `orderBy('ts')` would need a hand-made composite index in the console,
+  and this project's standing problem is console steps nobody performs — so
+  slice filtering and sorting happen client-side over a capped, small set.
+- **NOT versioned, on purpose**: `roster` (the one collection with personal
+  data — copying it per edit multiplies the exposure for no gain) and
+  `campaignFrames` (already an explicit editable history, and the whole set
+  would approach the 1 MiB doc limit). Both are stated in the panel's own copy.
+- **Restore is an ordinary `updateSlice`**, so it backs up what it replaces —
+  an undo of the undo is always there.
+- `staffAccess` IS versioned, and that's safe precisely because `backups` is
+  RHQ-read-only under the rules, unlike world-readable `content/*`.
+- "Download everything" writes a single JSON of all current slices +
+  `campaignFrames` (`buildFullExport`) — the off-platform copy, for when the
+  Firebase project itself is the thing that's gone.
+- ⚠️ The `backups` rules block needs the pending republish. Until then the
+  panel's list read fails (it says so, naming HANDOVER §0); writes fail silently
+  by design, so nothing else breaks.
 
 ### Briefing video upload (Firebase Storage)
 The Briefings editor's video field is a **drag-and-drop zone**
@@ -494,8 +525,9 @@ styles — there is no CSS-in-JS or component library.
    Five changes are waiting on that republish: the `intelSubmissions` block
    (COY-intel approval workflow), the roster read lockdown (RHQ + own-record
    only), the `campaignFrames` collection block, the `intelStats` block (both
-   2026-08-04 — see below), and `isRHQStaff()` (2026-08-05 — without it RHQ
-   Staff accounts cannot approve anything live). Until then, live Firebase still runs the
+   2026-08-04 — see below), `isRHQStaff()` (2026-08-05 — without it RHQ
+   Staff accounts cannot approve anything live), and the `backups` block
+   (2026-08-05 — without it the Backups panel cannot list history). Until then, live Firebase still runs the
    older rules, so against the live project RHQ can't write campaign frames at
    all and every anonymous decrypt count is silently rejected (by design the
    write failure is swallowed, so the puzzle still works — the counts just
@@ -510,8 +542,8 @@ styles — there is no CSS-in-JS or component library.
 **Rules coverage** — every collection/doc the app touches has a block:
 `content/*` (all `SINGLE_SLICES` — adding a slice needs no rules change),
 `campaignFrames`, `roster`, `tasks`, `activity`, `users`, `support`,
-`resetRequests`, `audit`, `authIndex`, `intelSubmissions`, `intelStats`
-(plus a narrower `content/intel` override for RHQ Staff);
+`resetRequests`, `audit`, `authIndex`, `intelSubmissions`, `intelStats`,
+`backups` (plus a narrower `content/intel` override for RHQ Staff);
 everything else default-denies. The `content/*`/`roster`/`intelSubmissions`
 blocks were
 verified against the real rules engine via the `firebase-tools` Firestore

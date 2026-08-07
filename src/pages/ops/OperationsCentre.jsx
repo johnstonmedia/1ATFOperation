@@ -14,6 +14,7 @@ import SubmissionsEditor from './SubmissionsEditor'
 import UsersAdmin from './UsersAdmin'
 import HelpAdmin from './HelpAdmin'
 import AuditLog from './AuditLog'
+import BackupsPanel from './BackupsPanel'
 import LoginModal from '../../components/LoginModal'
 
 const SECTIONS = [
@@ -26,6 +27,7 @@ const SECTIONS = [
   { id: 'branding', label: 'Branding & Assets', group: 'CONTENT' },
   { id: 'users', label: 'Users', group: 'ADMIN' },
   { id: 'help', label: 'Help', group: 'ADMIN' },
+  { id: 'backups', label: 'Backups', group: 'ADMIN' },
   { id: 'audit', label: 'Audit Log', group: 'ADMIN' },
 ]
 
@@ -115,6 +117,7 @@ export default function OperationsCentre() {
         {section === 'approvals' && <SubmissionsEditor />}
         {section === 'users' && <UsersAdmin />}
         {section === 'help' && <HelpAdmin />}
+        {section === 'backups' && <BackupsPanel />}
         {section === 'audit' && <AuditLog />}
       </div>
     </div>

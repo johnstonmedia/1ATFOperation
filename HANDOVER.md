@@ -16,7 +16,7 @@ into a list of things that were already done.
 Console.** The live project is still running an older ruleset. This is a manual
 console action nobody has done, and it is the single highest-value task here.
 
-Five separate changes are stuck behind it:
+Six separate changes are stuck behind it:
 
 | Block | Consequence of not republishing |
 |---|---|
@@ -24,6 +24,7 @@ Five separate changes are stuck behind it:
 | `intelStats` | Every anonymous decrypt count is rejected. Writes are deliberately swallowed, so the puzzles still work — the Ops Centre "Decrypts" panel just reads zero forever, which looks like "nobody is playing" rather than "this is broken". |
 | `intelSubmissions` | The COY-intel approval workflow doesn't work live. |
 | `roster` read lockdown | Roster reads are still on the old, looser rule (RHQ + own-record only is what the repo has). |
+| `backups` (2026-08-05) | The **Backups** panel cannot list version history — the read is denied. Capture still runs on every save (writes are swallowed on failure), so nothing is lost meanwhile; the panel just shows its "could not read" notice. |
 | `isRHQStaff` (2026-08-05) | **RHQ Staff accounts cannot approve anything live.** The role exists, the UI works, but publishing an approved fragment writes `content/intel` and clears `intelSubmissions` — both denied for that role until the republish. |
 
 **How to do it:** Firebase Console → Firestore → Rules → paste
@@ -54,7 +55,10 @@ Nothing else on the site is affected.
 3. Sign in as a Company Commander, submit an intel change, approve it as RHQ.
 4. Ops Centre → Briefings → drag an MP4 into the drop zone. It should upload,
    preview, and survive Save + reload on the public `/briefings` tab.
-5. As 190990, create an **RHQ Staff** user. Sign in as them, open
+5. Ops Centre → Backups. Save any change (e.g. the narrative), then confirm a
+   restore point appears, that Restore puts it back, and that restoring is
+   itself undoable.
+6. As 190990, create an **RHQ Staff** user. Sign in as them, open
    `/staff-centre` → Approvals, and approve a commander's submission. Confirm
    they are bounced from `/operations-centre` and `/company-command`.
 
@@ -175,6 +179,22 @@ QA pass available.
   phone**, that's where it's least certain.
 - "Preview as recruit" in both editors.
 - Telemetry end-to-end (blocked on §0).
+
+### Backups / version history (2026-08-05)
+[backups.js](src/lib/backups.js) + [BackupsPanel.jsx](src/pages/ops/BackupsPanel.jsx).
+The pure logic is harness-verified (28 checks: change summaries per slice shape,
+size formatting, the roster exclusion in the full export, and a LOCAL MODE
+round trip covering pruning at the cap, newest-first ordering, per-slice
+isolation, duplicate detection, and the three skip paths — undefined, oversized,
+circular). **The Firestore path is not verified at all** and can't be until §0.
+Worth driving:
+- capture actually fires on a real save, and the entry names the right person
+- Restore puts content back AND leaves a restore point for the version it
+  replaced (the undo-of-undo property the panel promises)
+- the map preview: a territory backup should summarise cells/places, never dump
+  24,000 characters
+- prune at the cap against Firestore, not just localStorage
+- "Download everything" contains no roster data
 
 ### Staff roles & RHQ Staff approvals (2026-08-05)
 [ApprovalsQueue.jsx](src/components/ApprovalsQueue.jsx), the two new roles, and

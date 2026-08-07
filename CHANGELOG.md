@@ -17,6 +17,50 @@ keep entries short and focused on what a new collaborator needs to know.
 
 ---
 
+## 2026-08-05 (ops) — Backups: automatic version history for all content
+- **New "Backups" section in the Operations Centre** (ADMIN group) — the past
+  versions of everything RHQ edits: the map, the narrative, briefings, intel,
+  branding, the welcome page, company pages, staff access.
+- **Capture has exactly ONE hook**: `DataContext.updateSlice` files the value it
+  is about to overwrite before writing the new one. Every editor already saves
+  through `updateSlice`, so no editor needed changing — and any future editor
+  gets history for free. This is why it's worth resisting any temptation to
+  write slices directly from a component.
+- Entries carry `{ slice, value, ts, by, byId, size }`. `AuthContext` pushes the
+  signed-in user down via a new `setBackupActor` (it is mounted *inside*
+  `DataProvider`, so it cannot be pulled up).
+- **Skipped** when the value is unchanged (repeated Saves don't pile up
+  duplicates), undefined, over 600 KB, or unserialisable. `recordBackup` never
+  throws — a failed backup must not be the thing that stops RHQ saving.
+- **20 versions kept per slice**, pruned on write. Painting the map is the
+  expensive case at ~24 KB per snapshot, which is what set that ceiling.
+- **No composite index needed, deliberately.** `where('slice','==',…)` +
+  `orderBy('ts')` would require one created by hand in the console, and this
+  repo's standing problem is console steps nobody performs. Filtering and
+  sorting happen client-side over a small capped set instead.
+- **Restore is an ordinary save**, so it backs up the version it replaces — the
+  undo is always undoable. Also per-entry Download, Delete, and a
+  **"Download everything"** JSON of all current content + campaign frames, for
+  a copy that survives the Firebase project itself.
+- **Deliberately NOT versioned**, and the panel says so in its own copy:
+  - `roster` — the one collection holding personal data (names, IDs, emails,
+    plain-text temp passwords). Copying it into a second collection on every
+    edit would multiply that exposure for no operational gain.
+  - `campaignFrames` — already an explicit, editable history, and snapshotting
+    the whole set would push one document near Firestore's 1 MiB limit.
+- `staffAccess` IS versioned, which is safe precisely because `backups` is
+  **RHQ-read-only** under the rules — unlike the world-readable `content/*`
+  documents it snapshots. Immutable too: `allow update: if false`.
+- ⚠️ **Needs the pending rules republish** (HANDOVER §0) before the panel can
+  list anything. Capture still runs meanwhile — writes fail silently by design —
+  and the panel names §0 in its error rather than looking broken.
+- Verified with throwaway harnesses, 28 checks: per-slice change summaries
+  (cell-diff counts for the map, added/removed for arrays, changed keys for
+  objects), size formatting, the roster exclusion in the full export, and a
+  LOCAL MODE round trip covering pruning at the cap, newest-first ordering,
+  per-slice isolation, duplicate detection and all three skip paths. The
+  Firestore path is unverified — see HANDOVER §3.
+
 ## 2026-08-05 (ops) — Briefings video: paste an embed code
 - **The Briefings video field now takes a full `<iframe …>` embed code**, not
   just a link. It also stops mangling the cases it always should have handled:

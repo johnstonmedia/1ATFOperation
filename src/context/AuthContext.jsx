@@ -68,7 +68,7 @@ function profileFromRoster(idNumber, r) {
 }
 
 export function AuthProvider({ children }) {
-  const { state, reload, append } = useData()
+  const { state, reload, append, setBackupActor } = useData()
   const [user, setUser] = useState(null)
   const [ready, setReady] = useState(false)
 
@@ -272,6 +272,12 @@ export function AuthProvider({ children }) {
   const enrichedUser = user
     ? { ...user, rank: rosterRec?.rank || user.rank || '', name: rosterRec?.name || user.name, company: rosterRec?.company || user.company }
     : null
+
+  // Attribute content backups to whoever is signed in. Pushed down rather than
+  // pulled up, because AuthProvider is mounted INSIDE DataProvider.
+  useEffect(() => {
+    setBackupActor?.(enrichedUser?.name || '', enrichedUser?.idNumber || '')
+  }, [setBackupActor, enrichedUser?.name, enrichedUser?.idNumber])
 
   // Only a real RHQ session may emulate; otherwise the overlay is ignored.
   const realIsRHQ = enrichedUser?.role === 'RHQ'
