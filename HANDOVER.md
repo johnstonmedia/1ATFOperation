@@ -135,6 +135,32 @@ drift silently.
   bundle, which is equally readable — but it does mean the latch cannot be made
   into a lock without moving the Staff Centre behind real auth. `Staff` /
   `RHQ Staff` accounts exist for anyone who needs actual authority.
+- **A registered member can make themselves RHQ** (2026-08-09). A member's
+  `role` is a **client write**: `register()` in
+  [AuthContext.jsx](src/context/AuthContext.jsx) copies it out of their roster
+  record via `profileFromRoster()` and writes it into `users/<own uid>`, and
+  the rules' `users` create is only `request.auth.uid == uid`. Anyone who has
+  registered can instead write `role: 'RHQ'` there by hand and get the whole
+  Operations Centre — including the roster, which holds every cadet's name,
+  email and plain-text temp password. Self-*update* already freezes `role` and
+  `idNumber`; it is only create that is open.
+  **Rules alone cannot close this.** The check that's wanted is "does this
+  match their roster record", but `roster` documents are keyed by an arbitrary
+  auto-id, so there is no `get()` path from a uid or an ID number to the
+  record. Restricting create to unprivileged roles instead would break first
+  registration for every legitimately RHQ- or Staff-designated account, and
+  for the bootstrap admin.
+  **The fix is to key roster documents by cleaned ID number** (`roster/190990`)
+  rather than by auto-id. Then create can be gated on
+  `get(/roster/$(cleanId)).data.role == request.resource.data.role`. That is a
+  migration — existing docs need rewriting under new ids, and
+  `where('idNumber','==',id)` in `register()` becomes a direct `getDoc()`,
+  which is also one less query. Cost is real but bounded; do it before the
+  roster ever holds anything more sensitive than it does now.
+  Exploiting it needs a valid temp password and a hand-crafted Firestore
+  write, so it is not a "today" emergency — but it is the largest hole in the
+  ruleset, and it is invisible from the rules file, which is why it is now
+  written into that file's header too.
 - **Temp passwords are stored plain text** in the `roster` collection.
   Consider hashing and only revealing at generation/download time.
 - **Residual own-record leak**: an *unregistered* member who knows their own ID
