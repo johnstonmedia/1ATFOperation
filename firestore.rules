@@ -1,76 +1,105 @@
 rules_version = '2';
 
-// Security model for the 1ATF portal.
+// ===========================================================================
+// 1ATF Operational Portal — Cloud Firestore security rules
+// ===========================================================================
 //
-//  - Public operational content (content/*) is world-readable; only RHQ writes.
-//    Covers every single-value slice in store.js SINGLE_SLICES — narrative,
-//    territory, classified, branding, companyPages, video, intel, intelIntro,
-//    briefings. Adding a slice there needs NO rules change; it is already
-//    covered by this block.
-//  - campaignFrames: the campaign replay history, one document per frame
-//    (full cell snapshot + label + order) so RHQ can edit/reorder/delete any
-//    frame independently. World-readable like content/*; only RHQ writes.
-//  - intelSubmissions: the Company Commander approval queue — a commander
-//    reads/writes only their own company's submissions, RHQ manages all, and an
-//    'RHQ Staff' account manages all of them from the Staff Centre without
-//    getting any of RHQ's other powers.
-//  - backups: version history of the content/* slices (see lib/backups.js).
-//    RHQ-only read AND write — never public, unlike the documents it snapshots.
-//  - intelStats: anonymous per-company decrypt counts. Public read AND public
-//    create/increment (the Intel tab has no login), locked to a fixed shape
-//    carrying no identity — see the block below for exactly what that allows.
-//  - roster: RHQ reads all; a signed-in member may additionally read ONLY their
-//    own record (matched via their auth email against the record's idNumber) —
-//    this is what temporary-password registration relies on, before the member
-//    has a profile that marks them RHQ. Only RHQ writes.
-//  - tasks / activity: RHQ-only reads (their only current readers are legacy,
-//    unlinked pages — see CLAUDE.md). Only RHQ writes.
-//  - users/{uid}: a member may read and update ONLY their own profile, and may
-//    NOT change their own role or ID number (anti-escalation); RHQ manages all.
-//  - support / resetRequests: anyone (incl. signed-out) may submit a single,
-//    size-bounded request; only RHQ can read or action them.
-//  - authIndex/{id}: public read (login computes the credential epoch before
-//    sign-in); only RHQ bumps it on a password reset.
-//  - Everything else is denied by default.
+// TO PUBLISH: Firebase Console → Firestore Database → Rules → paste this whole
+// file → Publish. There is no deploy step in CI; the repo copy is NOT live
+// until someone does that by hand. See HANDOVER.md §0.
 //
-// "RHQ" is determined by the role field on the caller's own user profile.
+// Shape of the app, in one paragraph: the three public tabs have no accounts at
+// all, so everything they read must be world-readable and the one thing they
+// write (a decrypt counter) must be writable by an anonymous caller. Everything
+// authored lives under content/* and is written by RHQ. Two lesser roles exist
+// — Company Commander (drafts intel for its own company only) and RHQ Staff
+// (approves those drafts, and nothing else) — and each is granted only where it
+// is named explicitly below.
+//
+// Collection-by-collection summary:
+//
+//   content/{slice}   Public operational content. World-readable, RHQ writes.
+//                     Covers every SINGLE_SLICES entry in lib/store.js —
+//                     narrative, territory, classified, branding, companyPages,
+//                     video, intel, intelIntro, briefings, campaignDefaultStart,
+//                     staffAccess. Adding a slice there needs NO rules change.
+//                     content/intel additionally allows RHQ Staff (approvals).
+//   campaignFrames    Campaign replay history, one doc per frame (a full cell
+//                     snapshot + label + order). World-readable, RHQ writes.
+//   roster            RHQ reads all; a signed-in member may read ONLY their own
+//                     record. RHQ writes.
+//   users/{uid}       A member reads/updates only their own profile and may not
+//                     change their own role or ID number. RHQ manages all.
+//   tasks / activity  RHQ-only, both directions (legacy, unrouted pages).
+//   support           Anyone may file ONE bounded request; RHQ reads/actions.
+//   resetRequests     Same, for forgotten passwords.
+//   audit             RHQ reads/deletes; RHQ and RHQ Staff append. Never edited.
+//   backups           Version history of content/*. RHQ-only READ and DELETE —
+//                     never public, unlike the docs it snapshots. Append-only.
+//   authIndex/{id}    Public read (login needs the credential epoch BEFORE
+//                     sign-in); RHQ bumps it on a password reset.
+//   intelSubmissions  COY intel approval queue. Commander sees only its own
+//                     company; RHQ and RHQ Staff manage the whole queue.
+//   intelStats        Anonymous per-company decrypt counts. Public read AND
+//                     public create/increment, pinned to a fixed shape that
+//                     carries no identity.
+//
+//   Everything else default-denies at the bottom of the file.
+//
+// KNOWN GAP, deliberate — read before "fixing" the users block: a member's role
+// is written by the CLIENT at registration, copied from their roster record
+// (profileFromRoster in AuthContext.jsx). Rules cannot verify it, because the
+// roster is keyed by an arbitrary document id rather than by ID number, so
+// there is no get() to check it against. A registered member could therefore
+// write role:'RHQ' into their own users doc and become RHQ. Closing it in rules
+// alone would break every legitimately RHQ- or Staff-designated account at
+// first registration; the real fix is keying roster documents by ID number so
+// the create rule can cross-check. Tracked in HANDOVER.md §2.
+// ===========================================================================
+
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // ---------------------------------------------------------------- helpers
+    // ------------------------------------------------------------------
+    // Helpers. "RHQ" and friends are read off the caller's OWN user profile,
+    // so every one of these costs a get() — keep them cheap and few.
+    // ------------------------------------------------------------------
     function isSignedIn() {
       return request.auth != null;
     }
     function userDoc() {
       return /databases/$(database)/documents/users/$(request.auth.uid);
     }
-    function isRHQ() {
+    function roleIs(role) {
       return isSignedIn()
         && exists(userDoc())
-        && get(userDoc()).data.role == 'RHQ';
+        && get(userDoc()).data.role == role;
+    }
+    // Full Operations Centre authority.
+    function isRHQ() {
+      return roleIs('RHQ');
     }
     // An 'RHQ Staff' account: the Staff Centre plus the COY intel approval
-    // queue, for every company. Deliberately NOT isRHQ — it must never reach
-    // the Operations Centre's other slices (branding, territory, users…), so
-    // it is granted only where it is named explicitly: content/intel and
-    // intelSubmissions below, plus writing an audit entry for what it approved.
+    // queue for every company. Deliberately NOT isRHQ — it must never reach the
+    // Operations Centre's other slices (branding, territory, users…), so it is
+    // granted only where it is named: content/intel, intelSubmissions, and
+    // append-only on audit and backups so its approvals leave a trace.
     function isRHQStaff() {
-      return isSignedIn()
-        && exists(userDoc())
-        && get(userDoc()).data.role == 'RHQ Staff';
+      return roleIs('RHQ Staff');
     }
-    // A Company Commander bound to company `coy`. Commanders may only ever act on
-    // their own company's data.
+    // A Company Commander bound to company `coy`. Commanders may only ever act
+    // on their own company's data.
     function isCommanderOf(coy) {
-      return isSignedIn()
-        && exists(userDoc())
-        && get(userDoc()).data.role == 'Company Commander'
+      return roleIs('Company Commander')
         && get(userDoc()).data.company == coy;
     }
     // True when the signed-in caller's own auth email corresponds to `idNumber`.
     // Auth emails are synthesised as id-<idNumber>[.v<epoch>]@1atf.unit (see
-    // idToEmail() in AuthContext.jsx); idNumber is digits-only so no cleaning is
-    // needed to compare it against the email's id- segment.
+    // idToEmail() in AuthContext.jsx). matches() is anchored to the whole
+    // string. NOTE: the email is built from a cleaned id (lowercased, non
+    // -alphanumerics stripped), so a roster record whose idNumber carries spaces
+    // or punctuation will not match — the same assumption registration's
+    // where('idNumber','==',id) query already relies on.
     function isOwnId(idNumber) {
       return isSignedIn()
         && request.auth.token.email.matches(
@@ -81,12 +110,19 @@ service cloud.firestore {
       return !(key in data) || (data[key] is string && data[key].size() <= max);
     }
 
-    // ------------------------------------------------------- public site content
-    // Anyone can read; RHQ edits.
-    match /content/{doc} {
+    // ------------------------------------------------------------------
+    // Public site content
+    // ------------------------------------------------------------------
+    // Anyone can read; RHQ edits. Every SINGLE_SLICES doc lands here, including
+    // staffAccess — the shared Staff Centre password is therefore world
+    // -readable. That is accepted, not overlooked: it was previously compiled
+    // into the JS bundle, which is equally readable. It is a latch, not a lock;
+    // real authority is the Staff / RHQ Staff roles. See HANDOVER.md §2.
+    match /content/{slice} {
       allow read: if true;
       allow write: if isRHQ();
     }
+
     // Approving a COY submission publishes into content/intel, so RHQ Staff
     // needs write on THIS slice and no other. Overlapping matches are OR'd in
     // Firestore, so this widens content/intel only — every other content/*
@@ -96,41 +132,40 @@ service cloud.firestore {
       allow write: if isRHQ() || isRHQStaff();
     }
 
-    // ---------------------------------------------------- campaign replay frames
-    // One document per frame (full cell snapshot). Anyone can read; RHQ edits,
-    // reorders, duplicates or deletes any frame independently.
+    // ------------------------------------------------------------------
+    // Campaign replay frames
+    // ------------------------------------------------------------------
+    // One document per frame (a full cell snapshot, not a diff) so RHQ can
+    // edit, reorder, duplicate or delete any frame independently. Read by every
+    // visitor — the public Home map plays these back.
     match /campaignFrames/{id} {
       allow read: if true;
       allow write: if isRHQ();
     }
 
-    // --------------------------------------------------------------- roster
+    // ------------------------------------------------------------------
+    // Roster
+    // ------------------------------------------------------------------
     // RHQ reads every record. A signed-in member may additionally read ONLY
-    // their own record — this is what temporary-password registration relies
-    // on: it queries where('idNumber','==', id), which returns at most one
-    // doc, so this rule permits exactly that doc and denies everyone else's.
+    // their own — which is what temporary-password registration depends on: it
+    // queries where('idNumber','==',id), returning at most one document, so
+    // this rule permits exactly that one and denies everyone else's. A
+    // collection-wide list by a non-RHQ caller is denied outright (rules never
+    // filter a query, they only accept or reject it); store.js swallows that.
     // Writes are RHQ-only.
     match /roster/{id} {
       allow read:  if isRHQ() || isOwnId(resource.data.idNumber);
       allow write: if isRHQ();
     }
 
-    // ------------------------------------------ distributed tasks + activity feed
-    // RHQ-only reads. (Their only current readers are the legacy, unlinked
-    // Tasks.jsx/Activity.jsx pages — see CLAUDE.md.)
-    match /tasks/{id} {
-      allow read:  if isRHQ();
-      allow write: if isRHQ();
-    }
-    match /activity/{id} {
-      allow read:  if isRHQ();
-      allow write: if isRHQ();
-    }
-
-    // ------------------------------------------------------ personnel profiles
+    // ------------------------------------------------------------------
+    // Personnel profiles
+    // ------------------------------------------------------------------
     // A member reads only their own profile; RHQ reads all. On self-update a
-    // member may not change their role or ID number — only RHQ can. Profiles are
-    // never deleted by their owner.
+    // member may not change their role or ID number — that is the anti
+    // -escalation check, and it is why the update rule spells both fields out.
+    // Profiles are never deleted by their owner.
+    // See the KNOWN GAP note in the file header about create.
     match /users/{uid} {
       allow read:   if isRHQ() || (isSignedIn() && request.auth.uid == uid);
       allow create: if isSignedIn() && request.auth.uid == uid;
@@ -141,8 +176,29 @@ service cloud.firestore {
       allow delete: if isRHQ();
     }
 
-    // ------------------------------------------------------- help / support inbox
-    // Anyone (incl. signed-out) may file ONE bounded request; RHQ reads/actions.
+    // ------------------------------------------------------------------
+    // Distributed tasks + activity feed
+    // ------------------------------------------------------------------
+    // RHQ-only in both directions. Their only readers are the legacy, unrouted
+    // Tasks.jsx / Activity.jsx pages — see CLAUDE.md. If either is ever revived
+    // as a member-facing page, this is the block that has to change.
+    match /tasks/{id} {
+      allow read:  if isRHQ();
+      allow write: if isRHQ();
+    }
+    match /activity/{id} {
+      allow read:  if isRHQ();
+      allow write: if isRHQ();
+    }
+
+    // ------------------------------------------------------------------
+    // Help / support inbox
+    // ------------------------------------------------------------------
+    // Anyone, including a signed-out visitor, may file ONE bounded request —
+    // automatic error reports come through here too (DataContext.reportError),
+    // and those fire before anybody has signed in. The key list must stay in
+    // step with that record's shape or reports start silently failing.
+    // Nobody but RHQ can read the inbox back.
     match /support/{id} {
       allow create: if request.resource.data.keys()
                         .hasOnly(['category','name','idNumber','contact','message','code','auto','ts','status'])
@@ -156,8 +212,11 @@ service cloud.firestore {
       allow read, update, delete: if isRHQ();
     }
 
-    // --------------------------------------------------- forgotten-password inbox
-    // Anyone may raise a reset request; RHQ reads and actions it.
+    // ------------------------------------------------------------------
+    // Forgotten-password inbox
+    // ------------------------------------------------------------------
+    // Anyone may raise a reset request; RHQ reads it and actions it by bumping
+    // the credential epoch in authIndex.
     match /resetRequests/{id} {
       allow create: if request.resource.data.keys().hasOnly(['idNumber','ts','status'])
         && request.resource.data.idNumber is string
@@ -166,33 +225,45 @@ service cloud.firestore {
       allow read, update, delete: if isRHQ();
     }
 
-    // ------------------------------------------------------------- audit log
-    // Record of RHQ actions. RHQ only — created, read and cleared by RHQ; never
-    // edited in place.
-    // Version history of the content slices. RHQ-only in BOTH directions —
-    // unlike the content/* documents it snapshots, this is never public, which
-    // is also what makes it safe for the staffAccess slice. Immutable once
-    // written: a backup that can be edited is not a backup.
+    // ------------------------------------------------------------------
+    // Audit log
+    // ------------------------------------------------------------------
+    // Record of RHQ actions. Append-only: never edited in place, or it is not a
+    // record. RHQ Staff may APPEND (every approval it makes is logged) but can
+    // neither read the log back nor delete from it — the Audit Log stays an
+    // Operations Centre view.
+    match /audit/{id} {
+      allow read, delete: if isRHQ();
+      allow create: if isRHQ() || isRHQStaff();
+      allow update: if false;
+    }
+
+    // ------------------------------------------------------------------
+    // Backups / version history
+    // ------------------------------------------------------------------
+    // Snapshots of content/* taken automatically by DataContext.updateSlice
+    // before it overwrites a slice (lib/backups.js). RHQ-only in BOTH
+    // directions — unlike the documents it snapshots, this is never public,
+    // which is exactly what makes it safe to version the staffAccess slice.
+    // Immutable once written: a backup that can be edited is not a backup.
+    //
+    // RHQ Staff can CREATE but not read, because its content/intel approval
+    // save has to be able to leave a restore point behind. The prune pass that
+    // follows a write reads the collection and will therefore be denied for
+    // that role; recordBackup never throws, so the save itself still succeeds.
     match /backups/{id} {
       allow read:   if isRHQ();
-      // RHQ Staff writes content/intel when it approves a submission, so it has
-      // to be able to leave the restore point behind for that save.
       allow create: if isRHQ() || isRHQStaff();
       allow update: if false;
       allow delete: if isRHQ();
     }
 
-    match /audit/{id} {
-      allow read, delete: if isRHQ();
-      // RHQ Staff may APPEND (every approval it makes is logged) but never read
-      // the log back or delete from it — the Audit Log stays an Ops Centre view.
-      allow create: if isRHQ() || isRHQStaff();
-      allow update: if false;
-    }
-
-    // -------------------------------------------------- public auth-version index
-    // No sensitive data — just the credential epoch — so login can read it before
-    // sign-in. RHQ bumps it on a reset.
+    // ------------------------------------------------------------------
+    // Public auth-version index
+    // ------------------------------------------------------------------
+    // Nothing sensitive — just the credential epoch — and login has to read it
+    // BEFORE sign-in to work out which synthesised email to use, so it must be
+    // public. RHQ bumps it on a reset, and may write nothing but that one int.
     match /authIndex/{id} {
       allow read:  if true;
       allow write: if isRHQ()
@@ -200,34 +271,51 @@ service cloud.firestore {
         && request.resource.data.pwVersion is int;
     }
 
-    // ------------------------------------------- intel approval queue (drafts)
-    // Company Commanders submit intel changes for THEIR company; the change is
-    // not public until RHQ approves it (approval writes content/intel and clears
-    // the submission). A commander may only read/write submissions carrying
-    // their own company code; RHQ manages the whole queue. Commander list
-    // queries must be filtered by company (the app does this) to satisfy read.
+    // ------------------------------------------------------------------
+    // Intel approval queue (drafts)
+    // ------------------------------------------------------------------
+    // Company Commanders submit intel changes for THEIR company; nothing is
+    // public until an approval writes content/intel and clears the submission.
+    // A commander may only touch submissions carrying their own company code —
+    // and because rules never filter, a commander's list query must itself be
+    // filtered by company or the whole read is rejected (the app does this).
+    // RHQ and RHQ Staff manage the entire queue.
     match /intelSubmissions/{id} {
-      allow read:   if isRHQ() || isRHQStaff() || isCommanderOf(resource.data.company);
-      allow create: if isRHQ() || isRHQStaff() || (isCommanderOf(request.resource.data.company)
-                                   && request.resource.data.status == 'pending');
-      allow update: if isRHQ() || isRHQStaff() || (isCommanderOf(resource.data.company)
-                                   && request.resource.data.company == resource.data.company);
+      allow read:   if isRHQ() || isRHQStaff()
+                    || isCommanderOf(resource.data.company);
+      allow create: if isRHQ() || isRHQStaff()
+                    || (isCommanderOf(request.resource.data.company)
+                        && request.resource.data.status == 'pending');
+      // A commander may edit their own draft but never reassign it to another
+      // company, which would put it in front of the wrong approver.
+      allow update: if isRHQ() || isRHQStaff()
+                    || (isCommanderOf(resource.data.company)
+                        && request.resource.data.company == resource.data.company);
       // Approving and dismissing both clear the submission.
-      allow delete: if isRHQ() || isRHQStaff() || isCommanderOf(resource.data.company);
+      allow delete: if isRHQ() || isRHQStaff()
+                    || isCommanderOf(resource.data.company);
     }
 
-    // ------------------------------------------------- anonymous decrypt counts
+    // ------------------------------------------------------------------
+    // Anonymous decrypt counts
+    // ------------------------------------------------------------------
     // How many devices have solved each intel fragment, per company. The Intel
     // tab has no login, so this MUST be writable by an unauthenticated visitor
-    // — which is why the document is constrained to a fixed shape carrying
-    // nothing but a company code, a fragment id, a count and two timestamps.
-    // There is no identity here to protect.
+    // — there is no identity to gate on. It is pinned by SHAPE instead: a
+    // company code, a fragment id, a count and a timestamp, and nothing else.
+    // There is no identity in these documents to protect.
     //
-    // create: the first solve, which must start the count at exactly 1.
-    // update: exactly +1, and may not rewrite which company/fragment the doc
-    //         is about — so the worst an abusive client can do is inflate one
-    //         counter one request at a time, never forge or move a total.
-    // Deletes are RHQ-only (resetting a term's counts).
+    //   create: the first solve, which must start the count at exactly 1.
+    //   update: exactly +1, and may not rewrite which company or fragment the
+    //           document is about.
+    //
+    // So the worst an abusive client can do is inflate one counter one request
+    // at a time — it can never forge a total or move one between companies.
+    // Treat the numbers as an engagement signal, never a score. This is the
+    // ONLY rule in the file granting an anonymous caller a write; it is the one
+    // most worth putting through the emulator (HANDOVER.md §1), and it relies
+    // on the rules engine seeing increment() already resolved in
+    // request.resource.data. Deletes are RHQ-only (resetting a term's counts).
     function statsShapeOk(d) {
       return d.keys().hasOnly(['company','fragmentId','solves','lastAt'])
         && d.company is string && d.company.size() <= 8
@@ -245,7 +333,9 @@ service cloud.firestore {
       allow delete: if isRHQ();
     }
 
-    // ------------------------------------------------------------- default deny
+    // ------------------------------------------------------------------
+    // Default deny
+    // ------------------------------------------------------------------
     match /{document=**} {
       allow read, write: if false;
     }
