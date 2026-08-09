@@ -330,7 +330,8 @@ function Replay({ territory, frames, captions, frameMeta, startIdx, maxWidth }) 
 // lands exactly on a bubble rather than short of it.
 function FrameRail({ count, activeIdx, rail, nameAt, onPick }) {
   const INSET = 9 // px — half a bubble plus its ring
-  const posOf = (i) => `calc(${INSET}px + (100% - ${INSET * 2}px) * ${count > 1 ? i / (count - 1) : 0})`
+  const fracOf = (i) => (count > 1 ? i / (count - 1) : 0)
+  const posOf = (i) => `calc(${INSET}px + (100% - ${INSET * 2}px) * ${fracOf(i)})`
 
   return (
     <div className="replay-rail" role="group" aria-label="Campaign timeline">
@@ -346,7 +347,10 @@ function FrameRail({ count, activeIdx, rail, nameAt, onPick }) {
             key={i}
             type="button"
             className={`replay-bubble${i < activeIdx ? ' is-played' : ''}${i === activeIdx ? ' is-current' : ''}`}
-            style={{ left: posOf(i) }}
+            // --tip-p anchors the hover tip so the end bubbles' tips stay
+            // inside the rail instead of overflowing the page. See the
+            // .replay-bubble-tip rule in index.css.
+            style={{ left: posOf(i), '--tip-p': fracOf(i) }}
             onClick={() => onPick(i)}
             aria-label={`Show ${name}`}
             aria-current={i === activeIdx ? 'true' : undefined}

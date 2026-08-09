@@ -383,11 +383,19 @@ label { font-size: 12px; color: var(--text-dim); text-transform: uppercase; lett
 .replay-bubble:hover, .replay-bubble:focus-visible { transform: translate(-50%, -50%) scale(1.45); outline: none; }
 .replay-bubble:hover .replay-bubble-tip,
 .replay-bubble:focus-visible .replay-bubble-tip { opacity: 1; }
+/* The tip is anchored by `--tip-p`, the bubble's 0..1 position along the rail,
+   so it slides from left-aligned at the first bubble to right-aligned at the
+   last and is only centred in the middle. This is NOT cosmetic: an
+   `opacity: 0` element still contributes to scrollable overflow, so a plainly
+   centred tip on the LAST bubble pushed past the rail's right edge and gave
+   the whole PAGE a horizontal scrollbar — with the sticky header then sitting
+   one viewport wide while the body scrolled wider than it. Keep the shift
+   tied to the bubble's position, and keep the width bounded below. */
 .replay-bubble-tip {
   position: absolute;
   bottom: calc(100% + 9px);
   left: 50%;
-  transform: translateX(-50%);
+  transform: translateX(calc(var(--tip-p, 0.5) * -100%));
   padding: 3px 8px;
   border: 1px solid var(--accent);
   border-radius: var(--radius);
@@ -395,7 +403,11 @@ label { font-size: 12px; color: var(--text-dim); text-transform: uppercase; lett
   color: #fff;
   font: 600 10px 'JetBrains Mono', monospace;
   letter-spacing: 1px;
-  white-space: nowrap;
+  /* Bounded so a long RHQ-typed frame label wraps instead of growing the tip
+     without limit (which would reintroduce the overflow from the middle of
+     the rail, where no anchoring can help). Short names still sit on one line. */
+  max-width: min(200px, 60vw);
+  text-align: center;
   opacity: 0;
   transition: opacity 120ms ease;
   pointer-events: none;

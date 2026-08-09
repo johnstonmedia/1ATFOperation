@@ -17,6 +17,38 @@ keep entries short and focused on what a new collaborator needs to know.
 
 ---
 
+## 2026-08-09 — Privacy notice rewritten for the no-login majority; timeline rail overflow fix
+- **[Privacy.jsx](src/pages/Privacy.jsx) restructured around who actually reads
+  it.** Only ~20 of ~800 unit members hold a login, so the notice now opens with
+  "nothing about you is stored — which covers almost everyone in the unit", and
+  the roster fields moved down into a separate *"If you've been issued a login"*
+  section. It previously led with roster/login material, which implied every
+  reader had a record.
+- Softened the "full roster access is limited to RHQ staff" line: it now says
+  the roster holds the details staff entered "and nothing about how anyone uses
+  the site" — the real reassurance is that no per-member activity is logged.
+- **Password wording is deliberately split in two.** The notice states that the
+  password a member *chooses* is hashed by Firebase Auth and unreadable by
+  anyone including RHQ (true), and says only that the one-time registration code
+  "isn't your password". It does **not** claim temp passwords are hashed,
+  because they are still stored plain text in `roster` and RHQ reads and exports
+  them ([UsersAdmin.jsx](src/pages/ops/UsersAdmin.jsx) — the table cell and the
+  temp-password sheet). **If temp passwords are ever hashed, strengthen this
+  section in the same commit**; until then don't let the claim widen.
+- Contact routing rewritten — the **Help** option no longer exists in the nav,
+  so it now points at chain of command / unit staff / a direct email, and tells
+  readers without a login there is nothing to correct or remove.
+- **Fixed: the campaign timeline rail gave the whole page a horizontal
+  scrollbar.** `.replay-bubble-tip` was centred on its bubble, so the *last*
+  bubble's tip extended past the rail's right edge — and an `opacity: 0` element
+  still contributes to scrollable overflow, so this happened without anyone
+  hovering, the moment the rail rendered. The sticky header then sat one
+  viewport wide while the body scrolled wider, which is what read as the title
+  bar "not aligning". Tips are now anchored by `--tip-p` (the bubble's 0..1
+  position along the rail): left-aligned at the first bubble, right-aligned at
+  the last, centred in between, and width-capped so a long RHQ frame label wraps
+  instead of growing without limit.
+
 ## 2026-08-05 (ops) — Backups: automatic version history for all content
 - **New "Backups" section in the Operations Centre** (ADMIN group) — the past
   versions of everything RHQ edits: the map, the narrative, briefings, intel,
