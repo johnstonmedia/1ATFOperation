@@ -14,10 +14,11 @@ export default function Privacy() {
           Then nothing about you is stored — which covers almost everyone in the
           unit. Reading the operation brief, looking at the map and solving
           intel fragments needs <b>no account and no sign-in</b>, so there is
-          nothing to attach to you — no name, no ID number, no record that you
-          visited. There is no advertising and no third-party tracking. The one
-          thing these pages send is described under <b>Decrypt counts</b> below,
-          and it cannot identify you.
+          nothing to attach to you — no name and no ID number. There is{' '}
+          <b>no advertising</b> on this site and nothing here is ever sold. Two
+          things do leave your device, and neither can identify you: the counter
+          described under <b>Decrypt counts</b>, and — if the unit has switched
+          it on — the visit counting described under <b>Site analytics</b>.
         </Section>
 
         <Section title="Decrypt counts">
@@ -29,6 +30,22 @@ export default function Privacy() {
           see which puzzles are being played, so they know what's worth making
           more of. Your own progress — which fragments you've cracked — stays on
           your device and is never sent anywhere.
+        </Section>
+
+        <Section title="Site analytics">
+          The unit may switch on <b>Google Analytics</b> to count how many
+          people open the site and which pages get used, so staff know whether
+          anyone is actually reading the briefings. If it is on, your browser
+          tells Google the <b>page address</b> you opened (never the bits after
+          a <b>?</b>), roughly where in the world you are, and what browser and
+          device type you're using. It is set up so that Google{' '}
+          <b>cannot use any of it to build a profile of you or target
+          advertising at you</b> — the settings that would allow that are turned
+          off in the site's code, which is why they can't be changed quietly.
+          Your name, ID number and login are never sent, and if you sign in,
+          nothing links your account to what you looked at. If your browser or
+          phone has a <b>“Do Not Track”</b> setting turned on, this site obeys
+          it and sends nothing at all.
         </Section>
 
         <Section title="If you've been issued a login">
@@ -66,7 +83,10 @@ export default function Privacy() {
           on your device and to remember simple things that never leave it:
           your selected company, which pages you've already opened, and which
           intel fragments you've decrypted. Clearing your browser data resets
-          those. There are no advertising or third-party tracking cookies.
+          those. There are <b>no advertising cookies</b>. If the unit has
+          switched on the visit counting described above, Google Analytics also
+          sets a cookie so a returning visitor isn't counted twice — clearing
+          your browser data resets that too.
         </Section>
 
         <Section title="Questions, corrections or removal">

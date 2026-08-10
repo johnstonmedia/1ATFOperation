@@ -40,6 +40,12 @@ jobs:
         run: npm run build
         env:
           VITE_BASE: /
+          # Google Analytics 4 measurement ID (G-XXXXXXXXXX). Set it at
+          # Settings → Secrets and variables → Actions → Variables. Left unset,
+          # the build ships with analytics entirely absent — no script, no
+          # cookie, no request (see src/lib/analytics.js). It is a variable
+          # rather than a secret because a measurement ID is public by design.
+          VITE_GA_ID: ${{ vars.VITE_GA_ID }}
 
       - uses: actions/upload-pages-artifact@v3
         with:

@@ -17,6 +17,9 @@ don't repeat or undo recent work.
   for spreadsheet import, **EmailJS** ([src/lib/notify.js](src/lib/notify.js))
   for admin/member email notifications — silent no-op until `VITE_EMAILJS_*`
   keys are set, request is always stored in Firestore regardless.
+  **Google Analytics 4** ([src/lib/analytics.js](src/lib/analytics.js)) is the
+  same shape: entirely absent until `VITE_GA_ID` is set — no script, no cookie,
+  no request. See "Analytics" below before touching it.
 - Hosted on **GitHub Pages** via [.github/workflows/deploy.yml](.github/workflows/deploy.yml)
   (deploys `dist/` on every push to **main**). Pages Source must be **GitHub
   Actions**. Served from the root of a **custom domain** (set in Settings →
@@ -498,6 +501,28 @@ Captures only **name, ID number, company, email** (fuzzy `COLUMN_HINTS` in
 `src/pages/ops/UsersAdmin.jsx`). Company accepts a letter or phonetic name.
 Import **merges**: existing IDs are kept unchanged, only new IDs are added.
 Issues temp passwords; can download a temp-password sheet; supports search.
+
+## Analytics (2026-08-10)
+[src/lib/analytics.js](src/lib/analytics.js) + `PageViews` in
+[src/App.jsx](src/App.jsx).
+- **Off unless `VITE_GA_ID` is set**, and there is deliberately **no hard-coded
+  fallback ID** (unlike the Firebase/EmailJS keys) — an analytics property is
+  account-level and shouldn't be inherited by accident. Live value comes from a
+  GitHub Actions **variable** (not a secret: a measurement ID is public by
+  design), passed through in `deploy.yml`.
+- **SPA page views are sent manually.** gtag counts only the first load, so
+  `config` uses `send_page_view: false` and `PageViews` sends one per route
+  change off `useLocation`. Without that the whole site reads as one view.
+- **The query string is stripped** before sending — `?emulate=<company>` and
+  anything else appended to a URL is unit business.
+- ⚠️ **Configured for an audience of minors.** `allow_google_signals: false`
+  and `allow_ad_personalization_signals: false` are what keep the privacy
+  notice's "no profiling, no advertising" true. The browser's **Do Not Track**
+  signal is honoured (GA does not do this by itself) — a deliberate choice for
+  a youth org, and a one-line removal if RHQ decides otherwise.
+- **If any of that changes, update the "Site analytics" section of
+  [Privacy.jsx](src/pages/Privacy.jsx) in the same commit** — that notice is
+  repo-versioned exactly so it can't drift from what the code does.
 
 ## Error reporting (`src/lib/errors.js`)
 Every failure maps to an internal code (`ATF-NET/AUTH/CFG/DATA/INP/UNK-*`).
