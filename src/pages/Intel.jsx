@@ -318,7 +318,7 @@ export function FragmentView({ fragment: f, company, onBack, onSolved, preview =
               <div className="mono dim" style={{ fontSize: 11, letterSpacing: 2, margin: '14px 0 6px' }}>ENTER DECRYPTED INTEL</div>
               <AnswerBoxes words={ws} ans={ans} setAns={setAns} checked={checked} solved={solved} onSubmit={() => setChecked(true)} />
               <div className="mono dim" style={{ fontSize: 10, marginTop: 6 }}>
-                Space moves to the next word — or paste the whole phrase into the first box.
+                Not case sensitive.
               </div>
               <div className="row center wrap" style={{ gap: 12, marginTop: 14 }}>
                 {solved ? <span className="accent head">DECRYPTED ✓</span> : <button className="primary" onClick={() => setChecked(true)}>Enter intel</button>}
