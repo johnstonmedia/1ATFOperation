@@ -2,8 +2,9 @@ import { useState, useEffect, useCallback } from 'react'
 import { useData } from '../context/DataContext'
 import { useConfirm } from '../context/ConfirmContext'
 import { useAudit } from '../hooks/useAudit'
-import { Field } from '../pages/ops/NarrativeEditor'
-import DocEmbed from './DocEmbed'
+import FragmentForm from './FragmentForm'
+import { attachmentSummary } from '../lib/fragments'
+import IntelPreview from './IntelPreview'
 import LanguageWarning from './LanguageWarning'
 import { PHONETIC } from '../firebase/seed'
 import { listSubmissions, deleteSubmission } from '../lib/submissions'
@@ -21,7 +22,6 @@ import { listSubmissions, deleteSubmission } from '../lib/submissions'
 // Staff under firestore.rules — see the content/intel and intelSubmissions
 // blocks there.
 
-const rid = () => Math.random().toString(36).slice(2, 10)
 const opLabel = (s, isNew) => (s.op === 'delete' ? 'REMOVAL REQUEST' : isNew ? 'NEW FRAGMENT' : 'EDIT')
 
 export default function ApprovalsQueue({ Header, intro }) {
@@ -99,7 +99,7 @@ export default function ApprovalsQueue({ Header, intro }) {
       </Header>
 
       <div className="mono dim" style={{ fontSize: 11, marginBottom: 14, maxWidth: 720 }}>
-        {intro || 'Changes submitted by Company Commanders. Approve to publish to the public site, or open one to adjust the wording first. Nothing here is live until you approve it.'}
+        {intro || 'Changes submitted by Company Commanders. Approve to publish to the public site, or open one to view the handouts and change anything — wording, solution, hint, document, images — before it goes live. Nothing here is live until you approve it.'}
       </div>
 
       {loading && <div className="panel panel-pad mono dim" style={{ fontSize: 13 }}>Loading…</div>}
@@ -129,6 +129,9 @@ export default function ApprovalsQueue({ Header, intro }) {
                     solution: <span className="accent">{s.fragment?.answer || '—'}</span>
                     {s.submittedByName ? ` · by ${s.submittedByName}` : ''}
                   </div>
+                  {s.op !== 'delete' && attachmentSummary(s.fragment) && (
+                    <div className="mono dim" style={{ fontSize: 11, marginTop: 2 }}>{attachmentSummary(s.fragment)}</div>
+                  )}
                 </div>
               </div>
 
@@ -148,7 +151,7 @@ export default function ApprovalsQueue({ Header, intro }) {
                 ) : (
                   <>
                     <button className="primary" onClick={() => publish(s)}>Approve &amp; publish</button>
-                    <button className="ghost" onClick={() => setReviewing(s)}>Review / edit first</button>
+                    <button className="ghost" onClick={() => setReviewing(s)}>Open, view &amp; edit</button>
                   </>
                 )}
                 <button className="danger ghost" onClick={() => dismiss(s)}>Dismiss</button>
@@ -161,60 +164,41 @@ export default function ApprovalsQueue({ Header, intro }) {
   )
 }
 
-// Opened to adjust the wording before approving.
+// Opened to adjust a submission before approving. This is the SAME form the
+// author used (FragmentForm) — a reviewer can change every field, including the
+// hint and the handouts, rather than having to bounce it back to the commander
+// over a wording tweak. Audience is the one thing that isn't editable: `publish`
+// stamps the submission's company back on regardless, so offering a picker here
+// would only lie about what gets saved.
 function ReviewFragment({ Header, sub, onBack, onApprove }) {
   const [f, setF] = useState({ ...sub.fragment, resources: sub.fragment?.resources || [] })
   const set = (k, v) => setF((p) => ({ ...p, [k]: v }))
-  const [resDraft, setResDraft] = useState({ title: '', url: '' })
+  const [preview, setPreview] = useState(false)
 
-  const addLink = () => {
-    if (!resDraft.url.trim()) return
-    set('resources', [...f.resources, { id: rid(), type: 'link', title: resDraft.title.trim() || resDraft.url.trim(), url: resDraft.url.trim() }])
-    setResDraft({ title: '', url: '' })
-  }
-  const delRes = (id) => set('resources', f.resources.filter((r) => r.id !== id))
+  const coy = PHONETIC[sub.company] || sub.company
+
+  // The reviewer's real question is "does this work as a puzzle" — so give them
+  // the recruit's view of the edited draft, same as both authoring screens have.
+  if (preview) return <IntelPreview fragment={f} onBack={() => setPreview(false)} backLabel="← Back to review" />
 
   return (
     <div>
-      <Header title="Review submission" sub={`${PHONETIC[sub.company] || sub.company} · FROM ${(sub.submittedByName || 'COMMANDER').toUpperCase()}`}>
+      <Header title="Review submission" sub={`${coy} · FROM ${(sub.submittedByName || 'COMMANDER').toUpperCase()}`}>
+        <button className="ghost" onClick={() => setPreview(true)}>👁 Preview as recruit</button>
         <button className="ghost" onClick={onBack}>← Back to queue</button>
       </Header>
 
-      <LanguageWarning texts={[f.title, f.prompt, f.answer, f.reveal]} style={{ marginBottom: 14 }} />
+      <LanguageWarning texts={[f.title, f.prompt, f.answer, f.hint, f.reveal]} style={{ marginBottom: 14, maxWidth: 720 }} />
 
-      <div className="panel panel-pad col" style={{ marginBottom: 16, maxWidth: 720 }}>
-        <Field label="Title"><input value={f.title || ''} onChange={(e) => set('title', e.target.value)} /></Field>
-        <Field label="Coded message / instructions">
-          <textarea rows={3} value={f.prompt || ''} onChange={(e) => set('prompt', e.target.value)} />
-        </Field>
-        <Field label="Solution (decoded words)">
-          <input className="mono" value={f.answer || ''} onChange={(e) => set('answer', e.target.value)} />
-        </Field>
-        <Field label="Revealed intel">
-          <textarea rows={3} value={f.reveal || ''} onChange={(e) => set('reveal', e.target.value)} />
-        </Field>
-        <Field label="Embedded document (optional URL)">
-          <input value={f.docUrl || ''} onChange={(e) => set('docUrl', e.target.value)} />
-        </Field>
-        {f.docUrl?.trim() && <DocEmbed url={f.docUrl} height={280} />}
-      </div>
-
-      {f.resources?.length > 0 && (
-        <div className="panel panel-pad col" style={{ marginBottom: 16, maxWidth: 720 }}>
-          <strong className="head" style={{ fontSize: 14 }}>Resources</strong>
-          {f.resources.map((r) => (
-            <div key={r.id} className="row between center" style={{ gap: 8, borderBottom: '1px solid var(--line)', paddingBottom: 6 }}>
-              <span className="mono" style={{ fontSize: 12 }}>{r.type === 'image' ? '🖼' : '🔗'} {r.title}</span>
-              <button className="danger ghost" onClick={() => delRes(r.id)} style={{ padding: '2px 8px' }}>Remove</button>
-            </div>
-          ))}
-          <div className="row wrap" style={{ gap: 8, alignItems: 'flex-end' }}>
-            <div className="grow" style={{ minWidth: 140 }}><Field label="Link title"><input value={resDraft.title} onChange={(e) => setResDraft({ ...resDraft, title: e.target.value })} /></Field></div>
-            <div className="grow" style={{ minWidth: 180 }}><Field label="Link URL"><input value={resDraft.url} onChange={(e) => setResDraft({ ...resDraft, url: e.target.value })} placeholder="https://…" /></Field></div>
-            <button className="ghost" onClick={addLink}>+ Add link</button>
+      <FragmentForm
+        f={f}
+        set={set}
+        audience={
+          <div className="mono dim" style={{ fontSize: 11 }}>
+            Audience: <span className="accent">{coy}</span> · locked to the submitting company
           </div>
-        </div>
-      )}
+        }
+      />
 
       <div className="row" style={{ gap: 10 }}>
         <button className="primary" onClick={() => onApprove(f)}>Approve &amp; publish</button>

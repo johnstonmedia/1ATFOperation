@@ -167,6 +167,15 @@ routes — see [src/App.jsx](src/App.jsx):
   ([src/pages/ops/SubmissionsEditor.jsx](src/pages/ops/SubmissionsEditor.jsx)):
   approve as-is, edit-then-approve, or dismiss. Approval writes the live
   `content/intel` slice; removal requests take a fragment down.
+- **The fragment editor is ONE component**,
+  [src/components/FragmentForm.jsx](src/components/FragmentForm.jsx) (fields +
+  the resources/handouts panel), shared by the ops Intel editor, the COY Centre
+  builder and the Approvals review screen — so a reviewer can change *every*
+  field the author could, hints and handouts included. It was three copies until
+  2026-08-13 and the approvals copy had drifted (no hint, no images, resources
+  unaddable). Put fragment-editing changes there, not in a caller. Each caller
+  supplies its own `audience` node: a `<select>` for RHQ, a read-only line where
+  `company` is re-stamped on save anyway.
 - **Language compliance:** config-driven `BANNED_TERMS` in
   [src/lib/language.js](src/lib/language.js) + `<LanguageWarning>` (advisory,
   non-blocking) in the intel editors / COY Centre. Edit the list to change

@@ -17,6 +17,42 @@ keep entries short and focused on what a new collaborator needs to know.
 
 ---
 
+## 2026-08-13 — One shared intel-fragment form; approvals can now edit everything and SEE the handouts
+- **New [FragmentForm.jsx](src/components/FragmentForm.jsx)** — the fragment
+  fields + resources panel, now used by all three places a fragment is authored:
+  Ops Centre → Intercepted Intelligence, the COY Centre builder, and the
+  Approvals review screen. They were three near-identical copies, and the
+  approvals one had **silently fallen behind**: no `hint` field, no image
+  upload, and the resources block only rendered `if (resources.length > 0)`, so
+  a submission that arrived with none could never have any added. A reviewer who
+  can't change a field can only dismiss and ask the commander to redo it, which
+  defeats the point of the queue.
+- Callers pass their own **`audience`** node (RHQ gets the `<select>`; the COY
+  Centre and Approvals get a read-only line) because both of those paths
+  re-stamp `company` on save — a picker there would misreport what gets written.
+- **Resources are now shown as what they are**, not as a filename: image
+  thumbnails with click-to-expand, links openable in a tab, and both the title
+  and a link's URL editable inline. This is the "visualise the handouts" half of
+  the request and it landed in the shared component, so all three screens got it.
+- Oversized images now say so (`> 150 KB, resize it`) instead of silently
+  dropping the file — the cap exists because resources are inlined as data URLs
+  into the world-readable `intel` slice.
+- Approvals also gained: **👁 Preview as recruit** on the review screen (the same
+  inert `IntelPreview` the authoring screens use), and a one-line attachment
+  summary on each queue row (`📄 document · 🖼 2 images · 💡 hint`) so a reviewer
+  can see a submission carries a handout before opening it.
+- `attachmentSummary` lives in [src/lib/fragments.js](src/lib/fragments.js), not
+  beside the component: a module that exports both a component and a plain
+  function breaks React Fast Refresh, and Vite was logging a full-reload
+  invalidation on every edit to FragmentForm.
+- No data-model, rules or auth change — same `intelSubmissions` → `content/intel`
+  flow as before.
+- **Verified**: `npm run build` clean; all four changed modules transform under
+  the dev server; a headless `renderToString` pass over FragmentForm in all
+  three caller shapes — including a **legacy submission missing the `hint`,
+  `docUrl` and `resources` keys**, which is the realistic shape of anything
+  already sitting in the queue.
+
 ## 2026-08-09 — Privacy notice rewritten for the no-login majority; timeline rail overflow fix
 - **[Privacy.jsx](src/pages/Privacy.jsx) restructured around who actually reads
   it.** Only ~20 of ~800 unit members hold a login, so the notice now opens with

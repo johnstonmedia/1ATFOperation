@@ -6,10 +6,9 @@ import { useToast } from '../context/ToastContext'
 import { useConfirm } from '../context/ConfirmContext'
 import Logo from '../components/Logo'
 import LoginModal from '../components/LoginModal'
-import DocEmbed from '../components/DocEmbed'
+import FragmentForm from '../components/FragmentForm'
 import LanguageWarning from '../components/LanguageWarning'
 import IntelPreview from '../components/IntelPreview'
-import { Field } from './ops/NarrativeEditor'
 import { PHONETIC } from '../firebase/seed'
 import {
   listSubmissions, createSubmission, updateSubmission, deleteSubmission, newSubmission,
@@ -206,27 +205,13 @@ function StatusChip({ status, label }) {
   )
 }
 
-// Simplified, company-locked fragment editor for commanders.
+// Company-locked fragment editor for commanders — the same FragmentForm RHQ
+// uses, minus the audience picker (a commander may only ever author for their
+// own company; `submit` re-stamps it either way).
 function CoyBuilder({ fragment, coyName, note, onCancel, onSubmit }) {
   const [f, setF] = useState({ ...fragment, resources: fragment.resources || [] })
   const set = (k, v) => setF((p) => ({ ...p, [k]: v }))
-  const [resDraft, setResDraft] = useState({ title: '', url: '' })
   const [preview, setPreview] = useState(false)
-
-  const addLink = () => {
-    if (!resDraft.url.trim()) return
-    set('resources', [...f.resources, { id: rid(), type: 'link', title: resDraft.title.trim() || resDraft.url.trim(), url: resDraft.url.trim() }])
-    setResDraft({ title: '', url: '' })
-  }
-  const addImage = async (e) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    if (file.size > 150 * 1024) { e.target.value = ''; return }
-    const url = await new Promise((res) => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(file) })
-    set('resources', [...f.resources, { id: rid(), type: 'image', title: file.name, url }])
-    e.target.value = ''
-  }
-  const delRes = (id) => set('resources', f.resources.filter((r) => r.id !== id))
 
   // See the same puzzle a recruit will — worth doing before submitting to RHQ,
   // since a wrong solution string only shows up as the wrong number of answer
@@ -254,44 +239,14 @@ function CoyBuilder({ fragment, coyName, note, onCancel, onSubmit }) {
 
       <LanguageWarning texts={[f.title, f.prompt, f.answer, f.hint, f.reveal]} style={{ marginBottom: 14 }} />
 
-      <div className="panel panel-pad col" style={{ marginBottom: 16 }}>
-        <div className="mono dim" style={{ fontSize: 11 }}>Audience: <span className="accent">{coyName} (your company)</span></div>
-        <Field label="Title"><input value={f.title} onChange={(e) => set('title', e.target.value)} /></Field>
-        <Field label="Coded message / instructions (what the cadet sees)">
-          <textarea rows={3} value={f.prompt} onChange={(e) => set('prompt', e.target.value)} placeholder="e.g. Decode the Morse:  -.-. .- -- .--." />
-        </Field>
-        <Field label="Solution (the decoded words — cadet gets one box per word)">
-          <input className="mono" value={f.answer} onChange={(e) => set('answer', e.target.value)} placeholder="e.g. CAMP AT SINGLETON" />
-        </Field>
-        <Field label="Hint (optional — cadets reveal it themselves with a button)">
-          <textarea rows={2} value={f.hint || ''} onChange={(e) => set('hint', e.target.value)} placeholder="e.g. Each group of dots and dashes is one letter." />
-        </Field>
-        <Field label="Revealed intel (shown once they decode it)">
-          <textarea rows={3} value={f.reveal} onChange={(e) => set('reveal', e.target.value)} placeholder="e.g. Depart 0700 Sat 12 Apr, Singleton. Bring webbing + boots." />
-        </Field>
-        <Field label="Embedded document (optional URL — direct PDF/image or Google Drive)">
-          <input value={f.docUrl} onChange={(e) => set('docUrl', e.target.value)} placeholder="docs/brief.pdf · https://… · Drive link" />
-        </Field>
-        {f.docUrl.trim() && <DocEmbed url={f.docUrl} height={280} />}
-      </div>
-
-      <div className="panel panel-pad col" style={{ marginBottom: 16 }}>
-        <strong className="head" style={{ fontSize: 14 }}>Resources (optional — e.g. a Morse-code chart)</strong>
-        <div className="col" style={{ gap: 6 }}>
-          {f.resources.map((r) => (
-            <div key={r.id} className="row between center" style={{ gap: 8, borderBottom: '1px solid var(--line)', paddingBottom: 6 }}>
-              <span className="mono" style={{ fontSize: 12 }}>{r.type === 'image' ? '🖼' : '🔗'} {r.title}</span>
-              <button className="danger ghost" onClick={() => delRes(r.id)} style={{ padding: '2px 8px' }}>Remove</button>
-            </div>
-          ))}
-        </div>
-        <div className="row wrap" style={{ gap: 8, alignItems: 'flex-end' }}>
-          <div className="grow" style={{ minWidth: 140 }}><Field label="Link title"><input value={resDraft.title} onChange={(e) => setResDraft({ ...resDraft, title: e.target.value })} /></Field></div>
-          <div className="grow" style={{ minWidth: 180 }}><Field label="Link URL"><input value={resDraft.url} onChange={(e) => setResDraft({ ...resDraft, url: e.target.value })} placeholder="https://…" /></Field></div>
-          <button className="ghost" onClick={addLink}>+ Add link</button>
-          <label className="btn ghost" style={{ cursor: 'pointer', padding: '8px 12px' }}>+ Image<input type="file" accept="image/*" onChange={addImage} style={{ display: 'none' }} /></label>
-        </div>
-      </div>
+      <FragmentForm
+        f={f}
+        set={set}
+        maxWidth="100%"
+        audience={
+          <div className="mono dim" style={{ fontSize: 11 }}>Audience: <span className="accent">{coyName} (your company)</span></div>
+        }
+      />
 
       {note && <div className="mono" style={{ fontSize: 11, color: '#ffcf4a', marginBottom: 10 }}>{note}</div>}
       <div className="row" style={{ gap: 10 }}>
