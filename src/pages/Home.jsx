@@ -15,6 +15,28 @@ const badge = (c) => (
   }}>{c.letter}</span>
 )
 
+// A movement can be credited to more than one company (up to all six
+// non-RHQ companies). Laid out as a small grid rather than one wide row so
+// it stays compact next to the text instead of pushing the row wide — column
+// count per size chosen for the tightest packing at each count: 1x1, 2x1,
+// 3x1, 2x2, 3+2, 3x2.
+const CLUSTER_COLS = { 1: 1, 2: 2, 3: 3, 4: 2, 5: 3, 6: 3 }
+function BadgeCluster({ companies }) {
+  if (companies.length === 1) return badge(companies[0])
+  const cols = CLUSTER_COLS[companies.length] || 3
+  const size = 22
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, ${size}px)`, gap: 4, flex: '0 0 auto' }}>
+      {companies.map((c) => (
+        <span key={c.letter} title={c.name} style={{
+          width: size, height: size, borderRadius: 4, background: c.accent, display: 'inline-flex',
+          alignItems: 'center', justifyContent: 'center', fontFamily: 'Orbitron', fontWeight: 700, fontSize: 10, color: '#04121b',
+        }}>{c.letter}</span>
+      ))}
+    </div>
+  )
+}
+
 export default function Home() {
   const { state } = useData()
   const { company } = useCompany()
@@ -138,12 +160,12 @@ function MovementsBox({ mv }) {
       {mv.intro && <div className="mono dim" style={{ fontSize: 11, lineHeight: 1.6 }}>{mv.intro}</div>}
       <div className="col" style={{ gap: 12 }}>
         {entries.map((e) => {
-          const c = comp(e.company)
+          const comps = (e.companies || []).map(comp).filter(Boolean)
           return (
             <div key={e.id} className="row" style={{ gap: 12, alignItems: 'flex-start' }}>
               {/* Unknown/blank company codes still render a row — the text is
                   the point, and a stale letter shouldn't drop the entry. */}
-              {c ? badge(c) : <span style={{ width: 28, flex: '0 0 auto' }} />}
+              {comps.length ? <BadgeCluster companies={comps} /> : <span style={{ width: 28, flex: '0 0 auto' }} />}
               <div style={{ fontSize: 13, lineHeight: 1.55 }}>{e.text}</div>
             </div>
           )
