@@ -549,7 +549,7 @@ function NarrativeDetail({ narrative, classified }) {
             {movements.title || 'RECENT MOVEMENTS'}
           </div>
           {movements.entries.filter((e) => String(e.text || '').trim()).map((e) => (
-            <Field key={e.id} label={`${e.company}-COY`}>{e.text}</Field>
+            <Field key={e.id} label={`${(e.companies || []).join('/') || '?'}-COY`}>{e.text}</Field>
           ))}
         </Panel>
       )}

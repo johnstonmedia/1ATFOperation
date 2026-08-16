@@ -102,8 +102,16 @@ function MovementsEditor({ n, setN }) {
   const mv = movementsOf(n)
   const patch = (p) => setN({ ...n, movements: { ...mv, ...p } })
   const setEntry = (id, p) => patch({ entries: mv.entries.map((e) => (e.id === id ? { ...e, ...p } : e)) })
-  const add = () => patch({ entries: [...mv.entries, { id: rid(), company: 'A', text: '' }] })
+  const add = () => patch({ entries: [...mv.entries, { id: rid(), companies: ['A'], text: '' }] })
   const del = (id) => patch({ entries: mv.entries.filter((e) => e.id !== id) })
+  // Toggle one company on/off a movement — a movement can be credited to any
+  // subset of the six non-RHQ companies, not just one.
+  const toggleCompany = (id, letter) => {
+    const entry = mv.entries.find((x) => x.id === id)
+    const current = entry?.companies || []
+    const next = current.includes(letter) ? current.filter((l) => l !== letter) : [...current, letter]
+    setEntry(id, { companies: next })
+  }
   const move = (i, dir) => {
     const j = i + dir
     if (j < 0 || j >= mv.entries.length) return
@@ -138,12 +146,25 @@ function MovementsEditor({ n, setN }) {
       {!mv.entries.length && <div className="mono dim" style={{ fontSize: 12 }}>No movements listed — the box is hidden.</div>}
       {mv.entries.map((e, i) => (
         <div key={e.id} className="row wrap" style={{ gap: 8, alignItems: 'flex-start', borderTop: '1px solid var(--line)', paddingTop: 8 }}>
-          <select value={e.company} onChange={(ev) => setEntry(e.id, { company: ev.target.value })}
-            style={{ width: 'auto', flex: '0 0 auto' }} autoComplete="off">
-            {COMPANIES.filter((c) => c.letter !== 'R').map((c) => (
-              <option key={c.letter} value={c.letter}>{c.name} ({c.letter})</option>
-            ))}
-          </select>
+          {/* One toggle per company (max six — every non-RHQ company) rather
+              than a single-select: a movement can now be credited to more
+              than one company at once. */}
+          <div className="row wrap" style={{ gap: 4, flex: '0 0 auto', width: 88 }}>
+            {COMPANIES.filter((c) => c.letter !== 'R').map((c) => {
+              const active = (e.companies || []).includes(c.letter)
+              return (
+                <button key={c.letter} type="button" title={c.name} onClick={() => toggleCompany(e.id, c.letter)}
+                  className={active ? '' : 'ghost'}
+                  style={{
+                    width: 26, height: 26, padding: 0, borderRadius: 4,
+                    background: active ? c.accent : 'transparent',
+                    borderColor: active ? c.accent : undefined,
+                    color: active ? '#04121b' : undefined,
+                    fontFamily: 'Orbitron', fontWeight: 700, fontSize: 11,
+                  }}>{c.letter}</button>
+              )
+            })}
+          </div>
           <textarea rows={2} value={e.text} onChange={(ev) => setEntry(e.id, { text: ev.target.value })}
             placeholder="e.g. Cleared the approach to Singleton, forcing the Meridian line back off the ridge."
             style={{ flex: '1 1 260px' }} />

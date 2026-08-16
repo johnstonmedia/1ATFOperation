@@ -316,11 +316,11 @@ export const DEFAULT_NARRATIVE = {
     title: 'RECENT MOVEMENTS',
     intro: 'Company actions behind the latest changes to the operational map.',
     entries: [
-      { id: 'mv-a', company: 'A', text: 'Pushed the northern screen forward and held the gained ground through the week.' },
-      { id: 'mv-b', company: 'B', text: 'Cleared the approach to Singleton, forcing the Meridian line back off the ridge.' },
-      { id: 'mv-c', company: 'C', text: 'Consolidated the coastal corridor; no ground lost during the period.' },
-      { id: 'mv-e', company: 'E', text: 'Reinforced the Southern Line after Bravo’s advance opened a gap.' },
-      { id: 'mv-s', company: 'S', text: 'Moved the forward supply point up behind the new front, sustaining the advance.' },
+      { id: 'mv-a', companies: ['A'], text: 'Pushed the northern screen forward and held the gained ground through the week.' },
+      { id: 'mv-b', companies: ['B'], text: 'Cleared the approach to Singleton, forcing the Meridian line back off the ridge.' },
+      { id: 'mv-c', companies: ['C'], text: 'Consolidated the coastal corridor; no ground lost during the period.' },
+      { id: 'mv-e', companies: ['E'], text: 'Reinforced the Southern Line after Bravo’s advance opened a gap.' },
+      { id: 'mv-s', companies: ['S'], text: 'Moved the forward supply point up behind the new front, sustaining the advance.' },
     ],
   },
   meridian: {
@@ -361,13 +361,24 @@ export function smeacOf(narrative) {
 // panel. `entries` is defaulted separately because a narrative CAN legitimately
 // have an empty list (RHQ deleted every row) and that must not silently
 // resurrect the filler text — only a missing key does.
+//
+// Entries used to carry a single `company` letter; a movement can now be
+// credited to any set of companies (up to all six), stored as `companies`.
+// Every entry is normalised to `companies` here so callers never have to
+// branch on which shape a given entry was saved in.
 export function movementsOf(narrative) {
   const m = narrative?.movements
-  if (!m) return DEFAULT_NARRATIVE.movements
-  return {
+  const merged = {
     ...DEFAULT_NARRATIVE.movements,
-    ...m,
-    entries: Array.isArray(m.entries) ? m.entries : DEFAULT_NARRATIVE.movements.entries,
+    ...(m || {}),
+    entries: Array.isArray(m?.entries) ? m.entries : DEFAULT_NARRATIVE.movements.entries,
+  }
+  return {
+    ...merged,
+    entries: merged.entries.map((e) => ({
+      ...e,
+      companies: Array.isArray(e.companies) && e.companies.length ? e.companies : (e.company ? [e.company] : []),
+    })),
   }
 }
 

@@ -17,6 +17,29 @@ keep entries short and focused on what a new collaborator needs to know.
 
 ---
 
+## 2026-08-16 — Recent Movements: a movement can now credit up to all six companies
+- `narrative.movements` entries moved from a single `company` letter to a
+  **`companies` array** (up to all six non-RHQ companies). `movementsOf()` in
+  [seed.js](src/firebase/seed.js) normalises every entry to `companies` —
+  an old entry that only has `company` is read as a one-element array — so
+  nothing already saved needed migrating.
+- **Home** ([Home.jsx](src/pages/Home.jsx)): the single company badge next to
+  a movement's text is now a `BadgeCluster` — a small CSS grid, not a wide
+  row, so a multi-company credit stays compact instead of pushing the row
+  wide. Column count is chosen per count for the tightest packing: 1→1x1,
+  2→2x1, 3→3x1, 4→2x2, 5→3+2, 6→3x2 (`CLUSTER_COLS`).
+- **Ops Centre → Map: Narrative** ([NarrativeEditor.jsx](src/pages/ops/NarrativeEditor.jsx)):
+  the per-row company `<select>` (one company only) is now a row of six
+  letter-toggle chips — click any subset on/off. Matches the fixed set of six
+  non-RHQ companies exactly, so "max of six" needed no separate cap.
+- **Staff Centre** ([StaffCentre.jsx](src/pages/StaffCentre.jsx)) movements
+  detail label now joins `companies` (`A/B/C-COY`) instead of reading the old
+  single `company` field.
+- Verified in the browser (LOCAL MODE): toggled a movement to three
+  companies in the ops editor, saved, and confirmed the home page rendered
+  the A/B/C cluster; also spot-checked the 1–6 badge count layouts directly
+  against seed data.
+
 ## 2026-08-13 — One shared intel-fragment form; approvals can now edit everything and SEE the handouts
 - **New [FragmentForm.jsx](src/components/FragmentForm.jsx)** — the fragment
   fields + resources panel, now used by all three places a fragment is authored:
