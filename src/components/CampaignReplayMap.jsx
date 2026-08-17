@@ -6,20 +6,24 @@ import { renderWaveLayer } from '../lib/terrainRender'
 
 // Campaign replay wrapper around PixelMap. On load it auto-plays the
 // campaign history — from RHQ's chosen default start frame (or the earliest
-// one) through to the live territory — as an animated conquest wave, then
-// rests on the live state.
+// one) through to the LAST RECORDED FRAME — as an animated conquest wave,
+// then rests there.
 //
 // The transport is a TIMELINE RAIL: one bubble per recorded frame on a single
 // line, filling left-to-right as the replay advances. Hovering a bubble names
 // that frame ("Week 5"); clicking one cuts straight to it — an instant swap of
 // the map, never an animated replay of everything in between, because
 // browsing history should be immediate. Playback itself has no pause: ▶ PLAY
-// runs from RHQ's default start frame through to the live state, and clicking
+// runs from RHQ's default start frame through to the last frame, and clicking
 // any bubble mid-play simply snaps there and stops. Frames before the default
 // start stay on the rail and stay clickable; they're just skipped by the
 // automatic playback.
 //
 // Falls back to the plain static map when no campaign has been recorded.
+//
+// The live `territory` is NOT part of this replay once any frames exist —
+// only `+ Add Frame from Live Map` (in Map: Territory) puts a change on the
+// rail. See the comment on `frames` below for why.
 //
 // Animation architecture (the performance-critical part):
 //  - PixelMap renders only the COMMITTED frame (its hatch+border composite is
@@ -51,19 +55,22 @@ const playBtnStyle = {
 export default function CampaignReplayMap({ territory, frames: campaignFrames, defaultStartId, maxWidth }) {
   const { cols, rows } = territory
 
-  // Frames: one per recorded frame, sorted by order. If the live territory
-  // has drifted from the last frame (a live save made without updating the
-  // replay), append it as a final synthetic move so the replay always ends
-  // exactly on the live map.
+  // Frames: one per recorded frame, sorted by order — ONLY real, saved
+  // frames. Once a campaign replay exists, it is the sole source of truth
+  // for what the public map shows at rest; a live "Save map" that isn't also
+  // captured via "+ Add Frame from Live Map" simply won't appear here until
+  // it is. (A previous version synthesised the live territory as an
+  // unlabelled final frame so the replay never looked stale — that made the
+  // live map masquerade as a frame nobody could see, edit or manage from the
+  // Map: Territory editor. Removed in favour of an explicit nudge in that
+  // editor when the live map has drifted from the last recorded frame.)
   const frames = useMemo(() => {
     if (!framesValid(campaignFrames, cols, rows)) return null
     const f = frameCells(campaignFrames)
-    if (f[f.length - 1] !== territory.cells) f.push(territory.cells)
     return f.length >= 2 ? f : null
-  }, [campaignFrames, territory.cells, cols, rows])
+  }, [campaignFrames, cols, rows])
 
-  // Captions per transition (transition k plays into frame k+1); a synthetic
-  // final frame from live drift has no label.
+  // Captions per transition (transition k plays into frame k+1).
   const captions = useMemo(
     () => (framesValid(campaignFrames, cols, rows) ? frameCaptions(campaignFrames) : []),
     [campaignFrames, cols, rows],
@@ -71,8 +78,7 @@ export default function CampaignReplayMap({ territory, frames: campaignFrames, d
 
   // Per-frame id + label for the manual picker — includes frame 0's own
   // label (frameCaptions deliberately drops it, since it has no TRANSITION
-  // caption). Index i here lines up 1:1 with frames[i] for every REAL frame;
-  // a synthetic live-drift frame (if any) sits one past the end of this list.
+  // caption). Index i here lines up 1:1 with frames[i].
   const frameMeta = useMemo(
     () => (framesValid(campaignFrames, cols, rows) ? sortFrames(campaignFrames).map((f) => ({ id: f.id, label: f.label || '' })) : []),
     [campaignFrames, cols, rows],
@@ -253,12 +259,10 @@ function Replay({ territory, frames, captions, frameMeta, startIdx, maxWidth }) 
     return () => { live = false; cancelAnimationFrame(e.raf) }
   }, [playing, frames, transitions, cols, rows, perMs, commitFrame])
 
-  // Name for every bubble on the rail. Indices line up 1:1 with `frames`; a
-  // synthetic live-drift frame (one past the end of frameMeta) is "Current
-  // state". RHQ's own label wins wherever they set one.
+  // Name for every bubble on the rail. Indices line up 1:1 with `frames`.
+  // RHQ's own label wins wherever they set one.
   const frameName = useCallback((i) => {
-    if (i >= frameMeta.length) return 'Current state'
-    return frameMeta[i].label || (i === 0 ? 'Campaign baseline' : `Frame ${i + 1}`)
+    return frameMeta[i]?.label || (i === 0 ? 'Campaign baseline' : `Frame ${i + 1}`)
   }, [frameMeta])
 
   const caption = moveIdx >= 0 ? (captions[moveIdx] || '') : ''

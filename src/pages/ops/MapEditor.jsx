@@ -31,8 +31,17 @@ export default function MapEditor() {
   // the live territory — { id, order, label, cells, original }. `original` is
   // the frame's cells as loaded, so we can tell if there are unsaved changes
   // before switching away. "Save map" always publishes the live territory
-  // regardless of this; frame edits are saved separately via "Update Frame".
+  // regardless of this; frame edits are staged locally via "Update Frame"
+  // (see draftFrameCells below) and only reach the site via "Publish frame
+  // changes".
   const [editing, setEditing] = useState(null)
+  // frameId -> repainted cells that "Update Frame" has committed but that
+  // haven't been pushed to the live campaignFrames collection yet. Kept
+  // separate from `state.campaignFrames` (the published data) so painting a
+  // frame never touches the public site until RHQ explicitly publishes it —
+  // unlike every other campaign action (relabel/reorder/duplicate/delete/
+  // set-default-start), which still writes immediately, same as before.
+  const [draftFrameCells, setDraftFrameCells] = useState({})
   const [previewOpen, setPreviewOpen] = useState(false)
 
   const { cols, rows } = terr
@@ -95,17 +104,23 @@ export default function MapEditor() {
     setEditing({ id: frame.id, order: frame.order, label: frame.label || '', cells: frame.cells, original: frame.cells })
   }
 
-  // Write the currently-edited frame's cells back to campaignFrames. Does
-  // NOT touch the live territory.
+  // Stage the currently-edited frame's cells locally — NOT written to
+  // campaignFrames (and so not visible on the site) until RHQ clicks
+  // "Publish frame changes" in the panel below. Re-opening "Edit" on this
+  // frame later picks the staged cells back up (see CampaignPanel's onEdit).
   const commitFrameEdit = () => {
     if (!editing) return
-    const frames = (state.campaignFrames || []).map((f) =>
-      f.id === editing.id ? { ...f, cells: editing.cells, updatedAt: Date.now() } : f)
-    updateSlice('campaignFrames', frames)
-    audit('Updated campaign frame', `frame ${editing.order + 1}`)
-    toast.push(`Frame ${editing.order + 1} updated.`)
+    setDraftFrameCells((d) => ({ ...d, [editing.id]: editing.cells }))
+    toast.push(`Frame ${editing.order + 1} updated — not live yet. Click "Publish frame changes" below to push it to the site.`)
     setEditing(null)
   }
+  const clearDraftFrame = (id) => setDraftFrameCells((d) => {
+    if (!(id in d)) return d
+    const next = { ...d }
+    delete next[id]
+    return next
+  })
+  const clearAllDraftFrames = () => setDraftFrameCells({})
 
   const swatches = [...PAINT, ...(terr.showRHQ ? [RHQ_PAINT] : [])]
   // Whatever's currently on the paint canvas — the live territory, or the
@@ -132,11 +147,11 @@ export default function MapEditor() {
       {editing && (
         <div className="panel panel-pad row between center wrap" style={{ gap: 10, marginBottom: 10, borderColor: 'var(--accent)', background: 'rgba(54,224,192,0.06)' }}>
           <div className="mono accent" style={{ fontSize: 12 }}>
-            EDITING {editing.order === 0 ? 'START FRAME' : `FRAME ${editing.order + 1}`} — painting here updates this historical frame, not the live map.
+            EDITING {editing.order === 0 ? 'START FRAME' : `FRAME ${editing.order + 1}`} — painting here updates this historical frame, not the live map. "Update Frame" only saves your place in this editor — it stays off the site until you publish it below.
           </div>
           <div className="row" style={{ gap: 8 }}>
             <button className="ghost" onClick={() => startEdit(null)}>Cancel</button>
-            <button className="primary" onClick={commitFrameEdit}>Update Frame</button>
+            <button className="primary" onClick={commitFrameEdit} title="Stores your painting so you can keep working — does not push it to the site">Update Frame</button>
           </div>
         </div>
       )}
@@ -180,6 +195,9 @@ export default function MapEditor() {
         editing={editing}
         onStartEdit={startEdit}
         onForceClearEdit={() => setEditing(null)}
+        draftFrameCells={draftFrameCells}
+        onClearDraftFrame={clearDraftFrame}
+        onClearAllDraftFrames={clearAllDraftFrames}
       />
 
       <div className="panel panel-pad col" style={{ gap: 8, marginTop: 14 }}>
@@ -248,7 +266,10 @@ function PreviewMapModal({ territory, onClose }) {
 // (the way to insert a new frame mid-sequence), reordered or deleted
 // independently — no more diff-chain, no more "re-recording the start wipes
 // everything after it".
-function CampaignPanel({ frames, defaultStartId, terr, territory, editing, onStartEdit, onForceClearEdit }) {
+function CampaignPanel({
+  frames, defaultStartId, terr, territory, editing, onStartEdit, onForceClearEdit,
+  draftFrameCells, onClearDraftFrame, onClearAllDraftFrames,
+}) {
   const { updateSlice } = useData()
   const audit = useAudit()
   const confirm = useConfirm()
@@ -258,6 +279,13 @@ function CampaignPanel({ frames, defaultStartId, terr, territory, editing, onSta
   const active = framesValid(frames, cols, rows)
   const count = sorted.length
   const hasRecentFrame = sorted.some((f) => f.ts >= Date.now() - WEEK_MS)
+  const draftIds = Object.keys(draftFrameCells)
+  const draftCount = draftIds.length
+  // The live map is the source for the NEXT frame, not part of the replay
+  // itself (see CampaignReplayMap) — so if it's diverged from the last
+  // recorded frame, the public site is showing something already out of
+  // date until RHQ deliberately captures it.
+  const liveDrift = active && territory.cells !== sorted[sorted.length - 1].cells
 
   const [exporting, setExporting] = useState(false)
   const [exportPct, setExportPct] = useState(0)
@@ -279,6 +307,18 @@ function CampaignPanel({ frames, defaultStartId, terr, territory, editing, onSta
   const persist = (nextSorted, message, detail) => {
     updateSlice('campaignFrames', renumberFrames(nextSorted))
     audit(message, detail)
+  }
+
+  // Push every staged "Update Frame" edit to the live campaignFrames
+  // collection in one write — the only point at which a repainted frame
+  // actually reaches the public site.
+  const publishDraftFrames = () => {
+    if (!draftCount) return
+    const next = sorted.map((f) => (f.id in draftFrameCells ? { ...f, cells: draftFrameCells[f.id], updatedAt: Date.now() } : f))
+    updateSlice('campaignFrames', next)
+    audit('Published campaign frame changes', `${draftCount} frame${draftCount === 1 ? '' : 's'}`)
+    toast.push(`${draftCount} frame${draftCount === 1 ? '' : 's'} published to the site.`)
+    onClearAllDraftFrames()
   }
 
   // Snapshot the current live painting as a new frame at the end.
@@ -320,6 +360,7 @@ function CampaignPanel({ frames, defaultStartId, terr, territory, editing, onSta
     })
     if (!ok) return
     if (editing?.id === f.id) onForceClearEdit()
+    onClearDraftFrame(f.id)
     if (defaultStartId === f.id) updateSlice('campaignDefaultStart', null)
     persist(sorted.filter((_, k) => k !== i), 'Deleted campaign frame', `frame ${i + 1}`)
     toast.push(`Frame ${i + 1} deleted.`)
@@ -334,6 +375,7 @@ function CampaignPanel({ frames, defaultStartId, terr, territory, editing, onSta
     })
     if (!ok) return
     onForceClearEdit()
+    onClearAllDraftFrames()
     updateSlice('campaignFrames', [])
     updateSlice('campaignDefaultStart', null)
     audit('Cleared campaign replay history')
@@ -391,9 +433,28 @@ function CampaignPanel({ frames, defaultStartId, terr, territory, editing, onSta
       </div>
       <div className="mono dim" style={{ fontSize: 11 }}>
         {active
-          ? 'Replay is live — visitors watch the conquest animate through every frame below when the map loads (or jump to any frame themselves via the picker on the Home page). Each frame can be repainted, relabelled, reordered, duplicated or deleted independently. "Set as Default Start" picks which frame the auto-play begins from — earlier frames stay archived and reachable via the picker either way.'
+          ? 'Replay is live — visitors watch the conquest animate through every recorded frame below when the map loads (or jump to any frame themselves via the picker on the Home page). Each frame can be repainted, relabelled, reordered, duplicated or deleted independently. "Set as Default Start" picks which frame the auto-play begins from — earlier frames stay archived and reachable via the picker either way. The live map above is only ever a starting point for the NEXT frame — it doesn\'t appear in the replay itself until you add it.'
           : 'No frames recorded yet. Paint the map above, then add it as the campaign start frame — you can add more as the campaign advances.'}
       </div>
+
+      {liveDrift && (
+        <div className="row between center wrap" style={{ gap: 10, padding: '8px 10px', border: '1px solid var(--accent)', borderRadius: 6, background: 'rgba(54,224,192,0.06)' }}>
+          <span className="mono accent" style={{ fontSize: 11 }}>
+            ⚠ Live map has changed since the last recorded frame — the public replay won't show this until you add it.
+          </span>
+          <button className="ghost" onClick={addFromLive} style={{ flex: '0 0 auto' }}>+ Add Frame from Live Map</button>
+        </div>
+      )}
+
+      {draftCount > 0 && (
+        <div className="row between center wrap" style={{ gap: 10, padding: '8px 10px', border: '1px solid var(--accent)', borderRadius: 6, background: 'rgba(54,224,192,0.06)' }}>
+          <span className="mono accent" style={{ fontSize: 11 }}>
+            ● {draftCount} frame{draftCount === 1 ? '' : 's'} repainted but not published — the site still shows the old version.
+          </span>
+          <button className="primary" onClick={publishDraftFrames} style={{ flex: '0 0 auto' }}>Publish frame changes</button>
+        </div>
+      )}
+
       <div className="row wrap center" style={{ gap: 8 }}>
         <button className="primary" onClick={addFromLive} title="Snapshot the current live painting as a new frame at the end of the timeline.">
           + Add Frame from Live Map
@@ -453,8 +514,9 @@ function CampaignPanel({ frames, defaultStartId, terr, territory, editing, onSta
               isLast={i === sorted.length - 1}
               isEditing={editing?.id === f.id}
               isDefaultStart={defaultStartId === f.id}
+              hasDraft={f.id in draftFrameCells}
               onMove={(dir) => move(i, dir)}
-              onEdit={() => onStartEdit(editing?.id === f.id ? null : { id: f.id, order: i, label: f.label || '', cells: f.cells })}
+              onEdit={() => onStartEdit(editing?.id === f.id ? null : { id: f.id, order: i, label: f.label || '', cells: draftFrameCells[f.id] ?? f.cells })}
               onDuplicate={() => duplicate(i)}
               onDelete={() => del(i)}
               onRelabel={(label) => relabel(i, label)}
@@ -477,7 +539,7 @@ function CampaignPanel({ frames, defaultStartId, terr, territory, editing, onSta
 // One frame row. Keeps its own local label text so typing doesn't fire a
 // Firestore write per keystroke — the label only commits (onRelabel) when
 // the field loses focus or Enter is pressed, and only if it actually changed.
-function FrameRow({ f, index, isFirst, isLast, isEditing, isDefaultStart, onMove, onEdit, onDuplicate, onDelete, onRelabel, onSetDefaultStart }) {
+function FrameRow({ f, index, isFirst, isLast, isEditing, isDefaultStart, hasDraft, onMove, onEdit, onDuplicate, onDelete, onRelabel, onSetDefaultStart }) {
   const [label, setLabel] = useState(f.label || '')
   useEffect(() => { setLabel(f.label || '') }, [f.label])
   const commit = () => { if (label !== (f.label || '')) onRelabel(label) }
@@ -496,6 +558,7 @@ function FrameRow({ f, index, isFirst, isLast, isEditing, isDefaultStart, onMove
         style={{ flex: '1 1 160px' }}
       />
       {isDefaultStart && <span className="tag" style={{ fontSize: 9, flex: '0 0 auto', color: 'var(--accent)', borderColor: 'var(--accent)' }}>DEFAULT START</span>}
+      {hasDraft && <span className="tag mono" style={{ fontSize: 9, flex: '0 0 auto', color: 'var(--accent)', borderColor: 'var(--accent)' }} title="Repainted but not yet published — the site still shows the old version">● UNPUBLISHED</span>}
       <span className="mono dim" style={{ fontSize: 10, flex: '0 0 auto' }}>{new Date(f.ts).toLocaleDateString()}</span>
       <div className="row" style={{ gap: 4, flex: '0 0 auto' }}>
         <button className="ghost" style={{ padding: '3px 8px' }} onClick={() => onMove(-1)} disabled={isFirst} title="Move earlier">↑</button>

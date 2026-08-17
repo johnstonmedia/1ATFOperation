@@ -17,6 +17,44 @@ keep entries short and focused on what a new collaborator needs to know.
 
 ---
 
+## 2026-08-17 — Campaign replay: no more phantom frame, and frame edits stage locally
+Two related fixes to confusing behaviour in the Campaign Replay system
+(Map: Territory + the public replay it drives).
+
+- **Removed the "live drift" synthetic frame.** `CampaignReplayMap.jsx`
+  used to silently append `state.territory.cells` as an extra, unlabelled
+  "Current state" bubble on the public timeline rail whenever it differed
+  from the last recorded frame — so the live map masqueraded as a real frame
+  that nobody could see, edit, relabel or delete from the Map: Territory
+  panel, because it wasn't actually a `campaignFrames` doc. Once any frames
+  are recorded, the public replay now shows **only real, saved frames** —
+  the live territory is purely the starting point for the *next* frame you
+  choose to add, never part of the replay on its own. Trade-off: if RHQ
+  paints the live map and saves without also clicking "+ Add Frame from Live
+  Map", the public site keeps showing the last recorded frame until they do
+  — no more automatic, invisible sync. To make that deliberate rather than
+  surprising, **Map: Territory** now shows a "Live map has changed since the
+  last recorded frame" notice (with its own Add Frame button) whenever the
+  two differ.
+- **Repainting a frame no longer publishes immediately.** "Update Frame" used
+  to write straight to the live `campaignFrames` collection the instant you
+  clicked it. It now only stages the paint job in local editor state
+  (`draftFrameCells`, keyed by frame id) — the frame row gets an
+  **● UNPUBLISHED** tag, and a banner with a **Publish frame changes** button
+  appears whenever any frame has a pending edit. Nothing reaches the public
+  site until that button is clicked (one write for every pending frame).
+  Re-opening Edit on a staged frame resumes from the staged paint. Every
+  OTHER campaign action (relabel, reorder, duplicate, delete, Set Default
+  Start) is unchanged — still instant, per explicit user decision (only the
+  cell-painting step needed staging, not the whole panel). Deleting a frame
+  or clearing the whole replay also drops any pending staged cells for it.
+- Verified in the browser (LOCAL MODE): seeded two frames, edited the second
+  frame's cells and clicked "Update Frame" — confirmed via localStorage that
+  `campaignFrames` was untouched — then clicked "Publish frame changes" and
+  confirmed the write landed. Separately confirmed the public replay's frame
+  rail shows exactly the real recorded frames (no phantom bubble) even with
+  the live territory deliberately left drifted.
+
 ## 2026-08-17 — Map: Territory gets a "Preview Map" button
 - New **Preview Map** button in [MapEditor.jsx](src/pages/ops/MapEditor.jsx),
   next to "Save map". Opens a portalled modal (`PreviewMapModal`, same

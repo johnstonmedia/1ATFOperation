@@ -332,8 +332,8 @@ assuming a page exists).
   returns the full fixed roster, NOT whoever currently holds ground, so it
   never reshuffles or drops rows as the replay animates. RHQ is the one
   conditional entry (hidden when `showRHQ` is off, since it isn't drawn then).
-- **Campaign replay** (v2.3, 2026-08-04): every frame is its OWN Firestore
-  document in the `campaignFrames` collection —
+- **Campaign replay** (v2.3, 2026-08-04; v2.4, 2026-08-17): every frame is its
+  OWN Firestore document in the `campaignFrames` collection —
   `{ id, order, cells, label, ts, updatedAt }`, a full grid snapshot, not a
   diff against the previous frame (that was v2.2's design; see CHANGELOG for
   why it was replaced). In **Map: Territory**'s "Campaign replay" panel:
@@ -342,10 +342,9 @@ assuming a page exists).
   separate "select start state" step anymore). Each frame row supports
   **Edit** (loads that frame's cells into the SAME paint canvas used for the
   live map — a banner above it makes clear you're editing a historical frame,
-  not the live one; **Update Frame** saves back to just that frame, "Save
-  map" still only ever publishes the live territory), an inline **label**
-  field (commits on blur/Enter), **↑/↓** reorder, **Duplicate** (inserts a
-  copy right after — the way to add a step mid-sequence), and **Delete**.
+  not the live one), an inline **label** field (commits on blur/Enter),
+  **↑/↓** reorder, **Duplicate** (inserts a copy right after — the way to add
+  a step mid-sequence), and **Delete**.
   `order` is kept contiguous 0..N-1 by `renumberFrames()`, reassigned on every
   structural change. Because frames don't chain, editing frame 0 no longer
   wipes anything after it — that was only ever a limitation of the old
@@ -358,18 +357,44 @@ assuming a page exists).
   over a frames array (`sortFrames`, `framesValid`, `frameCells`,
   `frameCaptions`, `renumberFrames`) plus the animation math
   (`transitionPlan`/`transitionDuration`, unchanged).
+  ⚠️ **v2.4 (2026-08-17): repainting a frame no longer publishes on
+  "Update Frame".** That button now only stages the paint job in local
+  component state (`draftFrameCells`, keyed by frame id) — every OTHER action
+  (relabel/reorder/duplicate/delete/Set Default Start) still writes straight
+  to Firestore instantly, unchanged. Staged frames show an **● UNPUBLISHED**
+  tag on their row, and a banner with a **Publish frame changes** button
+  appears whenever any are pending — that's the one action that actually
+  pushes staged cells to the live `campaignFrames` collection (one write for
+  all pending frames). Re-opening **Edit** on a staged frame resumes from the
+  staged paint, not the last-published version. Deleting a frame or clearing
+  the whole replay also drops any of its pending staged cells. This mirrors
+  how "Save map" already worked for the live territory — painting is local
+  until an explicit publish action.
   The Home map renders through
   [CampaignReplayMap](src/components/CampaignReplayMap.jsx): an auto-playing
   conquest animation (per-owner BFS wave on a cheap flat-tint overlay; the
   expensive hatch layer commits once per frame) starting from the default
-  frame, company-name flashes at each captured cluster, resting on the live
-  state. The transport (rewritten 2026-08-04) is a **▶ PLAY button plus a
+  frame, company-name flashes at each captured cluster, resting on the **last
+  recorded frame**. ⚠️ **v2.4 also removed the old "live drift" synthetic
+  frame**: earlier, if the live `territory` differed from the last recorded
+  frame, `CampaignReplayMap` silently appended it as an extra, unlabelled
+  "Current state" bubble on the public rail — a real-looking frame that
+  wasn't actually a `campaignFrames` doc, so it couldn't be seen, relabelled
+  or deleted from the Map: Territory panel. Once any frames exist, the live
+  territory is now purely the starting point for the *next* frame — it never
+  appears in the public replay on its own. Map: Territory shows a **"Live map
+  has changed since the last recorded frame"** notice (with its own
+  **+ Add Frame from Live Map** button) whenever `state.territory.cells`
+  differs from the last frame, so that drift is always a deliberate,
+  visible RHQ action, never invisible magic. Don't reintroduce the
+  auto-append — see CHANGELOG 2026-08-17 for the reasoning.
+  The transport (rewritten 2026-08-04) is a **▶ PLAY button plus a
   timeline rail with one bubble per frame** — hover names the frame, click cuts
   straight to it (an instant swap, never an animated replay of everything in
   between), and the rail fills as playback advances. **Playback does not
   pause**, and **PLAY resumes from the frame on screen** — click a bubble then
   PLAY and it continues from there; only pressing PLAY while already at the
-  live state restarts from the default start frame. A bubble click mid-play
+  last frame restarts from the default start frame. A bubble click mid-play
   snaps there and stops. This replaced the old play/pause + skip buttons, progress
   bar and "Jump to a frame…" dropdown — don't reintroduce them. Frames before
   the default start stay on the rail and stay clickable; they're just skipped
