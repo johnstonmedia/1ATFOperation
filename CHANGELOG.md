@@ -17,6 +17,54 @@ keep entries short and focused on what a new collaborator needs to know.
 
 ---
 
+## 2026-08-17 — Company map labels no longer stack on each other; manual override for the rest
+`companyLabels.js` derived each company's name-label position purely from its
+own holding, with zero awareness of where any OTHER company's label landed —
+so companies holding adjacent/interleaved ground (the normal case at a
+contested border) could get poles only a few cells apart, and the on-screen
+text piled up into unreadable stacks (e.g. "A-COY/B-COY/D-COY/S-COY" all
+overlapping in a tight contested cluster).
+
+- **Automatic fix**: `companyLabelPoints` (and `mergedGainLabels`, used by the
+  weekly export image) now place one company at a time and feed each already-
+  placed label back in as an avoid point for the rest (`LABEL_AVOID_RADIUS =
+  24` cells, wider than the 10-cell place-avoidance since text needs
+  horizontal room, not just a clear point). Verified via synthetic grids run
+  through the real module in-browser: wide, well-separated holdings are
+  unaffected (no-op, as expected); moderately tight holdings get visibly
+  spread apart (min label spacing went from 18 to ~24 cells in one test case).
+  Font size and everything else about label rendering is unchanged.
+- **Known limit, addressed by the next item**: when a company's entire
+  holding sits within the avoid radius of a neighbour's label — a genuinely
+  narrow multi-way contested pocket — there's nowhere left to place it that
+  clears the radius, and the code falls back to the pre-fix "ignore
+  avoidance" placement. Confirmed via a deliberately pathological synthetic
+  case (five 10-cell-wide adjacent stripes) that reproduces the reported
+  overlap almost exactly.
+- **Manual override, for that residual case**: Map: Territory has a new
+  **"Arrange company labels manually"** checkbox. When on, the live paint
+  canvas shows the derived labels (normally hidden while painting, since a
+  label over cells you're editing is in the way) and each one becomes
+  draggable, the same interaction as place-name markers. A dragged position
+  is stored per company in `territory.labelOverrides` (`{ [code]: {x, y} }`,
+  a new key on the existing `territory` slice — no rules change needed) and
+  persists only on "Save map", same as everything else in that editor.
+  Companies without an override keep placing themselves automatically —
+  including steering clear of a manually-placed one, since overrides feed
+  into the same avoid-list mechanism the automatic placements use. A new
+  "Company label positions" panel lists any overrides with a per-company and
+  a "reset all" button back to automatic. `PixelMap.jsx`'s existing
+  place-marker drag plumbing (`dragging.current`) was generalised to carry
+  `{ place: id } | { label: code }` instead of a bare place id, so both drag
+  types share one pointer-event path. The two canvas export functions
+  (`exportCampaignReplay`, `exportProgressImage`) now also pass
+  `territory.labelOverrides` through, so exports match what's on screen.
+  End-to-end verified in a local-mode sandbox (`VITE_FIREBASE_DISABLE=1`, no
+  production Firebase touched): seeded the pathological overlap, signed in as
+  the bootstrap admin, toggled the checkbox, dragged two labels via real
+  pointer events, saved, and confirmed the public Home page rendered
+  identically to the ops editor's saved state.
+
 ## 2026-08-17 — Campaign replay: no more phantom frame, and frame edits stage locally
 Two related fixes to confusing behaviour in the Campaign Replay system
 (Map: Territory + the public replay it drives).

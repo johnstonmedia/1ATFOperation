@@ -134,8 +134,16 @@ function poleOfLargestComponent(mask, cols, rows, avoid = []) {
 
 // One name label per owner present on the grid.
 // Returns [{ code, label, color, x, y, size }] in cell coordinates.
-// `avoid` is `territory.places` — see poleOfLargestComponent.
-export function companyLabelPoints(cells, cols, rows, { showRHQ = true, minCells = MIN_LABEL_CELLS, avoid = [] } = {}) {
+// `avoid` is `territory.places` — see poleOfLargestComponent. `overrides` is
+// `territory.labelOverrides` — { [code]: {x, y} } — RHQ's manually-dragged
+// positions (see MapEditor's "Arrange company labels" mode): a company with
+// an override skips the derived pole entirely and renders at the chosen spot
+// instead, but still counts toward `minCells` (holding nothing still hides
+// the label) and still feeds `labelAvoid` so later, still-automatic
+// companies steer clear of it. Automatic placement can't always separate a
+// tight multi-way contested cluster on its own — see CHANGELOG — so this is
+// the deliberate human-in-the-loop escape hatch, not a replacement for it.
+export function companyLabelPoints(cells, cols, rows, { showRHQ = true, minCells = MIN_LABEL_CELLS, avoid = [], overrides = {} } = {}) {
   if (!cells || cells.length !== cols * rows) return []
   const n = cells.length
 
@@ -166,8 +174,11 @@ export function companyLabelPoints(cells, cols, rows, { showRHQ = true, minCells
     if (!mask) continue
     const pole = poleOfLargestComponent(mask, cols, rows, [...placeAvoid, ...labelAvoid])
     if (!pole || pole.size < minCells) continue
-    out.push({ code, label: coyLabelOf(code), color: colorOf(code), x: pole.x, y: pole.y, size: pole.size })
-    labelAvoid.push({ x: pole.x, y: pole.y, radius: LABEL_AVOID_RADIUS })
+    const manual = overrides[code]
+    const x = manual ? manual.x : pole.x
+    const y = manual ? manual.y : pole.y
+    out.push({ code, label: coyLabelOf(code), color: colorOf(code), x, y, size: pole.size })
+    labelAvoid.push({ x, y, radius: LABEL_AVOID_RADIUS })
   }
   return out
 }

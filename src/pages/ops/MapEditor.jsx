@@ -8,7 +8,7 @@ import { useDialog } from '../../hooks/useDialog'
 import { OpsHeader, useSaved } from './OperationsCentre'
 import PixelMap from '../../components/PixelMap'
 import MapLegend from '../../components/MapLegend'
-import { PAINT, RHQ_PAINT, colorOf } from '../../lib/territory'
+import { PAINT, RHQ_PAINT, colorOf, coyLabelOf } from '../../lib/territory'
 import { useOceanMask } from '../../lib/oceanMask'
 import { sortFrames, framesValid, renumberFrames } from '../../lib/campaign'
 import { exportCampaignReplay, exportProgressImage, exportSupported, downloadBlob, defaultProgressTitle } from '../../lib/replayExport'
@@ -24,9 +24,22 @@ export default function MapEditor() {
   const confirm = useConfirm()
   const toast = useToast()
   const [saved, flash] = useSaved()
-  const [terr, setTerr] = useState(() => ({ ...state.territory, places: state.territory.places || [] }))
+  const [terr, setTerr] = useState(() => ({
+    ...state.territory,
+    places: state.territory.places || [],
+    labelOverrides: state.territory.labelOverrides || {},
+  }))
   const [brush, setBrush] = useState('M')
   const [size, setSize] = useState(2)
+  // "Arrange company labels" is a local UI mode, not a saved setting: it just
+  // switches the live canvas below into showing + dragging the derived
+  // company-name labels instead of hiding them (the normal editor behaviour,
+  // since a label over cells you're painting is in the way). Automatic
+  // placement (companyLabels.js) can't always separate a tight multi-way
+  // contested cluster on its own, so a manually-dragged position is the
+  // escape hatch — it's stored per company in terr.labelOverrides and, like
+  // everything else here, only reaches the site on "Save map".
+  const [arrangeLabels, setArrangeLabels] = useState(false)
   // When set, the paint canvas targets this campaign frame's cells instead of
   // the live territory — { id, order, label, cells, original }. `original` is
   // the frame's cells as loaded, so we can tell if there are unsaved changes
@@ -71,6 +84,13 @@ export default function MapEditor() {
     else setTerr((t) => ({ ...t, cells: brushOver(t.cells, points, code, sz) }))
   }
   const movePlace = (id, x, y) => setTerr((t) => ({ ...t, places: t.places.map((p) => (p.id === id ? { ...p, x, y } : p)) }))
+  const moveCompanyLabel = (code, x, y) => setTerr((t) => ({ ...t, labelOverrides: { ...t.labelOverrides, [code]: { x, y } } }))
+  const resetCompanyLabel = (code) => setTerr((t) => {
+    const next = { ...t.labelOverrides }
+    delete next[code]
+    return { ...t, labelOverrides: next }
+  })
+  const resetAllCompanyLabels = () => setTerr((t) => ({ ...t, labelOverrides: {} }))
   const addPlace = () => setTerr((t) => ({ ...t, places: [...t.places, { id: rid(), name: 'New place', x: Math.round(cols / 2), y: Math.round(rows / 2) }] }))
   const addStronghold = () => setTerr((t) => ({ ...t, places: [...t.places, { id: rid(), name: 'Meridian Stronghold', x: Math.round(cols / 2), y: Math.round(rows / 2), hostile: true }] }))
   const setPlace = (id, patch) => setTerr((t) => ({ ...t, places: t.places.map((p) => (p.id === id ? { ...p, ...patch } : p)) }))
@@ -134,6 +154,9 @@ export default function MapEditor() {
         <label className="row center" style={{ gap: 6, fontSize: 11 }}>
           <input type="checkbox" checked={!!terr.showRHQ} onChange={(e) => setTerr((t) => ({ ...t, showRHQ: e.target.checked }))} style={{ width: 'auto' }} /> Show RHQ on map
         </label>
+        <label className="row center" style={{ gap: 6, fontSize: 11 }} title="Shows the derived company-name labels on the canvas below and lets you drag any of them to a fixed spot — for when a tight multi-way contested cluster overlaps no matter what.">
+          <input type="checkbox" checked={arrangeLabels} onChange={(e) => setArrangeLabels(e.target.checked)} style={{ width: 'auto' }} /> Arrange company labels manually
+        </label>
         <button className="ghost" onClick={() => setPreviewOpen(true)} title="See exactly what recruits would see on the Home page, including unsaved changes">
           Preview Map
         </button>
@@ -185,7 +208,17 @@ export default function MapEditor() {
         <button className="danger ghost" onClick={clearAll} style={{ marginLeft: 'auto' }}>Clear all</button>
       </div>
 
-      <PixelMap territory={{ ...terr, cells: canvasCells }} edit brush={brush} brushSize={size} onPaint={paint} onMovePlace={movePlace} />
+      {arrangeLabels && (
+        <div className="mono dim" style={{ fontSize: 11, marginBottom: 8 }}>
+          Drag any company name below to fix its position — automatic placement keeps every other company clear of it. Companies you haven't dragged keep placing themselves automatically, including around a dragged one.
+        </div>
+      )}
+      <PixelMap
+        territory={{ ...terr, cells: canvasCells }}
+        edit brush={brush} brushSize={size} onPaint={paint} onMovePlace={movePlace}
+        showCompanyLabels={arrangeLabels}
+        onMoveCompanyLabel={arrangeLabels ? moveCompanyLabel : undefined}
+      />
 
       <CampaignPanel
         frames={state.campaignFrames}
@@ -221,6 +254,29 @@ export default function MapEditor() {
           </div>
         ))}
       </div>
+
+      {arrangeLabels && (
+        <div className="panel panel-pad col" style={{ gap: 8, marginTop: 14 }}>
+          <div className="row between center wrap" style={{ gap: 8 }}>
+            <strong className="head" style={{ fontSize: 14 }}>Company label positions</strong>
+            {Object.keys(terr.labelOverrides).length > 0 && (
+              <button className="ghost" onClick={resetAllCompanyLabels}>Reset all to automatic</button>
+            )}
+          </div>
+          {Object.keys(terr.labelOverrides).length === 0 && (
+            <div className="mono dim" style={{ fontSize: 12 }}>
+              All company labels are placed automatically. Drag a label on the map above to fix its position here.
+            </div>
+          )}
+          {Object.keys(terr.labelOverrides).map((code) => (
+            <div key={code} className="row center wrap" style={{ gap: 8 }}>
+              <span className="tag mono" style={{ fontSize: 11, color: colorOf(code), borderColor: colorOf(code) }}>{coyLabelOf(code)}</span>
+              <span className="mono dim" style={{ fontSize: 10 }}>manually positioned — drag it again to fine-tune</span>
+              <button className="ghost" style={{ marginLeft: 'auto' }} onClick={() => resetCompanyLabel(code)}>Reset to automatic</button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

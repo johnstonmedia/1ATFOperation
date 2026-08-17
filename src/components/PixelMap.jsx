@@ -35,6 +35,9 @@ export default function PixelMap({
            // segment, points pre-interpolated into a continuous line
 
   onMovePlace,
+  onMoveCompanyLabel, // (code, x, y) — when provided, derived company-name
+           // labels become draggable (see MapEditor's "Arrange company
+           // labels" mode); positions are stored in territory.labelOverrides.
   maxWidth,
   overlay, // optional node rendered inside the zoom/pan stage, above the
            // territory canvas — used by the campaign replay to keep its wave
@@ -58,7 +61,7 @@ export default function PixelMap({
   const viewRef = useRef(view)
   viewRef.current = view
   const dragOrigin = useRef(null) // { pointerId, lastX, lastY } | { pointerId, painting: true }
-  const dragging = useRef(null) // place-label id being dragged
+  const dragging = useRef(null) // { place: id } | { label: code } being dragged
   const oceanOverlayUrl = useOceanOverlayUrl(edit)
 
   // Company name placements are derived from the cells, so they track the
@@ -67,10 +70,11 @@ export default function PixelMap({
   // not free enough to redo on every pan/zoom re-render.
   // `avoid` keeps a company name off a named place: that place's beacon
   // already prints the same owner tag, so overlapping them just says it twice.
+  const labelOverrides = territory.labelOverrides || {}
   const companyLabels = useMemo(
-    () => (showCompanyLabels ? companyLabelPoints(cells, cols, rows, { showRHQ, avoid: places }) : []),
+    () => (showCompanyLabels ? companyLabelPoints(cells, cols, rows, { showRHQ, avoid: places, overrides: labelOverrides }) : []),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [showCompanyLabels, cells, cols, rows, showRHQ, places],
+    [showCompanyLabels, cells, cols, rows, showRHQ, places, labelOverrides],
   )
 
   const scale = view.scale
@@ -254,9 +258,12 @@ export default function PixelMap({
   }
 
   const onPointerMove = (e) => {
-    if (dragging.current && onMovePlace) {
+    if (dragging.current) {
       const c = cellFromEvent(e)
-      if (c) onMovePlace(dragging.current, c.x, c.y)
+      if (c) {
+        if (dragging.current.place != null) onMovePlace?.(dragging.current.place, c.x, c.y)
+        else if (dragging.current.label != null) onMoveCompanyLabel?.(dragging.current.label, c.x, c.y)
+      }
       return
     }
     const o = dragOrigin.current
@@ -325,10 +332,17 @@ export default function PixelMap({
             style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', imageRendering: 'pixelated', pointerEvents: 'none' }} />
           {overlay}
           {/* Derived company names, under the place beacons — a named place is
-              the more specific label, so it wins any overlap. */}
+              the more specific label, so it wins any overlap. Draggable only
+              in MapEditor's "Arrange company labels" mode (onMoveCompanyLabel
+              provided); pointer-events stay off otherwise so the label never
+              intercepts clicks meant for the map underneath. */}
           {companyLabels.map((l) => (
             <div key={l.code} className="company-label"
-              style={{ left: `${(l.x / cols) * 100}%`, top: `${(l.y / rows) * 100}%`, color: l.color }}>
+              style={{
+                left: `${(l.x / cols) * 100}%`, top: `${(l.y / rows) * 100}%`, color: l.color,
+                ...(onMoveCompanyLabel ? { pointerEvents: 'auto', cursor: 'grab' } : null),
+              }}
+              onPointerDown={onMoveCompanyLabel ? (e) => { e.stopPropagation(); dragging.current = { label: l.code } } : undefined}>
               {l.label}
             </div>
           ))}
@@ -348,7 +362,7 @@ export default function PixelMap({
                 tag={b.tag}
                 variant={b.recaptured ? 'boxed' : 'plain'}
                 draggable={!!onMovePlace}
-                onPointerDown={onMovePlace ? (e) => { e.stopPropagation(); dragging.current = p.id } : undefined}
+                onPointerDown={onMovePlace ? (e) => { e.stopPropagation(); dragging.current = { place: p.id } } : undefined}
               />
             )
           })}
