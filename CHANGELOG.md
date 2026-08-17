@@ -17,6 +17,26 @@ keep entries short and focused on what a new collaborator needs to know.
 
 ---
 
+## 2026-08-17 — Map: Territory gets a "Preview Map" button
+- New **Preview Map** button in [MapEditor.jsx](src/pages/ops/MapEditor.jsx),
+  next to "Save map". Opens a portalled modal (`PreviewMapModal`, same
+  `createPortal`-to-`document.body` pattern as `LoginModal`/`ConfirmDialog` —
+  the sticky nav rail / fixed drawer would otherwise trap a `position: fixed`
+  modal under page content) showing the **exact same `PixelMap` +
+  `MapLegend` the public Home page renders at rest** (`showCompanyLabels`
+  on, unlike the editor's own canvas which keeps it off on purpose since a
+  label over cells being painted just gets in the way).
+- Fed from `canvasCells` — whatever's currently on the paint canvas, i.e.
+  `editing.cells` while repainting a historical campaign frame, otherwise the
+  live `terr.cells` — **including unsaved strokes**. Lets RHQ sanity-check a
+  painting (fills, place labels, where a company's derived name lands) before
+  committing to "Save map", without needing to save-then-check-then-fix.
+  Doesn't touch `state.territory` or any other slice — pure read of local
+  editor state.
+- Verified in the browser (LOCAL MODE): painted an unsaved Bravo stroke,
+  opened Preview Map, and confirmed the modal showed the stroke plus a live
+  "B-COY" label and the map key — all before "Save map" was ever clicked.
+
 ## 2026-08-16 — Recent Movements: a movement can now credit up to all six companies
 - `narrative.movements` entries moved from a single `company` letter to a
   **`companies` array** (up to all six non-RHQ companies). `movementsOf()` in

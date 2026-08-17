@@ -1,10 +1,13 @@
 import { useState, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { useData } from '../../context/DataContext'
 import { useAudit } from '../../hooks/useAudit'
 import { useConfirm } from '../../context/ConfirmContext'
 import { useToast } from '../../context/ToastContext'
+import { useDialog } from '../../hooks/useDialog'
 import { OpsHeader, useSaved } from './OperationsCentre'
 import PixelMap from '../../components/PixelMap'
+import MapLegend from '../../components/MapLegend'
 import { PAINT, RHQ_PAINT, colorOf } from '../../lib/territory'
 import { useOceanMask } from '../../lib/oceanMask'
 import { sortFrames, framesValid, renumberFrames } from '../../lib/campaign'
@@ -30,6 +33,7 @@ export default function MapEditor() {
   // before switching away. "Save map" always publishes the live territory
   // regardless of this; frame edits are saved separately via "Update Frame".
   const [editing, setEditing] = useState(null)
+  const [previewOpen, setPreviewOpen] = useState(false)
 
   const { cols, rows } = terr
   const oceanMask = useOceanMask(cols, rows)
@@ -104,6 +108,10 @@ export default function MapEditor() {
   }
 
   const swatches = [...PAINT, ...(terr.showRHQ ? [RHQ_PAINT] : [])]
+  // Whatever's currently on the paint canvas — the live territory, or the
+  // historical frame being repainted — so "Preview Map" always shows exactly
+  // what's under the brush right now, unsaved changes included.
+  const canvasCells = editing ? editing.cells : terr.cells
 
   return (
     <div>
@@ -111,8 +119,15 @@ export default function MapEditor() {
         <label className="row center" style={{ gap: 6, fontSize: 11 }}>
           <input type="checkbox" checked={!!terr.showRHQ} onChange={(e) => setTerr((t) => ({ ...t, showRHQ: e.target.checked }))} style={{ width: 'auto' }} /> Show RHQ on map
         </label>
+        <button className="ghost" onClick={() => setPreviewOpen(true)} title="See exactly what recruits would see on the Home page, including unsaved changes">
+          Preview Map
+        </button>
         <button className="primary" onClick={save} disabled={!!editing} title={editing ? 'Exit frame editing to save the live map' : undefined}>{saved ? 'Saved ✓' : 'Save map'}</button>
       </OpsHeader>
+
+      {previewOpen && (
+        <PreviewMapModal territory={{ ...terr, cells: canvasCells }} onClose={() => setPreviewOpen(false)} />
+      )}
 
       {editing && (
         <div className="panel panel-pad row between center wrap" style={{ gap: 10, marginBottom: 10, borderColor: 'var(--accent)', background: 'rgba(54,224,192,0.06)' }}>
@@ -155,7 +170,7 @@ export default function MapEditor() {
         <button className="danger ghost" onClick={clearAll} style={{ marginLeft: 'auto' }}>Clear all</button>
       </div>
 
-      <PixelMap territory={{ ...terr, cells: editing ? editing.cells : terr.cells }} edit brush={brush} brushSize={size} onPaint={paint} onMovePlace={movePlace} />
+      <PixelMap territory={{ ...terr, cells: canvasCells }} edit brush={brush} brushSize={size} onPaint={paint} onMovePlace={movePlace} />
 
       <CampaignPanel
         frames={state.campaignFrames}
@@ -189,6 +204,42 @@ export default function MapEditor() {
         ))}
       </div>
     </div>
+  )
+}
+
+// Read-only, full-size render of exactly what's on the paint canvas right
+// now — same PixelMap (showCompanyLabels on) + MapLegend the public Home
+// page uses at rest, fed the in-progress `terr`/`editing` state instead of
+// the saved territory slice, so RHQ can sanity-check a stroke before "Save
+// map" publishes it. Portalled to <body>: mounted from inside the sticky
+// nav rail / fixed drawer, whose stacking contexts would otherwise trap a
+// `position: fixed` modal under page content (see LoginModal for the same
+// note).
+function PreviewMapModal({ territory, onClose }) {
+  const dialogRef = useDialog(onClose)
+  return createPortal(
+    <div onClick={onClose} style={{
+      position: 'fixed', inset: 0, zIndex: 900, background: 'rgba(2,4,9,0.85)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, overflow: 'auto',
+    }}>
+      <div ref={dialogRef} className="panel panel-pad" onClick={(e) => e.stopPropagation()} role="dialog"
+        aria-modal="true" aria-label="Map preview" style={{ width: 860, maxWidth: '100%' }}>
+        <div className="row between center">
+          <h2 className="accent" style={{ margin: 0, fontSize: 17 }}>PREVIEW — WHAT RECRUITS SEE</h2>
+          <button className="ghost" onClick={onClose} aria-label="Close" style={{ padding: '4px 10px' }}>✕</button>
+        </div>
+        <div className="mono dim" style={{ fontSize: 11, margin: '8px 0 14px' }}>
+          The Home page map exactly as it would render right now — territory, place labels and derived
+          company names included — with any unsaved painting still applied. Nothing here is published;
+          close this and click “Save map” when it looks right.
+        </div>
+        <div className="col" style={{ gap: 10 }}>
+          <PixelMap territory={territory} showCompanyLabels />
+          <MapLegend showRHQ={territory.showRHQ} />
+        </div>
+      </div>
+    </div>,
+    document.body,
   )
 }
 
