@@ -43,14 +43,21 @@ export function legendCodes({ showRHQ = true } = {}) {
 // a company label on top of one just says the same thing twice.
 const AVOID_RADIUS = 10
 
+// How close (in cells) a label may sit to ANOTHER COMPANY'S label before it's
+// pushed elsewhere. Bigger than AVOID_RADIUS on purpose: a place only needs
+// its point kept clear, but a label is a run of text ("A-COY") that needs
+// real horizontal room next to a neighbour's, not just non-overlapping poles.
+const LABEL_AVOID_RADIUS = 24
+
 // Pole of inaccessibility for a membership mask, restricted to the mask's
 // largest connected component. Returns { x, y, size } in cell coordinates
 // (centre of the winning cell), or null when the mask is empty.
 //
-// `avoid` is a list of {x, y} places to keep clear of: the deepest cell that
-// isn't near one wins, and only if EVERY interior cell is near a place does
-// the label fall back to the plain deepest cell — better a slight overlap than
-// silently dropping a company's name off the map.
+// `avoid` is a list of {x, y, radius} points to keep clear of (radius default
+// AVOID_RADIUS): the deepest cell that isn't near one wins, and only if EVERY
+// interior cell is near one does the label fall back to the plain deepest
+// cell — better a slight overlap than silently dropping a company's name off
+// the map.
 function poleOfLargestComponent(mask, cols, rows, avoid = []) {
   const n = cols * rows
   const comp = new Int32Array(n).fill(-1)
@@ -95,7 +102,7 @@ function poleOfLargestComponent(mask, cols, rows, avoid = []) {
   const cx = sumX / bestSize, cy = sumY / bestSize
 
   const nearPlace = (x, y) =>
-    avoid.some((p) => Math.hypot((p.x ?? Infinity) - x, (p.y ?? Infinity) - y) < AVOID_RADIUS)
+    avoid.some((p) => Math.hypot((p.x ?? Infinity) - x, (p.y ?? Infinity) - y) < (p.radius ?? AVOID_RADIUS))
 
   // Two candidates tracked at once: the best cell clear of any place, and the
   // best cell overall as a fallback for a holding that's entirely covered.
@@ -145,13 +152,22 @@ export function companyLabelPoints(cells, cols, rows, { showRHQ = true, minCells
     m[i] = 1
   }
 
+  // Placed one company at a time in CODE_ORDER, each new label also kept
+  // clear of every label already placed — without this, companies holding
+  // adjacent or interleaved ground (the normal case at a contested border)
+  // land their poles a few cells apart and the text stacks on screen. Order
+  // therefore also acts as placement priority: earlier codes get first claim
+  // on a contested pocket, later ones are pushed off it.
+  const placeAvoid = avoid.map((p) => ({ x: p.x, y: p.y, radius: AVOID_RADIUS }))
+  const labelAvoid = []
   const out = []
   for (const code of CODE_ORDER) {
     const mask = masks.get(code)
     if (!mask) continue
-    const pole = poleOfLargestComponent(mask, cols, rows, avoid)
+    const pole = poleOfLargestComponent(mask, cols, rows, [...placeAvoid, ...labelAvoid])
     if (!pole || pole.size < minCells) continue
     out.push({ code, label: coyLabelOf(code), color: colorOf(code), x: pole.x, y: pole.y, size: pole.size })
+    labelAvoid.push({ x: pole.x, y: pole.y, radius: LABEL_AVOID_RADIUS })
   }
   return out
 }
@@ -176,15 +192,19 @@ export function mergedGainLabels(plan, cols, rows, { minCells = MIN_LABEL_CELLS 
   }
 
   const out = []
+  const labelAvoid = []
   for (const code of CODE_ORDER) {
     const mask = masks.get(code)
     if (!mask) continue
     // Threshold on the owner's TOTAL gains, not the largest blob — a company
     // that took a lot of ground in scattered pieces still earns its name.
     if ((totals.get(code) || 0) < minCells) continue
-    const pole = poleOfLargestComponent(mask, cols, rows)
+    // Same mutual avoidance as companyLabelPoints — a week's gains often
+    // cluster several companies' advances around the same contested front.
+    const pole = poleOfLargestComponent(mask, cols, rows, labelAvoid)
     if (!pole) continue
     out.push({ code, label: coyLabelOf(code), color: colorOf(code), x: pole.x, y: pole.y, size: totals.get(code) })
+    labelAvoid.push({ x: pole.x, y: pole.y, radius: LABEL_AVOID_RADIUS })
   }
   return out
 }
