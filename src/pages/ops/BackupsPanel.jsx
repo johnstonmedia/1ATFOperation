@@ -72,6 +72,28 @@ export default function BackupsPanel() {
     setTimeout(refresh, 600) // let the new backup of the replaced value land
   }
 
+  const restoreFragment = async (row, fragment) => {
+    const current = Array.isArray(state?.intel) ? state.intel : []
+    const exists = current.some((f) => f.id === fragment.id)
+    const label = fragment.title || fragment.prompt?.slice(0, 40) || fragment.id || 'this fragment'
+    const ok = await confirm({
+      title: exists ? 'Overwrite this fragment' : 'Restore this fragment',
+      message: exists
+        ? `Replace the live "${label}" fragment with this version from ${when(row.ts)}? The current version is backed up first.`
+        : `Add "${label}" back to Intercepted Intelligence, using the version saved ${when(row.ts)}?`,
+      confirmLabel: exists ? 'Overwrite' : 'Restore',
+      danger: exists,
+    })
+    if (!ok) return
+    const next = exists
+      ? current.map((f) => (f.id === fragment.id ? fragment : f))
+      : [...current, fragment]
+    await updateSlice('intel', next)
+    audit('Restored intel fragment from backup', `${label} — version from ${when(row.ts)}`)
+    push(exists ? 'Fragment overwritten' : 'Fragment restored')
+    setTimeout(refresh, 600)
+  }
+
   const remove = async (row) => {
     const ok = await confirm({
       title: 'Delete this backup',
@@ -100,6 +122,7 @@ export default function BackupsPanel() {
         current={state?.[open.slice]}
         onBack={() => setOpen(null)}
         onRestore={() => restore(open)}
+        onRestoreFragment={(fragment) => restoreFragment(open, fragment)}
       />
     )
   }
@@ -184,12 +207,13 @@ export default function BackupsPanel() {
 // A single version, side by side with what is live. Text slices show their
 // fields; the map shows its grid rendered rather than 24,000 characters of
 // letters, which would tell RHQ nothing.
-function BackupPreview({ row, current, onBack, onRestore }) {
+function BackupPreview({ row, current, onBack, onRestore, onRestoreFragment }) {
+  const isIntel = row.slice === 'intel' && Array.isArray(row.value)
   return (
     <div>
       <OpsHeader title={sliceLabel(row.slice)} sub={`BACKUP // ${when(row.ts).toUpperCase()}`}>
         <button className="ghost" onClick={onBack}>← Back to list</button>
-        <button className="primary" onClick={onRestore}>Restore this version</button>
+        <button className="primary" onClick={onRestore}>Restore whole version</button>
       </OpsHeader>
 
       <div className="panel panel-pad col" style={{ marginBottom: 14, maxWidth: 900 }}>
@@ -200,10 +224,61 @@ function BackupPreview({ row, current, onBack, onRestore }) {
         </div>
       </div>
 
+      {isIntel && (
+        <div className="panel panel-pad col" style={{ marginBottom: 14, maxWidth: 900 }}>
+          <div className="mono accent" style={{ fontSize: 10, letterSpacing: 2, marginBottom: 4 }}>
+            INDIVIDUAL FRAGMENTS
+          </div>
+          <div className="mono dim" style={{ fontSize: 11, marginBottom: 8, lineHeight: 1.6 }}>
+            Restore a single fragment without touching anything else RHQ has changed since —
+            useful when a later edit accidentally dropped just one or two.
+          </div>
+          <IntelFragmentsView backup={row.value} current={current} onRestoreItem={onRestoreFragment} />
+        </div>
+      )}
+
       <div className="panel panel-pad col" style={{ maxWidth: 900 }}>
         <div className="mono accent" style={{ fontSize: 10, letterSpacing: 2 }}>CONTENT OF THIS VERSION</div>
         <ValueView slice={row.slice} value={row.value} />
       </div>
+    </div>
+  )
+}
+
+// Per-fragment restore for the Intel backup: each fragment from this backup
+// compared against what is live now, with its own Add back / Overwrite
+// action — so losing one fragment to a later edit doesn't mean reverting
+// every fragment written since.
+function IntelFragmentsView({ backup, current, onRestoreItem }) {
+  const currentById = new Map((Array.isArray(current) ? current : []).map((f) => [f.id, f]))
+  return (
+    <div className="col" style={{ gap: 8 }}>
+      {backup.map((f) => {
+        const live = currentById.get(f.id)
+        const missing = !live
+        const identical = live && JSON.stringify(live) === JSON.stringify(f)
+        return (
+          <div key={f.id || f.title} className="row between center wrap" style={{ gap: 10, borderTop: '1px solid var(--line, rgba(255,255,255,0.08))', paddingTop: 8 }}>
+            <div style={{ minWidth: 200 }}>
+              <div className="row center wrap" style={{ gap: 8 }}>
+                <span className="tag mono" style={{ fontSize: 10 }}>{f.company || 'ALL'}</span>
+                <span className="mono" style={{ fontSize: 12 }}>{f.title || f.prompt?.slice(0, 48) || f.id || 'Untitled fragment'}</span>
+              </div>
+              <div className="mono dim" style={{ fontSize: 10, marginTop: 4 }}>
+                {missing ? 'Missing from live Intel now' : identical ? 'Identical to what is live now' : 'Differs from what is live now'}
+              </div>
+            </div>
+            <button
+              className={missing ? 'primary' : 'ghost'}
+              style={{ fontSize: 11 }}
+              disabled={identical}
+              onClick={() => onRestoreItem(f)}
+            >
+              {missing ? 'Add back' : 'Overwrite live'}
+            </button>
+          </div>
+        )
+      })}
     </div>
   )
 }

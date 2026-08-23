@@ -17,6 +17,28 @@ keep entries short and focused on what a new collaborator needs to know.
 
 ---
 
+## 2026-08-23 — Backups: restore individual Intel fragments, not just the whole slice
+Restoring an `intel` backup previously only replaced the entire live array —
+if RHQ needed back just one or two fragments that a later edit had dropped
+(e.g. an import overwriting a hand-written one), the only option was to
+revert *every* fragment to that older snapshot, discarding anything written
+since. Fine when the whole slice regressed; wrong when only a couple of
+items were lost.
+
+- Opening an Intel backup (Backups → open a version) now shows an
+  **"Individual fragments"** panel listing every fragment in that backup,
+  each tagged **Missing from live now** / **Differs from what is live now** /
+  **Identical**, with its own **Add back** / **Overwrite live** button
+  (`IntelFragmentsView`, `BackupsPanel.jsx`). Restoring one fragment merges it
+  into the *current* live `intel` array (by `id`) via the ordinary
+  `updateSlice('intel', …)` path — so it still backs up what it replaces, and
+  every other fragment written since is left untouched.
+- Whole-slice restore is unchanged and still available ("Restore whole
+  version") for when the entire snapshot is what's wanted back.
+- Scoped to `intel` specifically (the only single-value slice that's an array
+  of `{ id, … }` items) rather than generalised to every slice — nothing else
+  under `SINGLE_SLICES` has that shape today.
+
 ## 2026-08-17 — Company map labels no longer stack on each other; manual override for the rest
 `companyLabels.js` derived each company's name-label position purely from its
 own holding, with zero awareness of where any OTHER company's label landed —
