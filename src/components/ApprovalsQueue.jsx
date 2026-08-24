@@ -25,7 +25,7 @@ import { listSubmissions, deleteSubmission } from '../lib/submissions'
 const opLabel = (s, isNew) => (s.op === 'delete' ? 'REMOVAL REQUEST' : isNew ? 'NEW FRAGMENT' : 'EDIT')
 
 export default function ApprovalsQueue({ Header, intro }) {
-  const { state, updateSlice } = useData()
+  const { state, updateIntel } = useData()
   const confirm = useConfirm()
   const audit = useAudit()
   const [subs, setSubs] = useState([])
@@ -52,17 +52,19 @@ export default function ApprovalsQueue({ Header, intro }) {
   const pending = subs.filter((s) => s.status === 'pending')
 
   // Publish a submission's fragment to the live intel slice, then clear it.
+  // Merges against whatever is live at the moment of writing (updateIntel),
+  // not this screen's possibly-stale `intel` — RHQ commonly has more than
+  // one Approvals window open, and a plain array-replace here is exactly
+  // what used to let two concurrent approvals silently overwrite each other.
   const publish = async (sub, fragmentOverride) => {
     const frag = { ...(fragmentOverride || sub.fragment), company: sub.company }
-    let next
-    if (sub.op === 'delete') {
-      next = intel.filter((x) => x.id !== frag.id)
-    } else {
-      next = intel.some((x) => x.id === frag.id)
-        ? intel.map((x) => (x.id === frag.id ? frag : x))
-        : [...intel, frag]
-    }
-    await updateSlice('intel', next)
+    await updateIntel((current) => (
+      sub.op === 'delete'
+        ? current.filter((x) => x.id !== frag.id)
+        : current.some((x) => x.id === frag.id)
+          ? current.map((x) => (x.id === frag.id ? frag : x))
+          : [...current, frag]
+    ))
     await deleteSubmission(sub.id)
     audit(
       sub.op === 'delete' ? 'Removed intel (approved)' : 'Published intel (approved)',
