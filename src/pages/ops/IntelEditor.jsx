@@ -15,7 +15,7 @@ const audLabel = (code) => (code === 'ALL' ? 'Unit-wide (RHQ)' : PHONETIC[code] 
 
 // RHQ / COY manage the decryptable intel fragments cadets see per company.
 export default function IntelEditor() {
-  const { state, updateSlice } = useData()
+  const { state, updateIntel } = useData()
   const confirm = useConfirm()
   const audit = useAudit()
   const [editing, setEditing] = useState(null)
@@ -23,16 +23,20 @@ export default function IntelEditor() {
   const intel = state.intel || []
   const blank = () => ({ id: rid(), company: 'A', title: '', prompt: '', answer: '', hint: '', reveal: '', resources: [], docUrl: '', ts: Date.now() })
 
+  // updateIntel merges against whatever is live at write time rather than
+  // this screen's `intel` snapshot, so an edit here can't silently clobber a
+  // fragment an Approvals window or another RHQ tab added/changed meanwhile.
   const upsert = (f) => {
-    const exists = intel.some((x) => x.id === f.id)
-    updateSlice('intel', exists ? intel.map((x) => (x.id === f.id ? f : x)) : [...intel, f])
+    updateIntel((current) => (
+      current.some((x) => x.id === f.id) ? current.map((x) => (x.id === f.id ? f : x)) : [...current, f]
+    ))
     audit('Saved intel fragment', `${audLabel(f.company)}: “${f.title || 'untitled'}”`)
     setEditing(null)
   }
   const remove = async (id) => {
     const f = intel.find((x) => x.id === id)
     if (!(await confirm({ title: 'Delete intel', message: `Delete “${f?.title || 'this fragment'}”?`, danger: true, confirmLabel: 'Delete' }))) return
-    updateSlice('intel', intel.filter((x) => x.id !== id))
+    updateIntel((current) => current.filter((x) => x.id !== id))
   }
 
   if (editing) return <Builder fragment={editing} onCancel={() => setEditing(null)} onSave={upsert} />

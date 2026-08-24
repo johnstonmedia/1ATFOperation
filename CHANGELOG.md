@@ -17,6 +17,43 @@ keep entries short and focused on what a new collaborator needs to know.
 
 ---
 
+## 2026-08-24 — Fixed: concurrent intel approvals/edits could silently overwrite each other
+Root-caused reported data loss ("approved different intel fragments in two
+windows, then some disappeared"). `intel` is loaded once into each tab's React
+state on page open with no live listener, and every add/edit/delete path —
+Approvals' `publish`, the ops Intel editor, and the fragment-restore added
+above — computed its new array from that tab's own copy and then did a blind
+`setDoc` overwrite of the whole `content/intel` document. Two RHQ windows
+approving *different* submissions around the same time each held a
+now-stale copy of the array; whichever save landed second silently wiped out
+whatever the other had just added, with no merge and no error. This is the
+one slice where several independent single-fragment write paths plausibly run
+concurrently in separate windows — everything else (map, narrative text,
+branding) is realistically edited by one screen at a time.
+
+- Added `mutateIntel(mutate)` in `src/lib/store.js`: a Firestore
+  `runTransaction` that reads the array fresh at write time, hands it to
+  `mutate`, and writes the result back atomically (LOCAL MODE re-reads
+  localStorage fresh instead, for the same-device multi-tab case). Two
+  concurrent single-fragment writes now serialise and merge instead of one
+  clobbering the other.
+- Added `DataContext.updateIntel(mutate)`, wrapping `mutateIntel` with the
+  existing backup-on-replace and React-state-sync behaviour `updateSlice` already
+  had. `ApprovalsQueue.publish`, `IntelEditor`'s upsert/remove, and
+  `BackupsPanel`'s per-fragment restore now all go through this instead of
+  `updateSlice('intel', wholeArrayComputedFromStaleState)`.
+- Nothing else changed: whole-slice operations (the "Restore whole version"
+  button, everything on every other content slice) still use plain
+  `updateSlice` — a full-array replace is the deliberate intent there, not a
+  bug to route around.
+- Not covered by this fix: two people hand-editing the exact same fragment's
+  fields at the same time will still have one edit win outright (last write,
+  same as before) — the transaction only protects against two DIFFERENT
+  fragments/ops colliding, which is what was actually reported and is the
+  realistic case (Approvals is inherently one-fragment-per-action). A true
+  field-level merge for simultaneous edits of one fragment was judged not
+  worth the complexity.
+
 ## 2026-08-23 — Backups: restore individual Intel fragments, not just the whole slice
 Restoring an `intel` backup previously only replaced the entire live array —
 if RHQ needed back just one or two fragments that a later edit had dropped

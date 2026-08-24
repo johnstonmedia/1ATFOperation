@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react'
-import { loadState, persistSlice, appendItem, stashPending, flushPending, makeId, isContentSlice } from '../lib/store'
+import { loadState, persistSlice, appendItem, stashPending, flushPending, makeId, isContentSlice, mutateIntel } from '../lib/store'
 import { recordBackup } from '../lib/backups'
 import { classify, buildReport } from '../lib/errors'
 import { notifyAdmin } from '../lib/notify'
@@ -56,6 +56,24 @@ export function DataProvider({ children }) {
       persistSlice(next, slice)
       return next
     })
+  }, [])
+
+  // Add/edit/remove ONE intel fragment against whatever is live right now,
+  // not against this tab's possibly-stale copy of the whole array — see
+  // lib/store.js mutateIntel for why that matters. `mutate` receives the
+  // fresh array and returns the new one; used by Approvals, the Intel
+  // editor and the Backups per-fragment restore instead of `updateSlice`.
+  const updateIntel = useCallback(async (mutate) => {
+    const { prev, next } = await mutateIntel(mutate)
+    if (JSON.stringify(prev) !== JSON.stringify(next)) {
+      recordBackup({ slice: 'intel', value: prev, ...actorRef.current })
+    }
+    setState((p) => {
+      const merged = { ...p, intel: next, contentMeta: { ...p.contentMeta, intel: { updatedAt: Date.now() } } }
+      stateRef.current = merged
+      return merged
+    })
+    return next
   }, [])
 
   // Append an immutable audit entry (RHQ actions). Best-effort: never blocks the
@@ -125,6 +143,6 @@ export function DataProvider({ children }) {
     return info
   }, [append])
 
-  const value = { state, loading, updateSlice, replaceRoster, append, reportError, reload, makeId, logAudit, setBackupActor }
+  const value = { state, loading, updateSlice, updateIntel, replaceRoster, append, reportError, reload, makeId, logAudit, setBackupActor }
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>
 }

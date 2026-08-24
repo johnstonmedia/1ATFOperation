@@ -23,7 +23,7 @@ const when = (t) => (t ? new Date(t).toLocaleString() : '—')
 const BACKED_UP_SLICES = Object.keys(SLICE_LABELS)
 
 export default function BackupsPanel() {
-  const { state, updateSlice } = useData()
+  const { state, updateSlice, updateIntel } = useData()
   const confirm = useConfirm()
   const { push } = useToast()
   const audit = useAudit()
@@ -73,8 +73,10 @@ export default function BackupsPanel() {
   }
 
   const restoreFragment = async (row, fragment) => {
-    const current = Array.isArray(state?.intel) ? state.intel : []
-    const exists = current.some((f) => f.id === fragment.id)
+    // Only used to word the confirm dialog — the actual merge below reads the
+    // array fresh via updateIntel, so a stale `exists` here can't lose data,
+    // just occasionally show "Restore" for what turns out to be an overwrite.
+    const exists = (Array.isArray(state?.intel) ? state.intel : []).some((f) => f.id === fragment.id)
     const label = fragment.title || fragment.prompt?.slice(0, 40) || fragment.id || 'this fragment'
     const ok = await confirm({
       title: exists ? 'Overwrite this fragment' : 'Restore this fragment',
@@ -85,10 +87,11 @@ export default function BackupsPanel() {
       danger: exists,
     })
     if (!ok) return
-    const next = exists
-      ? current.map((f) => (f.id === fragment.id ? fragment : f))
-      : [...current, fragment]
-    await updateSlice('intel', next)
+    await updateIntel((current) => (
+      current.some((f) => f.id === fragment.id)
+        ? current.map((f) => (f.id === fragment.id ? fragment : f))
+        : [...current, fragment]
+    ))
     audit('Restored intel fragment from backup', `${label} — version from ${when(row.ts)}`)
     push(exists ? 'Fragment overwritten' : 'Fragment restored')
     setTimeout(refresh, 600)

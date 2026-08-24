@@ -109,6 +109,43 @@ async function saveFirebaseSlice(slice, value) {
   await setDoc(doc(db, 'content', slice), { value, updatedAt: Date.now() })
 }
 
+// Atomically apply a change to the live `intel` array.
+//
+// Every other content slice is realistically edited by one RHQ screen at a
+// time. `intel` isn't: Approvals, the Intel editor and the Backups fragment
+// restore can all add/edit/remove ONE fragment, and RHQ commonly has more
+// than one of those open in separate windows/tabs at once (that's the whole
+// point of a queue). Each window's copy of `intel` is loaded once and never
+// refreshed, so a plain `updateSlice('intel', arrayBuiltFromThatCopy)` blindly
+// overwrites the whole document — whichever save lands second wins outright,
+// silently discarding any fragment the other window(s) added/changed since
+// its own load. `mutate` is handed the array as read FRESH at write time (a
+// Firestore transaction; a synchronous localStorage re-read in LOCAL MODE),
+// not the caller's stale copy, so two concurrent single-fragment edits merge
+// instead of one clobbering the other.
+export async function mutateIntel(mutate) {
+  if (!FIREBASE_ENABLED) {
+    const state = loadLocal()
+    const prev = Array.isArray(state.intel) ? state.intel : []
+    const next = mutate(prev)
+    state.intel = next
+    saveLocal(state)
+    return { prev, next }
+  }
+  const { doc, runTransaction } = await import('firebase/firestore')
+  const ref = doc(db, 'content', 'intel')
+  let prev = []
+  let next = []
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref)
+    const live = snap.exists() ? snap.data().value : []
+    prev = Array.isArray(live) ? live : []
+    next = mutate(prev)
+    tx.set(ref, { value: next, updatedAt: Date.now() })
+  })
+  return { prev, next }
+}
+
 async function persistCollection(coll, rows) {
   const { collection, getDocs, writeBatch, doc } = await import('firebase/firestore')
   const idOf = (r) => String(r._id || r.id)
