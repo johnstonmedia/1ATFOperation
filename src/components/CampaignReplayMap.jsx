@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import PixelMap from './PixelMap'
 import MapLegend from './MapLegend'
-import { framesValid, frameCells, frameCaptions, sortFrames, transitionPlan, transitionDuration } from '../lib/campaign'
+import { framesValid, frameCells, frameCaptions, frameUsesLabelOverrides, sortFrames, transitionPlan, transitionDuration } from '../lib/campaign'
 import { renderWaveLayer } from '../lib/terrainRender'
 
 // Campaign replay wrapper around PixelMap. On load it auto-plays the
@@ -76,6 +76,13 @@ export default function CampaignReplayMap({ territory, frames: campaignFrames, d
     [campaignFrames, cols, rows],
   )
 
+  // Per-frame "use RHQ's manually-dragged company label positions" flag,
+  // aligned 1:1 with `frames`/`frameMeta` below — see frameUsesLabelOverrides.
+  const labelFlags = useMemo(
+    () => (framesValid(campaignFrames, cols, rows) ? frameUsesLabelOverrides(campaignFrames) : []),
+    [campaignFrames, cols, rows],
+  )
+
   // Per-frame id + label for the manual picker — includes frame 0's own
   // label (frameCaptions deliberately drops it, since it has no TRANSITION
   // caption). Index i here lines up 1:1 with frames[i].
@@ -108,18 +115,23 @@ export default function CampaignReplayMap({ territory, frames: campaignFrames, d
       frames={frames}
       captions={captions}
       frameMeta={frameMeta}
+      labelFlags={labelFlags}
       startIdx={startIdx}
       maxWidth={maxWidth}
     />
   )
 }
 
-function Replay({ territory, frames, captions, frameMeta, startIdx, maxWidth }) {
+function Replay({ territory, frames, captions, frameMeta, labelFlags, startIdx, maxWidth }) {
   const { cols, rows } = territory
   const transitions = frames.length - 1
   const perMs = useMemo(() => transitionDuration(transitions), [transitions])
 
-  const [committed, setCommitted] = useState(frames[frames.length - 1])
+  // Index into `frames`/`labelFlags` of what's actually committed to
+  // PixelMap right now — tracked as an index (not just the cell string) so
+  // the currently-showing frame's label-override flag can be looked up at
+  // render time.
+  const [committedIdx, setCommittedIdx] = useState(frames.length - 1)
   const [playing, setPlaying] = useState(false)
   const [labels, setLabels] = useState([]) // conquest name flashes
   const [moveIdx, setMoveIdx] = useState(-1) // transition being played (-1 = at rest)
@@ -142,8 +154,8 @@ function Replay({ territory, frames, captions, frameMeta, startIdx, maxWidth }) 
 
   const commitFrame = useCallback((idx) => {
     eng.current.committedIdx = idx
-    setCommitted(frames[idx])
-  }, [frames])
+    setCommittedIdx(idx)
+  }, [])
 
   // Rest on a specific frame index — an instant cut, no animation. This is
   // what a bubble click does, and where playback lands when it finishes.
@@ -265,6 +277,11 @@ function Replay({ territory, frames, captions, frameMeta, startIdx, maxWidth }) 
     return frameMeta[i]?.label || (i === 0 ? 'Campaign baseline' : `Frame ${i + 1}`)
   }, [frameMeta])
 
+  // Only borrow RHQ's manually-dragged company label positions for a frame
+  // that explicitly opted in — every other frame places names automatically,
+  // regardless of what's set for the live map / other frames.
+  const activeLabelOverrides = labelFlags[committedIdx] ? (territory.labelOverrides || {}) : {}
+
   const caption = moveIdx >= 0 ? (captions[moveIdx] || '') : ''
   // At rest anywhere other than the live state, name the frame on screen so a
   // visitor who clicked a bubble knows what they're looking at.
@@ -293,7 +310,7 @@ function Replay({ territory, frames, captions, frameMeta, startIdx, maxWidth }) 
   return (
     <div className="col" style={{ gap: 10 }}>
       <PixelMap
-        territory={{ ...territory, cells: committed }}
+        territory={{ ...territory, cells: frames[committedIdx], labelOverrides: activeLabelOverrides }}
         maxWidth={maxWidth}
         overlay={overlay}
         showCompanyLabels

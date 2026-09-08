@@ -332,6 +332,18 @@ assuming a page exists).
   returns the full fixed roster, NOT whoever currently holds ground, so it
   never reshuffles or drops rows as the replay animates. RHQ is the one
   conditional entry (hidden when `showRHQ` is off, since it isn't drawn then).
+  Manually-dragged label positions (`territory.labelOverrides`, set via
+  MapEditor's "Arrange company labels manually") are **one global set of
+  coordinates, not one per frame** — deliberately, per "No need to add more
+  than one storage". Whether a given campaign frame actually USES them is a
+  separate per-frame flag, `campaignFrames[].useLabelOverrides` (2026-09-08,
+  a "Manual labels" checkbox on each frame row in Map: Territory's Campaign
+  replay panel; see `frameUsesLabelOverrides()` in
+  [src/lib/campaign.js](src/lib/campaign.js) and `CampaignReplayMap.jsx`,
+  which zeroes out `labelOverrides` for any committed frame that hasn't
+  opted in). Unchecked (the default) — a frame always places labels
+  automatically. Before this flag existed, dragging a label into place bled
+  into every frame of the public replay, not just the one it was fixed for.
 - **Campaign replay** (v2.3, 2026-08-04; v2.4, 2026-08-17): every frame is its
   OWN Firestore document in the `campaignFrames` collection —
   `{ id, order, cells, label, ts, updatedAt }`, a full grid snapshot, not a

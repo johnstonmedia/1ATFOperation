@@ -45,6 +45,18 @@ export function frameCaptions(frames) {
   return sortFrames(frames).slice(1).map((f) => f.label || '')
 }
 
+// Whether each frame, in order, should apply RHQ's manually-dragged company
+// label positions (`territory.labelOverrides` — see MapEditor's "Arrange
+// company labels" mode). There's only ONE set of override coordinates, not
+// one per frame; this just says which frames borrow them. Left unset (the
+// default), a frame always places company names automatically
+// (companyLabels.js) — so dragging a label into place for one frame doesn't
+// silently drag it in every other frame of the replay too, which is what
+// happened before this flag existed. Aligned with frameCells()/frameCaptions().
+export function frameUsesLabelOverrides(frames) {
+  return sortFrames(frames).map((f) => !!f.useLabelOverrides)
+}
+
 /* --------------------------- replay transitions -------------------------- */
 
 // Owner-code -> display label for the conquest flash.

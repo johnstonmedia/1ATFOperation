@@ -398,6 +398,18 @@ function CampaignPanel({
     audit('Relabelled campaign frame', `frame ${i + 1}`)
   }
 
+  // Whether this ONE frame borrows the current manually-dragged company
+  // label positions (terr.labelOverrides, set above via "Arrange company
+  // labels manually") instead of placing names automatically. There's only
+  // one set of dragged coordinates — this just decides which frames use it,
+  // so fixing a label for one historical frame doesn't drag it out of place
+  // on every other frame of the replay too.
+  const toggleLabelOverrides = (i) => {
+    const next = sorted.map((f, k) => (k === i ? { ...f, useLabelOverrides: !f.useLabelOverrides, updatedAt: Date.now() } : f))
+    updateSlice('campaignFrames', next)
+    audit(sorted[i].useLabelOverrides ? 'Disabled manual company labels on campaign frame' : 'Enabled manual company labels on campaign frame', `frame ${i + 1}`)
+  }
+
   const move = (i, dir) => {
     const j = i + dir
     if (j < 0 || j >= sorted.length) return
@@ -577,6 +589,7 @@ function CampaignPanel({
               onDelete={() => del(i)}
               onRelabel={(label) => relabel(i, label)}
               onSetDefaultStart={() => setDefaultStart(f.id)}
+              onToggleLabelOverrides={() => toggleLabelOverrides(i)}
             />
           ))}
         </div>
@@ -595,7 +608,7 @@ function CampaignPanel({
 // One frame row. Keeps its own local label text so typing doesn't fire a
 // Firestore write per keystroke — the label only commits (onRelabel) when
 // the field loses focus or Enter is pressed, and only if it actually changed.
-function FrameRow({ f, index, isFirst, isLast, isEditing, isDefaultStart, hasDraft, onMove, onEdit, onDuplicate, onDelete, onRelabel, onSetDefaultStart }) {
+function FrameRow({ f, index, isFirst, isLast, isEditing, isDefaultStart, hasDraft, onMove, onEdit, onDuplicate, onDelete, onRelabel, onSetDefaultStart, onToggleLabelOverrides }) {
   const [label, setLabel] = useState(f.label || '')
   useEffect(() => { setLabel(f.label || '') }, [f.label])
   const commit = () => { if (label !== (f.label || '')) onRelabel(label) }
@@ -615,6 +628,11 @@ function FrameRow({ f, index, isFirst, isLast, isEditing, isDefaultStart, hasDra
       />
       {isDefaultStart && <span className="tag" style={{ fontSize: 9, flex: '0 0 auto', color: 'var(--accent)', borderColor: 'var(--accent)' }}>DEFAULT START</span>}
       {hasDraft && <span className="tag mono" style={{ fontSize: 9, flex: '0 0 auto', color: 'var(--accent)', borderColor: 'var(--accent)' }} title="Repainted but not yet published — the site still shows the old version">● UNPUBLISHED</span>}
+      <label className="row center" style={{ gap: 4, flex: '0 0 auto' }}
+        title="When checked, this frame shows company labels at the positions dragged in “Arrange company labels manually” above. Unchecked (default), this frame always places labels automatically — a manual position only ever applies to the frames it's turned on for.">
+        <input type="checkbox" checked={!!f.useLabelOverrides} onChange={onToggleLabelOverrides} style={{ width: 'auto' }} />
+        <span className="mono dim" style={{ fontSize: 10 }}>Manual labels</span>
+      </label>
       <span className="mono dim" style={{ fontSize: 10, flex: '0 0 auto' }}>{new Date(f.ts).toLocaleDateString()}</span>
       <div className="row" style={{ gap: 4, flex: '0 0 auto' }}>
         <button className="ghost" style={{ padding: '3px 8px' }} onClick={() => onMove(-1)} disabled={isFirst} title="Move earlier">↑</button>

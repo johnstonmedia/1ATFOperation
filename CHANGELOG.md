@@ -17,6 +17,35 @@ keep entries short and focused on what a new collaborator needs to know.
 
 ---
 
+## 2026-09-08 — Fixed: manually-dragged company label positions bled into every campaign replay frame
+Reported: fixing a company name's on-map position (MapEditor's "Arrange
+company labels manually", stored in `territory.labelOverrides`) was meant to
+be a one-off escape hatch for a single tight/contested spot, but since
+`CampaignReplayMap` spread the whole live `territory` object (overrides
+included) onto every committed frame, the dragged position applied to the
+*entire* replay history, not just the frame it was fixed for.
+
+- Added `campaignFrames[].useLabelOverrides`: a boolean per frame, default
+  unset (= automatic placement). Deliberately only ONE new field — the
+  dragged coordinates themselves stay the single existing
+  `territory.labelOverrides` store; this just decides which frames borrow
+  them. See `frameUsesLabelOverrides()` in
+  [src/lib/campaign.js](src/lib/campaign.js).
+- `CampaignReplayMap.jsx` now tracks which frame index is actually committed
+  to `PixelMap` (`committedIdx`, replacing the old `committed` cells-only
+  state) and looks up that frame's flag each render, passing
+  `labelOverrides: {}` to `PixelMap` for any frame that hasn't opted in.
+- Added a "Manual labels" checkbox to each frame row in Map: Territory's
+  Campaign replay panel ([MapEditor.jsx](src/pages/ops/MapEditor.jsx)),
+  writing straight to `campaignFrames` like the existing relabel/reorder
+  actions (not staged behind "Publish frame changes" — same immediacy as
+  "Set as Default Start").
+- Not touched: the live map / ops preview always applies
+  `territory.labelOverrides` as before (there's no frame concept there to
+  gate on) — this only affects the public/Staff Centre campaign replay.
+- Pushed to `claude/map-label-frame-toggle-mgerph` for review before merging
+  to `main`.
+
 ## 2026-08-24 — Fixed: concurrent intel approvals/edits could silently overwrite each other
 Root-caused reported data loss ("approved different intel fragments in two
 windows, then some disappeared"). `intel` is loaded once into each tab's React
