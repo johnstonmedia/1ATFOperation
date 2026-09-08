@@ -332,6 +332,20 @@ assuming a page exists).
   returns the full fixed roster, NOT whoever currently holds ground, so it
   never reshuffles or drops rows as the replay animates. RHQ is the one
   conditional entry (hidden when `showRHQ` is off, since it isn't drawn then).
+  RHQ can override a company's derived position by dragging it in Map:
+  Territory's **"Arrange company labels manually"** mode
+  (`territory.labelOverrides`, `{ [code]: { x, y, setAt } }`) — meant as a
+  human-in-the-loop fix for a tight multi-way contested cluster the automatic
+  placement can't separate on its own, not a permanent alternate layout.
+  **An override auto-expires one week after `setAt`**
+  (`LABEL_OVERRIDE_TTL_MS`/`activeLabelOverrides()` in companyLabels.js,
+  checked inside `companyLabelPoints()` itself so every caller — the public
+  map, Staff Centre, both exports, and the editor's own arrange-mode preview
+  — gets the reversion for free with no per-caller change); re-dragging an
+  active override restarts its week. RHQ can still reset one (or all) to
+  automatic sooner from the panel. An override stored without a `setAt`
+  (nothing before this feature predates the expiry) is treated as already
+  expired rather than permanent.
 - **Campaign replay** (v2.3, 2026-08-04; v2.4, 2026-08-17): every frame is its
   OWN Firestore document in the `campaignFrames` collection —
   `{ id, order, cells, label, ts, updatedAt }`, a full grid snapshot, not a

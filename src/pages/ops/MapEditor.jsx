@@ -9,6 +9,7 @@ import { OpsHeader, useSaved } from './OperationsCentre'
 import PixelMap from '../../components/PixelMap'
 import MapLegend from '../../components/MapLegend'
 import { PAINT, RHQ_PAINT, colorOf, coyLabelOf } from '../../lib/territory'
+import { LABEL_OVERRIDE_TTL_MS, activeLabelOverrides } from '../../lib/companyLabels'
 import { useOceanMask } from '../../lib/oceanMask'
 import { sortFrames, framesValid, renumberFrames } from '../../lib/campaign'
 import { exportCampaignReplay, exportProgressImage, exportSupported, downloadBlob, defaultProgressTitle } from '../../lib/replayExport'
@@ -84,7 +85,11 @@ export default function MapEditor() {
     else setTerr((t) => ({ ...t, cells: brushOver(t.cells, points, code, sz) }))
   }
   const movePlace = (id, x, y) => setTerr((t) => ({ ...t, places: t.places.map((p) => (p.id === id ? { ...p, x, y } : p)) }))
-  const moveCompanyLabel = (code, x, y) => setTerr((t) => ({ ...t, labelOverrides: { ...t.labelOverrides, [code]: { x, y } } }))
+  // setAt stamps when this drag happened — it's what lets a manual position
+  // expire back to automatic one week later (companyLabels.js) with no
+  // further RHQ action. Re-dragging an already-overridden label restarts its
+  // week from the new drag, same as fine-tuning a fresh one.
+  const moveCompanyLabel = (code, x, y) => setTerr((t) => ({ ...t, labelOverrides: { ...t.labelOverrides, [code]: { x, y, setAt: Date.now() } } }))
   const resetCompanyLabel = (code) => setTerr((t) => {
     const next = { ...t.labelOverrides }
     delete next[code]
@@ -268,13 +273,27 @@ export default function MapEditor() {
               All company labels are placed automatically. Drag a label on the map above to fix its position here.
             </div>
           )}
-          {Object.keys(terr.labelOverrides).map((code) => (
-            <div key={code} className="row center wrap" style={{ gap: 8 }}>
-              <span className="tag mono" style={{ fontSize: 11, color: colorOf(code), borderColor: colorOf(code) }}>{coyLabelOf(code)}</span>
-              <span className="mono dim" style={{ fontSize: 10 }}>manually positioned — drag it again to fine-tune</span>
-              <button className="ghost" style={{ marginLeft: 'auto' }} onClick={() => resetCompanyLabel(code)}>Reset to automatic</button>
-            </div>
-          ))}
+          {/* A manual position is only good for a week (see companyLabels.js)
+              — this list shows the same "active" check the map itself uses,
+              so a row whose week has run out reads as already-reverted
+              rather than implying it's still steering the live map. */}
+          {Object.entries(terr.labelOverrides).map(([code, entry]) => {
+            const isActive = !!activeLabelOverrides({ [code]: entry })[code]
+            const daysLeft = isActive ? Math.max(1, Math.ceil((entry.setAt + LABEL_OVERRIDE_TTL_MS - Date.now()) / (24 * 60 * 60 * 1000))) : 0
+            return (
+              <div key={code} className="row center wrap" style={{ gap: 8 }}>
+                <span className="tag mono" style={{ fontSize: 11, color: colorOf(code), borderColor: colorOf(code) }}>{coyLabelOf(code)}</span>
+                <span className="mono dim" style={{ fontSize: 10 }}>
+                  {isActive
+                    ? `manually positioned — reverts to automatic in ${daysLeft} day${daysLeft === 1 ? '' : 's'}`
+                    : 'expired — already back to automatic placement'}
+                </span>
+                <button className="ghost" style={{ marginLeft: 'auto' }} onClick={() => resetCompanyLabel(code)}>
+                  {isActive ? 'Reset to automatic now' : 'Clear'}
+                </button>
+              </div>
+            )
+          })}
         </div>
       )}
     </div>

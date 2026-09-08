@@ -132,20 +132,48 @@ function poleOfLargestComponent(mask, cols, rows, avoid = []) {
   return { x: (win % cols) + 0.5, y: ((win / cols) | 0) + 0.5, size: bestSize }
 }
 
+// A manually-dragged label position is a temporary correction, not a
+// permanent departure from the derived placement — see companyLabelPoints.
+// After this long it's ignored and the company falls back to automatic
+// placement on its own, with no RHQ action needed.
+export const LABEL_OVERRIDE_TTL_MS = 7 * 24 * 60 * 60 * 1000
+
+// Filters `territory.labelOverrides` down to the entries still within their
+// one-week window. An entry with no `setAt` predates this expiry (nothing
+// before it ever stamped a time) and is treated as already expired rather
+// than permanent — an override this code can't date is not one it can
+// promise to keep honouring, and letting it revert to automatic is the safe
+// default rather than a silent forever-override. `now` is a param purely so
+// callers/tests can pass a fixed clock; real callers omit it.
+export function activeLabelOverrides(overrides, now = Date.now()) {
+  if (!overrides) return {}
+  const out = {}
+  for (const [code, entry] of Object.entries(overrides)) {
+    if (entry && typeof entry.setAt === 'number' && now - entry.setAt < LABEL_OVERRIDE_TTL_MS) {
+      out[code] = entry
+    }
+  }
+  return out
+}
+
 // One name label per owner present on the grid.
 // Returns [{ code, label, color, x, y, size }] in cell coordinates.
 // `avoid` is `territory.places` — see poleOfLargestComponent. `overrides` is
-// `territory.labelOverrides` — { [code]: {x, y} } — RHQ's manually-dragged
-// positions (see MapEditor's "Arrange company labels" mode): a company with
-// an override skips the derived pole entirely and renders at the chosen spot
-// instead, but still counts toward `minCells` (holding nothing still hides
-// the label) and still feeds `labelAvoid` so later, still-automatic
-// companies steer clear of it. Automatic placement can't always separate a
-// tight multi-way contested cluster on its own — see CHANGELOG — so this is
-// the deliberate human-in-the-loop escape hatch, not a replacement for it.
+// `territory.labelOverrides` — { [code]: {x, y, setAt} } — RHQ's
+// manually-dragged positions (see MapEditor's "Arrange company labels"
+// mode): a company with a still-active override (see activeLabelOverrides —
+// expires one week after `setAt`) skips the derived pole entirely and
+// renders at the chosen spot instead, but still counts toward `minCells`
+// (holding nothing still hides the label) and still feeds `labelAvoid` so
+// later, still-automatic companies steer clear of it. Automatic placement
+// can't always separate a tight multi-way contested cluster on its own —
+// see CHANGELOG — so this is the deliberate human-in-the-loop escape hatch,
+// not a replacement for it; the expiry is what keeps it a temporary nudge
+// rather than a fork from the derived layout that quietly drifts forever.
 export function companyLabelPoints(cells, cols, rows, { showRHQ = true, minCells = MIN_LABEL_CELLS, avoid = [], overrides = {} } = {}) {
   if (!cells || cells.length !== cols * rows) return []
   const n = cells.length
+  const active = activeLabelOverrides(overrides)
 
   // Bucket every cell by its base (uppercase) owner code in one pass; the
   // light "contested" variant belongs to the same company as the solid one.
@@ -174,7 +202,7 @@ export function companyLabelPoints(cells, cols, rows, { showRHQ = true, minCells
     if (!mask) continue
     const pole = poleOfLargestComponent(mask, cols, rows, [...placeAvoid, ...labelAvoid])
     if (!pole || pole.size < minCells) continue
-    const manual = overrides[code]
+    const manual = active[code]
     const x = manual ? manual.x : pole.x
     const y = manual ? manual.y : pole.y
     out.push({ code, label: coyLabelOf(code), color: colorOf(code), x, y, size: pole.size })

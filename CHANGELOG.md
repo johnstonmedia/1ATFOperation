@@ -17,6 +17,39 @@ keep entries short and focused on what a new collaborator needs to know.
 
 ---
 
+## 2026-09-08 — Manual company-label positions now auto-expire after one week
+- Map: Territory's "Arrange company labels manually" override
+  (`territory.labelOverrides`) was permanent until manually reset — a fix
+  for a tight multi-way contested cluster the automatic pole-of-inaccessibility
+  placement can't separate on its own, but with nothing pulling it back once
+  the cluster resolved itself. Requested change: a manual position should
+  only hold for one week, then fall back to automatic on its own.
+- `labelOverrides` entries now carry a `setAt` timestamp (stamped by
+  `MapEditor.moveCompanyLabel` on every drag, including re-dragging an
+  already-overridden label, which restarts its week from the new drag).
+  `src/lib/companyLabels.js` adds `LABEL_OVERRIDE_TTL_MS` (7 days) and
+  `activeLabelOverrides(overrides, now)`, which filters out anything past
+  its week — or missing `setAt` entirely, which is treated as already
+  expired rather than grandfathered in as permanent, since nothing before
+  this feature stamped a time.
+- The filtering lives **inside `companyLabelPoints()` itself**, not in each
+  caller, so the public map, Staff Centre, both canvas exports
+  (`replayExport.js`), and the ops editor's own "Arrange company labels"
+  preview all get the reversion for free — same one-hook shape as the
+  Backups capture hook. No caller needed a change beyond `MapEditor`
+  stamping `setAt`.
+- The "Company label positions" panel in `MapEditor.jsx` now shows, per
+  override, either "reverts to automatic in N days" or "expired — already
+  back to automatic placement" (computed with the same `activeLabelOverrides`
+  check the map itself uses, so the panel can't claim a row is still live
+  when it isn't) — RHQ can still reset one/all to automatic sooner from the
+  same panel.
+- ⚠️ Any pre-existing override saved before this change has no `setAt` and
+  therefore reads as already expired — it'll revert to automatic placement
+  as soon as this deploys, rather than silently running for another week
+  under a made-up grandfathered timestamp. RHQ can just re-drag it if the
+  manual position is still wanted.
+
 ## 2026-08-24 — Fixed: concurrent intel approvals/edits could silently overwrite each other
 Root-caused reported data loss ("approved different intel fragments in two
 windows, then some disappeared"). `intel` is loaded once into each tab's React

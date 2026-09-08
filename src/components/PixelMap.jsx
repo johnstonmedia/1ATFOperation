@@ -37,7 +37,9 @@ export default function PixelMap({
   onMovePlace,
   onMoveCompanyLabel, // (code, x, y) — when provided, derived company-name
            // labels become draggable (see MapEditor's "Arrange company
-           // labels" mode); positions are stored in territory.labelOverrides.
+           // labels" mode); positions are stored in territory.labelOverrides
+           // and expire back to automatic placement one week after being set
+           // (see companyLabels.js's activeLabelOverrides).
   maxWidth,
   overlay, // optional node rendered inside the zoom/pan stage, above the
            // territory canvas — used by the campaign replay to keep its wave
