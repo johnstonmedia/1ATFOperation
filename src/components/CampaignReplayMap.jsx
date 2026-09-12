@@ -3,6 +3,7 @@ import PixelMap from './PixelMap'
 import MapLegend from './MapLegend'
 import { framesValid, frameCells, frameCaptions, frameUsesLabelOverrides, sortFrames, transitionPlan, transitionDuration } from '../lib/campaign'
 import { renderWaveLayer } from '../lib/terrainRender'
+import { mapFor } from '../lib/maps'
 
 // Campaign replay wrapper around PixelMap. On load it auto-plays the
 // campaign history — from RHQ's chosen default start frame (or the earliest
@@ -105,7 +106,7 @@ export default function CampaignReplayMap({ territory, frames: campaignFrames, d
     return (
       <div className="col" style={{ gap: 10 }}>
         <PixelMap territory={territory} maxWidth={maxWidth} showCompanyLabels />
-        <MapLegend showRHQ={territory.showRHQ} />
+        <MapLegend showRHQ={territory.showRHQ} map={mapFor(territory)} />
       </div>
     )
   }
@@ -337,7 +338,7 @@ function Replay({ territory, frames, captions, frameMeta, labelFlags, startIdx, 
         />
       </div>
 
-      <MapLegend showRHQ={territory.showRHQ} />
+      <MapLegend showRHQ={territory.showRHQ} map={mapFor(territory)} />
     </div>
   )
 }

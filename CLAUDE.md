@@ -271,8 +271,17 @@ assuming a page exists).
     Derived from the Defence topo sheet by
     [tools/map/derive-singleton-map.py](tools/map/derive-singleton-map.py) —
     read that script before regenerating it; the source PDF is not in the repo.
+    It keys off the sheet's OWN LEGEND ink colours (roads print pink, contours
+    brown — `G-B` separates them cleanly; "warmth" does not) and carries
+    hard/loose-surface roads, tracks, railway, drainage, the sector and
+    defence-area boundaries, cultivated land and the vegetation density bands.
     `Ex Admin Area` is the RHQ location, and this is the one map seeded with
     `showRHQ: true`.
+  - A map may declare a **`terrainKey`**: what its own art's colours mean,
+    rendered by [MapLegend.jsx](src/components/MapLegend.jsx) behind a
+    `+ TERRAIN` toggle next to the company key. Singleton has one; NSW doesn't,
+    and so shows no toggle. ⚠️ Its colours mirror the derivation script's
+    palette — change both together or the key starts lying.
 - **Maps are code, not content.** New art has to be committed and its grid
   sized to it, so adding a map is a repo change: art in `public/map`, a record
   in `MAPS`, optionally a seed territory in `seed.js`. No rules change.

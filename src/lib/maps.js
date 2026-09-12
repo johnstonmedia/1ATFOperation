@@ -62,6 +62,26 @@ export const MAPS = [
     // Landlocked: every cell on the sheet is ground somebody can hold.
     blockFill: null,
     blockLabel: null,
+    // What the art's colours mean, shown as a terrain key under the map.
+    // These mirror the palette in tools/map/derive-singleton-map.py, which is
+    // the source of truth — change them together or the key starts lying.
+    // The wording is the sheet's own legend wording.
+    terrainKey: [
+      { color: '#c0bb74', label: 'Cleared' },
+      { color: '#a4b86e', label: 'Grass' },
+      { color: '#89ab68', label: 'Scrub / scattered trees' },
+      { color: '#6d9a5e', label: 'Woodland' },
+      { color: '#5c8a55', label: 'Woodland, dense' },
+      { color: '#c4ae8c', label: 'Cultivated land' },
+      { color: '#ad8a63', label: 'Steep / broken ground' },
+      { color: '#e48a34', label: 'Road, hard surface' },
+      { color: '#d8a860', label: 'Road, loose surface' },
+      { color: '#967c55', label: 'Track / trail' },
+      { color: '#7d8a9e', label: 'Railway' },
+      { color: '#4d87ad', label: 'Watercourse / dam' },
+      { color: '#9c95c6', label: 'Sector boundary' },
+      { color: '#c284a4', label: 'Defence area boundary' },
+    ],
   },
 ]
 

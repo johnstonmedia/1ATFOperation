@@ -2,27 +2,37 @@
 
 The portal's maps are flat pixel art, not scans: a 1:25,000 topographic sheet
 has far too much line work to read at 648px wide, and none of it survives the
-territory hatch being drawn over the top. So this reads the sheet and separates
-it into the things its legend actually distinguishes --
+territory hatch drawn over the top. So this reads the sheet and rebuilds it as
+the classes ITS OWN LEGEND defines, then reduces each ~3.16x3.16 block of
+source pixels to one output pixel of a flat palette.
 
-    vegetation wash   green area fill, in density bands
-    relief            contour line work, as a proxy for steepness
-    drainage          creeks and dams
-    cleared ground    the white paddocks and training flats
-    sealed road       the New England Highway along the northern boundary
-    vehicle track     the range road network
-    boundaries        Commonwealth land, and the sector boundary
+HOW THE LEGEND IS READ. The sheet separates its features by ink colour, and
+that - not geometry - is what this keys off:
 
--- and reduces each ~3.16x3.16 block of source pixels to one output pixel of a
-flat palette.
+    roads          red/pink ink: red leads, green tracks blue  (R-G>5, G-B<6)
+                   dark maroon = all-weather hard surface
+                   pale pink   = all-weather loose surface
+    contours       brown ink: green sits well above blue       (G-B>8)
+    track/trail    fine neutral dashes, neither red nor brown
+    drainage       blue/cyan ink and area fills
+    railway        heavy saturated blue with regular tick marks
+    sector bdy     broad lavender band  (red AND blue above green)
+    defence bdy    heavy dark red ink that is not the highway - the only two
+                   features drawn at that weight
+    vegetation     green area wash, in density bands
+    cultivated     pale pink area wash
 
-Two constraints drive the palette and the smoothing, and both are easy to get
-wrong by eye at full size:
+An earlier version keyed roads off "warm ink" (R-B) instead. That lumps brown
+contours in with pink roads, and no amount of geometry untangles them
+afterwards - which is why the road network came out almost empty. Measure
+before trusting a channel: on this sheet contours sit at G-B ~ +14 and roads
+at G-B ~ 0, which is a clean split.
 
+TWO CONSTRAINTS that are easy to get wrong by eye at full size:
   * The page renders every map through a contrast(140%) CSS filter
     (IMAGE_FILTER in src/lib/terrainRender.js), which crushes anything below
-    mid-grey to black. The colours below sit in the same narrow mid-tone band
-    the NSW art uses so that nothing blocks up once filtered.
+    mid-grey to black. The palette sits in a narrow mid-tone band so nothing
+    blocks up once filtered.
   * Vegetation is drawn with stipple symbols, so an unsmoothed classification
     is salt-and-pepper at this scale rather than country.
 
@@ -30,6 +40,7 @@ Usage:
     pip install pillow numpy scipy pymupdf
     python3 tools/map/derive-singleton-map.py Areas_8__9.pdf public/map/singleton.png
 """
+import io
 import sys
 
 from PIL import Image
@@ -47,7 +58,6 @@ def load_sheet(path):
         # The map face is page 2's single full-page image; page 1 is the legend.
         xref = doc[1].get_images(full=True)[0][0]
         data = doc.extract_image(xref)
-        import io
         return np.array(Image.open(io.BytesIO(data['image'])).convert('RGB'), np.float32)
     return np.array(Image.open(path).convert('RGB'), np.float32)
 
@@ -57,11 +67,11 @@ def ones(n):
 
 
 def keep_lines(mask, min_length, max_fill, gap=5):
-    """Keep only the components of `mask` that look like a route rather than a word.
+    """Keep only the components of `mask` that look like a route, not a word.
 
-    Two things separate them and neither needs to read the type: a route RUNS a
-    long way, and a route is a thin line inside its own bounding box where a
-    word fills its own. `gap` bridges the dashes a dashed track prints with.
+    Two things separate them without reading the type: a route RUNS a long way,
+    and a route is thin inside its own bounding box where a word fills its own.
+    `gap` bridges the dashes a dashed track or boundary prints with.
     """
     lab, _ = ndi.label(ndi.binary_dilation(mask, ones(gap)))
     out = np.zeros_like(mask)
@@ -86,38 +96,47 @@ def derive(im):
     V = mx / 255.0
     S = np.where(mx > 0, (mx - mn) / np.maximum(mx, 1), 0.0)
 
-    # ---------------------------------------------------------------- ink ---
     # Line work is anything printed darker than its surroundings, whatever the
-    # wash beneath it — which is what makes this work over both the white
+    # wash beneath it - which is what makes this work over both the white
     # paddocks and the green timber.
-    lines = V < (ndi.uniform_filter(V, 9) - 0.05)
-    warm = lines & (R - B > 3)
+    lines = V < (ndi.uniform_filter(V, 9) - 0.03)
 
-    # Named features print with a white halo; the sheet's big "COMMONWEALTH
-    # LAND" overprint is bare black type straight over the ground. The halo
-    # finds the first, keep_lines the second.
-    near_white = (V > 0.88) & (S < 0.08)
-    haloed = ndi.uniform_filter(near_white.astype(np.float32), 9) > 0.55
+    # --- lettering ---------------------------------------------------------
+    # Type is dark ink that does NOT run: spot heights, grid numbers, place
+    # names and the big "COMMONWEALTH LAND" overprint all fail the line test,
+    # while every road and track passes it.
+    #
+    # Do NOT try to find type by its white halo. Named features do print with
+    # one, but so does half this sheet - the cleared paddocks ARE white - so a
+    # halo test marks the whole training area as lettering and deletes every
+    # road crossing it. That mistake cost this map its road network once.
     dark_ink = ndi.binary_erosion(V < 0.52, ones(3))
-    typeblobs = ndi.binary_dilation(dark_ink & ~keep_lines(dark_ink, 45, 0.30), ones(7))
-    lettering = ndi.binary_dilation(haloed, ones(5)) | typeblobs
+    lettering = ndi.binary_dilation(dark_ink & ~keep_lines(dark_ink, 45, 0.30), ones(7))
 
     # The 1000m grid prints as full-length hairlines. Drop the rows and columns
     # it saturates, or the graticule survives as a dead-straight road.
-    ink = (V < 0.62) & (B - R < 8) & ~lettering
-    graticule = np.zeros_like(ink)
-    graticule[ink.mean(1) > 0.45, :] = True
-    graticule[:, ink.mean(0) > 0.45] = True
+    inkish = lines & ~lettering
+    graticule = np.zeros_like(inkish)
+    graticule[inkish.mean(1) > 0.45, :] = True
+    graticule[:, inkish.mean(0) > 0.45] = True
     graticule = ndi.binary_dilation(graticule, ones(5))
+    clean = lines & ~lettering & ~graticule
 
-    # Vehicle tracks: 2px+ of dark ink that runs. (Contours are finer, so the
-    # erosion drops them wholesale.)
-    track = keep_lines(ndi.binary_erosion(ink & ~graticule, ones(2)), 45, 0.30)
+    # Contours crowd together on the scarps until they merge into a solid
+    # reddish mass that passes every "is this pink ink" test. Nothing routed
+    # runs through that, so fence it off before looking for roads.
+    brown = clean & ((G - B) > 8) & (V > 0.50)
+    crowded = ndi.binary_dilation(ndi.uniform_filter(brown.astype(np.float32), 15) > 0.22, ones(7))
 
-    # Sealed road and the Commonwealth-land boundary are the only heavy warm
-    # ink on the sheet. Only the highway runs right across it; the boundary
-    # prints dashed and stays in the interior.
-    heavy = keep_lines(ndi.binary_erosion((R - (G + B) / 2 > 6) & (R > B) & (V < 0.75), ones(3)), 30, 0.35)
+    # --- roads, by the legend's own ink colour ------------------------------
+    red_ink = clean & ((R - G) > 5) & ((G - B) < 6) & ~crowded
+
+    # The sealed road and the Commonwealth-land boundary are the only heavy
+    # dark red ink; everything else at that weight is a pale loose-surface
+    # road. Of the two, only the highway runs right across the sheet.
+    # Erode by 2, not 3: red ink on this sheet is 1-2px, so a 3x3 erosion
+    # removes essentially all of it.
+    heavy = keep_lines(ndi.binary_erosion(red_ink & (V < 0.75), ones(2)), 150, 0.22, gap=9)
     lab, _ = ndi.label(ndi.binary_dilation(heavy, ones(9)))
     highway = np.zeros_like(heavy)
     for i, sl in enumerate(ndi.find_objects(lab), start=1):
@@ -127,20 +146,42 @@ def derive(im):
         if (xs.stop - xs.start) > 400 and (ys.start + ys.stop) / 2 < H * 0.55:
             highway |= lab == i
     highway &= heavy
-    boundary = heavy & ~highway
+    defence_bdy = heavy & ~highway
 
-    # Contours are the only elevation signal a raster sheet carries. Type and
-    # the graticule both pick up a warm JPEG fringe; left in, they would read
-    # as steep ground in the relief shading below.
-    contour = warm & (V > 0.50) & ~lettering & ~graticule
+    rest = red_ink & ~ndi.binary_dilation(heavy, ones(3))
+    # Hard surface prints dark maroon; loose surface prints pale pink.
+    road_hard = highway | keep_lines(rest & (V <= 0.58), 40, 0.30, gap=7)
+    road_loose = keep_lines(rest & (V > 0.58), 40, 0.30, gap=7)
 
-    # Dark ink on pale ground picks up a blue JPEG fringe, so keep drainage
-    # clear of it rather than painting a phantom creek along every road. The
-    # sector boundary is a broad lavender band: both it and drainage read as
-    # "blue" on a scan, but only the boundary carries red with it.
+    # --- track / trail -----------------------------------------------------
+    neutral = (abs(G - B) < 8) & (abs(R - G) < 10)
+    track = keep_lines(clean & (V < 0.62) & (S < 0.22) & neutral, 45, 0.30, gap=9)
+
+    # --- railway -----------------------------------------------------------
+    # Heavy saturated blue with regular tick marks; nothing else on the sheet
+    # is this blue, so it needs no geometry beyond a run-length test.
+    railway = keep_lines(clean & ((B - R) > 25) & ((B - G) > 15), 120, 0.35, gap=13)
+
+    # --- boundaries --------------------------------------------------------
+    # Sector boundary: broad lavender band - red AND blue both above green.
+    # Dark ink on pale ground picks up a blue JPEG fringe, so keep it clear of
+    # the fringe rather than tracing every road with a phantom boundary.
     fringe = ndi.binary_dilation(V < 0.55, ones(5))
-    sector = ndi.binary_erosion((B - G > 5) & (R - G > 0) & (V > 0.45) & ~fringe, ones(5))
-    water = (B - (R + G) / 2 > 7) & (B - G > 1) & (R <= G + 3) & (V > 0.45) & ~fringe & ~lettering
+    # ~crowded matters as much here as it does for the roads: merged contour
+    # mass on the scarps goes purple under JPEG and is otherwise a dead ringer
+    # for the lavender band.
+    sector = keep_lines(
+        ndi.binary_erosion(((B - G) > 5) & ((R - G) > 0) & (V > 0.45) & ~fringe & ~crowded, ones(5)),
+        150, 0.25, gap=11)
+
+    # --- drainage ----------------------------------------------------------
+    water = (((B - (R + G) / 2) > 7) & ((B - G) > 1) & (R <= G + 3) & (V > 0.45)
+             & ~fringe & ~lettering & ~railway)
+
+    # --- relief ------------------------------------------------------------
+    # Contours print brown, and are the only elevation signal a raster sheet
+    # carries. Everything else warm has already been claimed above.
+    contour = brown & ~red_ink
 
     # ------------------------------------------------------- to the grid ---
     YS = (np.arange(OUT_H + 1) * H / OUT_H).astype(int)
@@ -152,54 +193,76 @@ def derive(im):
         return np.add.reduceat(rows, XS[:-1], axis=1)[:, :OUT_W]
 
     cover = lambda m: reduce_sum(m) / AREA
+    # A 2px line is well under one output pixel, so widen the linear features
+    # before reducing or the network breaks into dots at this scale.
+    line_cover = lambda m, r=2: cover(ndi.binary_dilation(m, ones(r)))
 
-    # The wash is averaged over NON-line pixels only: dense contour hatching in
-    # the steep country would otherwise wash its timber out to pale.
-    fill = ~lines
+    # The area wash is averaged over pixels that are neither line work nor
+    # road-adjacent: dense contour hatching in the steep country would
+    # otherwise wash its timber out to pale, and pink road ink would bleed
+    # into the neighbouring ground and read as cultivated land.
+    roadish = ndi.binary_dilation(red_ink | defence_bdy, ones(9))
+    fill = ~lines & ~roadish
     fill_area = np.maximum(reduce_sum(fill), 1.0)
-    vg = ndi.uniform_filter(reduce_sum((G - (R + B) / 2) * fill) / fill_area, size=7)
+    wash = lambda ch: reduce_sum(ch * fill) / fill_area
+    vg = ndi.uniform_filter(wash(G - (R + B) / 2), size=7)
+    pk = ndi.uniform_filter(wash(R - G), size=7)
 
-    wt, tk = cover(water), cover(track)
-    hw, bd, sc = cover(highway), cover(boundary), cover(sector)
     relief = ndi.uniform_filter(cover(contour), size=9)
+    wt = ndi.median_filter(cover(water), size=3)
+    tk, rl = line_cover(track), line_cover(railway)
+    rlo, rhd = line_cover(road_loose), line_cover(road_hard)
+    sc, dbd = cover(sector), line_cover(defence_bdy, 3)
 
     # ---------------------------------------------------------- palette ---
     P = {k: np.array(v, np.float32) for k, v in {
-        'deep':     (0x5c, 0x8a, 0x55),   # dense timber on the steep country
-        'forest':   (0x6d, 0x9a, 0x5e),   # medium woodland
-        'open':     (0x89, 0xab, 0x68),   # open forest / scattered trees
-        'grass':    (0xa4, 0xb8, 0x6e),   # grazed grass
-        'cleared':  (0xc0, 0xbb, 0x74),   # cleared paddock — the training flats
-        'ridge':    (0xad, 0x8a, 0x63),   # broken ground
-        'scarp':    (0x9c, 0x7d, 0x68),   # steep scarp / rock
-        'water':    (0x4d, 0x87, 0xad),   # creeks and dams
-        'track':    (0x9a, 0x81, 0x60),   # vehicle track
-        'sealed':   (0xd4, 0x95, 0x57),   # sealed road
-        'boundary': (0xbc, 0x86, 0xa2),   # Commonwealth-land boundary
-        'sector':   (0x9c, 0x95, 0xc6),   # sector boundary
+        # Ground cover, in the legend's own density bands.
+        'dense':      (0x5c, 0x8a, 0x55),   # woodland, dense
+        'woodland':   (0x6d, 0x9a, 0x5e),   # woodland, medium
+        'scrub':      (0x89, 0xab, 0x68),   # scrub / scattered trees
+        'grass':      (0xa4, 0xb8, 0x6e),   # grazed grass
+        'cleared':    (0xc0, 0xbb, 0x74),   # cleared paddock, the training flats
+        'cultivated': (0xc4, 0xae, 0x8c),   # cultivated land (pale pink wash)
+        # Relief.
+        'ridge':      (0xad, 0x8a, 0x63),   # broken ground
+        'scarp':      (0x9c, 0x7d, 0x68),   # steep scarp / rock
+        # Line work, drawn in legend order of precedence.
+        'water':      (0x4d, 0x87, 0xad),   # streams, dams
+        'railway':    (0x7d, 0x8a, 0x9e),   # railway
+        'track':      (0x96, 0x7c, 0x55),   # track / trail
+        'road_loose': (0xd8, 0xa8, 0x60),   # road, all weather loose surface
+        'road_hard':  (0xe4, 0x8a, 0x34),   # road, all weather hard surface
+        'sector':     (0x9c, 0x95, 0xc6),   # sector boundary
+        'defence':    (0xc2, 0x84, 0xa4),   # defence area boundary
     }.items()}
 
-    # Classify, then median-filter: vegetation is drawn with stipple symbols,
-    # so without it the timber breaks up into salt-and-pepper at this scale.
-    GROUND = ['cleared', 'grass', 'open', 'forest', 'deep']
+    # Classify then median-filter: vegetation is drawn with stipple symbols, so
+    # without it the timber breaks up into salt-and-pepper at this scale.
+    GROUND = ['cleared', 'grass', 'scrub', 'woodland', 'dense']
     klass = ndi.median_filter(np.digitize(vg, [1.0, 5.5, 10.0, 14.5]), size=5)
     img = np.empty((OUT_H, OUT_W, 3), np.float32)
     for i, key in enumerate(GROUND):
         img[klass == i] = P[key]
+    # Cultivated land is a pink wash over otherwise open ground.
+    img[(klass <= 1) & (ndi.median_filter(pk, size=5) > 7)] = P['cultivated']
 
     # Relief: warm and darken the steep country in proportion to contour
-    # density. Kept light — the territory hatch is drawn over this and has to
+    # density. Kept light - the territory hatch is drawn over this and has to
     # stay readable.
-    steep = np.clip((relief - 0.11) / 0.09, 0, 1)[:, :, None]
-    img = img * (1 - steep * 0.34) + P['ridge'] * (steep * 0.34)
-    crest = np.clip((relief - 0.20) / 0.07, 0, 1)[:, :, None]
-    img = img * (1 - crest * 0.34) + P['scarp'] * (crest * 0.34)
+    steep = np.clip((relief - 0.12) / 0.10, 0, 1)[:, :, None]
+    img = img * (1 - steep * 0.24) + P['ridge'] * (steep * 0.24)
+    crest = np.clip((relief - 0.22) / 0.08, 0, 1)[:, :, None]
+    img = img * (1 - crest * 0.26) + P['scarp'] * (crest * 0.26)
 
-    img[ndi.median_filter(wt, size=3) > 0.12] = P['water']
-    img[tk > 0.16] = P['track']
-    img[sc > 0.30] = P['sector']
-    img[bd > 0.16] = P['boundary']
-    img[hw > 0.14] = P['sealed']
+    # Draw order = legend precedence: the more significant the route, the later
+    # it lands, so a junction shows the higher class.
+    img[wt > 0.12] = P['water']
+    img[tk > 0.18] = P['track']
+    img[rl > 0.18] = P['railway']
+    img[rlo > 0.16] = P['road_loose']
+    img[rhd > 0.16] = P['road_hard']
+    img[sc > 0.28] = P['sector']
+    img[dbd > 0.28] = P['defence']
     return img.round().clip(0, 255).astype(np.uint8)
 
 

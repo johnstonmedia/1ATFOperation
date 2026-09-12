@@ -17,6 +17,48 @@ keep entries short and focused on what a new collaborator needs to know.
 
 ---
 
+## 2026-09-12 (later) — Singleton map: the road network, and the legend on the page
+The second map shipped earlier the same day was thin: the road network barely
+appeared, and nothing told a reader what the colours meant. Both fixed.
+
+**Roads: the derivation was keying off the wrong channel.** It separated ink by
+"warmth" (`R-B`), which lumps the sheet's BROWN contours in with its PINK
+roads — after which no amount of geometry untangles them, and the road layer
+came out nearly empty. Measured against the sheet instead: contours sit at
+`G-B ≈ +14`, roads at `G-B ≈ 0`, which is a clean split and is exactly the
+distinction the printed legend makes. Rebuilt
+[tools/map/derive-singleton-map.py](tools/map/derive-singleton-map.py) around
+the legend's own ink colours, and it now carries the classes the sheet
+defines: hard-surface road, loose-surface road, track/trail, railway,
+watercourse/dam, sector boundary, defence area boundary, cultivated land, and
+vegetation in the legend's density bands.
+
+- **The bug that actually cost the road network** was a white-halo test meant
+  to find place names. Named features do print with a halo — but so does half
+  this sheet, because the cleared training paddocks ARE white. It was marking
+  23% of the map as "lettering" and deleting every road crossing the open
+  ground. Type is now found geometrically (dark ink that doesn't run as a
+  line), which is what already worked for the "COMMONWEALTH LAND" overprint.
+  There is a comment in the script so nobody reinstates it.
+- Two other corrections worth knowing: red ink on this sheet is 1–2px, so the
+  3x3 erosion used to find "heavy" features removed essentially all of it (now
+  2x2); and contours crowd together on the scarps into a solid reddish mass
+  that passes every "is this pink ink" test, so a crowded-contour guard fences
+  that country off before roads or boundaries are looked for. Without it the
+  escarpments drew as kilometres of phantom boundary.
+- Relief shading eased back and the route palette warmed, so roads read against
+  the ground they cross and still survive the page's contrast(140%) filter.
+
+**The legend is now on the interactive map.** A map record may carry a
+`terrainKey` (see [src/lib/maps.js](src/lib/maps.js)) naming what its art's
+colours mean; [MapLegend.jsx](src/components/MapLegend.jsx) renders it behind a
+`+ TERRAIN` toggle beside the existing company key — reference material rather
+than live state, so it does not permanently double the height of the key. The
+wording is the sheet's own. NSW declares no key and shows no toggle.
+
+⚠️ The key's colours mirror the palette in the derivation script. They are two
+copies of one fact: change them together or the key starts lying.
+
 ## 2026-09-12 — Second map: the Singleton Military Area, and a per-map data model
 Requested: a "secondary map" — the portal carries more than one map, each with
 its own independently-saved everything, signed-out visitors see exactly one of

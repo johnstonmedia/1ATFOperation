@@ -464,7 +464,7 @@ function MapDetail({ map, territory, campaignFrames, hasCampaign, updatedAt }) {
     <>
       <Muted>{map.name} — the map the portal is currently showing. Territory last updated {when(updatedAt)}. Live state shown — use +/- to zoom.</Muted>
       <PixelMap territory={territory} showCompanyLabels />
-      <MapLegend showRHQ={territory.showRHQ} />
+      <MapLegend showRHQ={territory.showRHQ} map={map} />
       <Panel>
         <div className="mono accent" style={{ fontSize: 10, letterSpacing: 2 }}>NAMED PLACES</div>
         {!(territory.places || []).length && <Muted>No place labels.</Muted>}

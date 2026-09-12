@@ -10,7 +10,7 @@ import PixelMap from '../../components/PixelMap'
 import MapLegend from '../../components/MapLegend'
 import { PAINT, RHQ_PAINT, colorOf, coyLabelOf } from '../../lib/territory'
 import { useUnpaintableMask } from '../../lib/unpaintableMask'
-import { MAPS, mapById, territorySlice, campaignStartSlice, framesForMap, withMapFrames } from '../../lib/maps'
+import { MAPS, mapById, mapFor, territorySlice, campaignStartSlice, framesForMap, withMapFrames } from '../../lib/maps'
 import { sortFrames, framesValid, renumberFrames } from '../../lib/campaign'
 import { exportCampaignReplay, exportProgressImage, exportSupported, downloadBlob, defaultProgressTitle } from '../../lib/replayExport'
 
@@ -424,7 +424,7 @@ function PreviewMapModal({ territory, onClose }) {
         </div>
         <div className="col" style={{ gap: 10 }}>
           <PixelMap territory={territory} showCompanyLabels />
-          <MapLegend showRHQ={territory.showRHQ} />
+          <MapLegend showRHQ={territory.showRHQ} map={mapFor(territory)} />
         </div>
       </div>
     </div>,
