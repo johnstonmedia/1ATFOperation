@@ -8,8 +8,9 @@
 // keep here.
 //
 // WHAT IS AND ISN'T COVERED, deliberately:
-//   ✓ every single-value slice in store.js SINGLE_SLICES — the map, all the
-//     text, branding, intel, the replay start frame, staff access.
+//   ✓ every single-value slice in store.js SINGLE_SLICES — every map's
+//     territory and replay start frame, which map is public, all the text,
+//     branding, intel, staff access.
 //   ✗ `roster`. It is the one collection holding personal data (names, ID
 //     numbers, emails, plain-text temp passwords). Copying it into a second
 //     collection on every edit would multiply that exposure for no operational
@@ -24,6 +25,7 @@
 // replacing first — an undo of the undo is always available.
 
 import { FIREBASE_ENABLED, db } from '../firebase/config'
+import { MAPS, territorySlice, campaignStartSlice } from './maps'
 
 // Versions kept per slice. Older ones are pruned as new ones arrive. Painting
 // the map produces the biggest documents (~24 KB of cells each), so this is a
@@ -36,9 +38,20 @@ const MAX_BACKUP_BYTES = 600 * 1024
 
 const LS_KEY = '1atf-backups'
 
+// Each map contributes its own territory + replay-start slice, named after
+// the map so a version in the list says which map it restores (see
+// lib/maps.js). The primary map keeps the original unsuffixed slice names, so
+// history captured before there was a second map still reads correctly.
+const MAP_SLICE_LABELS = MAPS.reduce((acc, m) => {
+  acc[territorySlice(m.id)] = `Map: Territory — ${m.name}`
+  acc[campaignStartSlice(m.id)] = `Replay Start Frame — ${m.name}`
+  return acc
+}, {})
+
 export const SLICE_LABELS = {
   narrative: 'Map: Narrative',
-  territory: 'Map: Territory',
+  ...MAP_SLICE_LABELS,
+  activeMap: 'Public Map',
   classified: 'Welcome Page',
   branding: 'Branding & Assets',
   companyPages: 'Company Pages',
@@ -46,10 +59,13 @@ export const SLICE_LABELS = {
   intel: 'Intercepted Intelligence',
   intelIntro: 'Intel Introduction',
   briefings: 'Briefings',
-  campaignDefaultStart: 'Replay Start Frame',
   staffAccess: 'Staff Centre Access',
 }
 export const sliceLabel = (s) => SLICE_LABELS[s] || s
+
+// True for any map's territory slice — the summary/diff code below is shaped
+// for the cell grid, not for the slice literally named "territory".
+export const isTerritorySlice = (s) => MAPS.some((m) => territorySlice(m.id) === s)
 
 /* ------------------------------ local mode ------------------------------ */
 
@@ -180,7 +196,7 @@ const isObj = (v) => v && typeof v === 'object' && !Array.isArray(v)
 export function describeChange(slice, backup, current) {
   if (JSON.stringify(backup) === JSON.stringify(current)) return 'Identical to what is live now'
 
-  if (slice === 'territory') {
+  if (isTerritorySlice(slice)) {
     const a = backup?.cells || ''
     const b = current?.cells || ''
     const parts = []

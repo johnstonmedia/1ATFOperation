@@ -239,6 +239,7 @@ function buildTerritoryCells() {
   return g.join('')
 }
 export const DEFAULT_TERRITORY = {
+  map: 'nsw',
   cols: T_COLS,
   rows: T_ROWS,
   showRHQ: false,
@@ -249,6 +250,60 @@ export const DEFAULT_TERRITORY = {
     { id: 'pl3', name: 'Singleton', x: 115, y: 13 },
   ],
 }
+
+// Pixel-grid territory over the Singleton Military Area sheet (AUSPEC0196,
+// Areas 8 & 9). 216x153 = one cell per exact 3x3 block of the 648x459 art.
+//
+// Positions below are read off the sheet itself, so the beacons land on the
+// real features: RHQ sits on the Ex Admin Area, the sentry posts sit on the
+// northern boundary along the highway, and the ranges/strongholds sit where
+// the sheet puts them. The starting paint is only a starting point — RHQ
+// repaints all of it in Map: Territory.
+const S_COLS = 216
+const S_ROWS = 153
+function buildSingletonCells() {
+  const g = new Array(S_COLS * S_ROWS).fill('.')
+  const blob = (cx, cy, w, h, code) => {
+    for (let y = cy; y < cy + h; y++) for (let x = cx; x < cx + w; x++) {
+      if (x >= 0 && x < S_COLS && y >= 0 && y < S_ROWS) g[y * S_COLS + x] = code
+    }
+  }
+  // Wider than the Ex Admin Area itself so the derived "RHQ" company label
+  // has somewhere to sit clear of that place's own beacon.
+  blob(88, 88, 24, 12, 'R')  // Ex Admin Area — RHQ
+  blob(133, 78, 15, 10, 'M') // Yellow Billys Cave, Sector 9
+  blob(170, 124, 17, 11, 'M') // Broken Back Range
+  blob(128, 18, 14, 9, 'm')  // DFSW2 firing range / Sentry Post No5, loosely held
+  return g.join('')
+}
+export const DEFAULT_SINGLETON_TERRITORY = {
+  map: 'singleton',
+  cols: S_COLS,
+  rows: S_ROWS,
+  // RHQ is a location on this map, not a hidden one — the Ex Admin Area is
+  // the whole reason the sheet is here.
+  showRHQ: true,
+  cells: buildSingletonCells(),
+  places: [
+    { id: 'sg-rhq', name: 'Ex Admin Area Bravo', x: 103, y: 95 },
+    { id: 'sg-war', name: 'Warringah', x: 99, y: 99 },
+    { id: 'sg-s7', name: 'Sector 7', x: 75, y: 11 },
+    { id: 'sg-s8', name: 'Sector 8', x: 95, y: 75 },
+    { id: 'sg-s9', name: 'Sector 9', x: 160, y: 64 },
+    { id: 'sg-sp5', name: 'Sentry Post No5', x: 124, y: 26 },
+    { id: 'sg-sp4', name: 'Sentry Post No4', x: 149, y: 30 },
+    { id: 'sg-sp10', name: 'Sentry Post No10', x: 188, y: 21 },
+    { id: 'sg-dfsw', name: 'DFSW2 Firing Range', x: 135, y: 22 },
+    { id: 'sg-cave', name: 'Yellow Billys Cave', x: 141, y: 84, hostile: true },
+    { id: 'sg-calf', name: 'Calf Pen', x: 146, y: 77 },
+    { id: 'sg-retrans', name: 'Retrans Peak', x: 25, y: 12 },
+    { id: 'sg-bbr', name: 'Broken Back Range', x: 178, y: 131, hostile: true },
+  ],
+}
+
+// Which map the public portal shows. RHQ switches it in Map: Territory;
+// visitors never see a switcher, only whichever map this names.
+export const DEFAULT_ACTIVE_MAP = 'nsw'
 
 // Reference location dots for the NSW operating area (Lithgow/Blue Mountains
 // across Sydney to the Hunter). Positions are approximate over the map image.

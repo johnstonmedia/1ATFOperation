@@ -17,6 +17,75 @@ keep entries short and focused on what a new collaborator needs to know.
 
 ---
 
+## 2026-09-12 — Second map: the Singleton Military Area, and a per-map data model
+Requested: a "secondary map" — the portal carries more than one map, each with
+its own independently-saved everything, signed-out visitors see exactly one of
+them, and RHQ switches between them in the Ops Centre.
+
+**The map registry.** [src/lib/maps.js](src/lib/maps.js) is new and is now the
+single description of what a map is: its art, its native pixel size, its
+territory grid and its unpaintable fill. `territory.js` still exports the
+primary map's constants (`TERR_COLS`, `MAP_IMAGE`, …) for the code paths that
+predate this, but they're derived from the registry rather than written twice.
+Maps are defined in code on purpose — a map needs art committed to
+`public/map` and a grid sized to it, so it is a repo change either way. What
+RHQ controls is which one visitors see and everything painted on top.
+
+- **Per-map storage, no rules change.** Each map gets its own `territory` and
+  `campaignDefaultStart` slice. The primary map keeps the original unsuffixed
+  document names so existing Firestore data is untouched; every other map gets
+  `territory_<mapId>` / `campaignDefaultStart_<mapId>` beside them. Both are
+  ordinary `content/*` docs, which the pending ruleset already covers.
+- **Replay frames stay in ONE collection.** `campaignFrames` now carries a
+  `map` field per document rather than getting a collection (and a rules
+  block) per map; a frame written before this has no field at all, which reads
+  as the primary map — exactly what it was. Consequence to remember when
+  touching MapEditor: `persistCollection` deletes any document missing from
+  what it is handed, so every frame write rebuilds one map's frames and
+  carries the others through (`withMapFrames` in maps.js).
+- **A territory says which map it belongs to** (`territory.map`), so PixelMap,
+  the replay and both exporters pick up the right art, aspect ratio and grid
+  with no extra plumbing. `normalizeTerritory` stamps it onto legacy data.
+  Grid-mismatch rejection is now judged per map, so one map's stale frames
+  can't take another map's history down with them.
+- **`activeMap`** is a new single-value slice naming the map the public portal
+  shows. Home and the Staff Centre read it; there is deliberately no public
+  switcher. Ops Centre → Map: Territory gets the switcher, which separates
+  *which map you're editing* from *which map is live* — switching the former
+  changes nothing for visitors until "Show this map on the portal".
+- `oceanMask.js` → **`unpaintableMask.js`**, parameterised by map. The NSW
+  ocean still blocks painting; Singleton is landlocked and declares no blocked
+  fill, so nothing there is unpaintable (and the editor's hint no longer talks
+  about ocean tiles on a map that has none).
+
+**The Singleton map itself.** Derived from the Defence AUSPEC0196 1:25,000
+sheet (Singleton Range Special, Areas 8 & 9), 648x459 art over a 216x153 grid.
+[tools/map/derive-singleton-map.py](tools/map/derive-singleton-map.py) is the
+reproducible derivation, and documents its reasoning; the source PDF is not in
+the repo (it is marked FOR DEFENCE PURPOSES ONLY).
+
+- It reads the sheet by its own **legend** — green wash = vegetation density,
+  warm line work = contours (the only relief signal a raster sheet carries),
+  blue = drainage, white = cleared, heavy warm ink = the sealed road and the
+  Commonwealth-land boundary, lavender band = the sector boundary.
+- Two non-obvious things the script exists to get right. **Type is rejected
+  geometrically, not by reading it**: a route runs a long way and is a thin
+  line inside its own bounding box, where a word fills its own — that one test
+  removes spot heights, grid numbers, place names and the big "COMMONWEALTH
+  LAND" overprint without touching the highway. And the **palette is pinned to
+  a narrow mid-tone band**, because the page draws every map through a
+  `contrast(140%)` filter that crushes anything darker than mid-grey to black;
+  the first passes looked right at full size and blocked up solid in the app.
+- **`Ex Admin Area` is RHQ**, as asked: it is the seeded RHQ holding, and
+  Singleton is the one map that ships with `showRHQ` on. Beacons are placed off
+  the sheet — the sentry posts on the northern boundary, Sectors 7/8/9, the
+  DFSW2 firing range, Yellow Billys Cave and Broken Back Range (strongholds),
+  Calf Pen, Warringah, Retrans Peak.
+- Verified end to end in LOCAL MODE: switching the edited map, painting and
+  saving each map without disturbing the other, per-map campaign frames, the
+  public replay, the weekly update image export at the new aspect, the Backups
+  panel's per-map labelling, and the Staff Centre naming the live map.
+
 ## 2026-09-08 — Fixed: manually-dragged company label positions bled into every campaign replay frame
 Reported: fixing a company name's on-map position (MapEditor's "Arrange
 company labels manually", stored in `territory.labelOverrides`) was meant to

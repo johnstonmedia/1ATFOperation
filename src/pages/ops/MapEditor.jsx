@@ -9,7 +9,8 @@ import { OpsHeader, useSaved } from './OperationsCentre'
 import PixelMap from '../../components/PixelMap'
 import MapLegend from '../../components/MapLegend'
 import { PAINT, RHQ_PAINT, colorOf, coyLabelOf } from '../../lib/territory'
-import { useOceanMask } from '../../lib/oceanMask'
+import { useUnpaintableMask } from '../../lib/unpaintableMask'
+import { MAPS, mapById, territorySlice, campaignStartSlice, framesForMap, withMapFrames } from '../../lib/maps'
 import { sortFrames, framesValid, renumberFrames } from '../../lib/campaign'
 import { exportCampaignReplay, exportProgressImage, exportSupported, downloadBlob, defaultProgressTitle } from '../../lib/replayExport'
 
@@ -17,18 +18,32 @@ const WEEK_MS = 7 * 24 * 60 * 60 * 1000
 
 const rid = () => Math.random().toString(36).slice(2, 9)
 
+// Editable copy of a saved territory slice, with the optional collections
+// filled in so the editor never has to null-check them.
+const loadTerr = (t) => ({ ...t, places: t.places || [], labelOverrides: t.labelOverrides || {} })
+
 // Pixel-grid territory editor. Pick a colour state, paint cells on the map.
+//
+// The portal carries several maps (lib/maps.js). This editor works on ONE at a
+// time — `mapId` below — and everything it writes is that map's own slice, so
+// painting one map can never disturb another. Which map the PUBLIC sees is a
+// separate, deliberate choice (the `activeMap` slice, set from the switcher
+// at the top of this page): switching what you're editing does not change
+// what visitors are looking at.
 export default function MapEditor() {
   const { state, updateSlice } = useData()
   const audit = useAudit()
   const confirm = useConfirm()
   const toast = useToast()
   const [saved, flash] = useSaved()
-  const [terr, setTerr] = useState(() => ({
-    ...state.territory,
-    places: state.territory.places || [],
-    labelOverrides: state.territory.labelOverrides || {},
-  }))
+  // Start on whichever map is live to the public — the one most likely to be
+  // the reason RHQ opened this page.
+  const [mapId, setMapId] = useState(() => mapById(state.activeMap).id)
+  const map = mapById(mapId)
+  const terrSlice = territorySlice(mapId)
+  const startSlice = campaignStartSlice(mapId)
+  const savedTerr = state[terrSlice]
+  const [terr, setTerr] = useState(() => loadTerr(savedTerr))
   const [brush, setBrush] = useState('M')
   const [size, setSize] = useState(2)
   // "Arrange company labels" is a local UI mode, not a saved setting: it just
@@ -58,7 +73,8 @@ export default function MapEditor() {
   const [previewOpen, setPreviewOpen] = useState(false)
 
   const { cols, rows } = terr
-  const oceanMask = useOceanMask(cols, rows)
+  const unpaintable = useUnpaintableMask(map, cols, rows)
+  const mapFrames = framesForMap(state.campaignFrames, mapId)
 
   // `points` is the whole stroke segment since the last pointer event (the
   // map interpolates a continuous line between samples) — stamped in one
@@ -73,7 +89,7 @@ export default function MapEditor() {
       for (let dy = -half; dy < sz - half; dy++) for (let dx = -half; dx < sz - half; dx++) {
         const nx = x + dx, ny = y + dy
         if (nx < 0 || nx >= cols || ny < 0 || ny >= rows) continue
-        if (code !== '.' && oceanMask && oceanMask[ny * cols + nx]) continue // can't paint ocean
+        if (code !== '.' && unpaintable && unpaintable[ny * cols + nx]) continue // e.g. ocean
         arr[ny * cols + nx] = code
       }
     }
@@ -101,9 +117,48 @@ export default function MapEditor() {
   }
 
   const save = () => {
-    updateSlice('territory', terr)
-    audit('Updated map territory')
+    updateSlice(terrSlice, { ...terr, map: mapId })
+    audit('Updated map territory', map.name)
     flash()
+  }
+
+  // Switch which map this editor is working on. Everything local to the
+  // previous map (its in-progress painting, its staged frame edits, which
+  // frame was open) is discarded, so confirm first if any of it is unsaved.
+  const switchMap = async (nextId) => {
+    if (nextId === mapId) return
+    const dirtyPaint = JSON.stringify(terr) !== JSON.stringify(loadTerr(savedTerr))
+    const dirtyFrames = Object.keys(draftFrameCells).length > 0
+    if (dirtyPaint || dirtyFrames || editing) {
+      const ok = await confirm({
+        title: `Leave ${map.name}?`,
+        message: `${map.name} has changes that haven't been published${dirtyFrames ? ' (including repainted frames)' : ''}. Switching map discards them.`,
+        danger: true,
+        confirmLabel: 'Discard & switch',
+      })
+      if (!ok) return
+    }
+    setEditing(null)
+    setDraftFrameCells({})
+    setArrangeLabels(false)
+    setTerr(loadTerr(state[territorySlice(nextId)]))
+    setMapId(nextId)
+  }
+
+  // Publish this map to the portal. The one control here that changes what a
+  // signed-out visitor sees, so it is deliberately explicit rather than a
+  // side effect of switching which map you're editing.
+  const makeLive = async () => {
+    if (state.activeMap === mapId) return
+    const ok = await confirm({
+      title: 'Change the public map',
+      message: `Show ${map.name} on the Home page instead of ${mapById(state.activeMap).name}? Every visitor sees the new map immediately; nothing painted on either map is changed.`,
+      confirmLabel: 'Show this map',
+    })
+    if (!ok) return
+    updateSlice('activeMap', mapId)
+    audit('Changed the public map', map.name)
+    toast.push(`${map.name} is now the public map.`)
   }
 
   // Load a frame into the shared canvas for repainting. Warns before
@@ -150,7 +205,7 @@ export default function MapEditor() {
 
   return (
     <div>
-      <OpsHeader title="Map: Territory" sub="EDIT // PIXEL TERRITORY" updatedAt={state.contentMeta?.territory?.updatedAt}>
+      <OpsHeader title="Map: Territory" sub={`EDIT // ${map.sub}`} updatedAt={state.contentMeta?.[terrSlice]?.updatedAt}>
         <label className="row center" style={{ gap: 6, fontSize: 11 }}>
           <input type="checkbox" checked={!!terr.showRHQ} onChange={(e) => setTerr((t) => ({ ...t, showRHQ: e.target.checked }))} style={{ width: 'auto' }} /> Show RHQ on map
         </label>
@@ -167,6 +222,8 @@ export default function MapEditor() {
         <PreviewMapModal territory={{ ...terr, cells: canvasCells }} onClose={() => setPreviewOpen(false)} />
       )}
 
+      <MapSwitcher maps={MAPS} mapId={mapId} liveId={state.activeMap} onSwitch={switchMap} onMakeLive={makeLive} />
+
       {editing && (
         <div className="panel panel-pad row between center wrap" style={{ gap: 10, marginBottom: 10, borderColor: 'var(--accent)', background: 'rgba(54,224,192,0.06)' }}>
           <div className="mono accent" style={{ fontSize: 12 }}>
@@ -180,7 +237,8 @@ export default function MapEditor() {
       )}
 
       <div className="mono dim" style={{ fontSize: 11, marginBottom: 10 }}>
-        Pick a colour, then paint on the map — one finger/click paints, the +/- buttons zoom, two-finger drag or middle/right-mouse drag pans while zoomed. Ocean tiles (shaded dark) can't be painted. "Full" is solid/firmly held; "Contested" is the lighter, newly-gained/loosely-held variant. Erase removes.
+        Pick a colour, then paint on the map — one finger/click paints, the +/- buttons zoom, two-finger drag or middle/right-mouse drag pans while zoomed.
+        {map.blockFill ? ` ${map.blockLabel} tiles (shaded dark) can't be painted.` : ''} "Full" is solid/firmly held; "Contested" is the lighter, newly-gained/loosely-held variant. Erase removes.
       </div>
 
       {[{ label: 'Full', variant: (c) => c }, { label: 'Contested', variant: (c) => c.toLowerCase() }].map(({ label, variant }) => (
@@ -214,6 +272,7 @@ export default function MapEditor() {
         </div>
       )}
       <PixelMap
+        key={`canvas-${mapId}`}
         territory={{ ...terr, cells: canvasCells }}
         edit brush={brush} brushSize={size} onPaint={paint} onMovePlace={movePlace}
         showCompanyLabels={arrangeLabels}
@@ -221,10 +280,14 @@ export default function MapEditor() {
       />
 
       <CampaignPanel
-        frames={state.campaignFrames}
-        defaultStartId={state.campaignDefaultStart}
+        key={`campaign-${mapId}`}
+        mapId={mapId}
+        allFrames={state.campaignFrames}
+        frames={mapFrames}
+        startSlice={startSlice}
+        defaultStartId={state[startSlice]}
         terr={terr}
-        territory={state.territory}
+        territory={savedTerr}
         editing={editing}
         onStartEdit={startEdit}
         onForceClearEdit={() => setEditing(null)}
@@ -281,6 +344,58 @@ export default function MapEditor() {
   )
 }
 
+// Which map you're editing, and which one the public is looking at — two
+// different things, shown together so the difference is impossible to miss.
+// Only RHQ ever sees this: the public portal has no map switcher at all, it
+// just renders whatever `activeMap` names.
+function MapSwitcher({ maps, mapId, liveId, onSwitch, onMakeLive }) {
+  const isLive = liveId === mapId
+  return (
+    <div className="panel panel-pad col" style={{ gap: 10, marginBottom: 12 }}>
+      <div className="row between center wrap" style={{ gap: 8 }}>
+        <strong className="head" style={{ fontSize: 14 }}>Map</strong>
+        <span className="mono dim" style={{ fontSize: 10, letterSpacing: 1 }}>
+          EACH MAP KEEPS ITS OWN TERRITORY, PLACES AND REPLAY
+        </span>
+      </div>
+      <div className="row wrap" style={{ gap: 8 }}>
+        {maps.map((m) => {
+          const active = m.id === mapId
+          return (
+            <button
+              key={m.id}
+              onClick={() => onSwitch(m.id)}
+              className={active ? 'primary' : 'ghost'}
+              style={{ textAlign: 'left', padding: '8px 12px', flex: '1 1 240px' }}
+              title={m.blurb}
+            >
+              <div className="row center" style={{ gap: 8 }}>
+                <span style={{ fontWeight: 700 }}>{m.name}</span>
+                {m.id === liveId && (
+                  <span className="tag" style={{ fontSize: 9, color: 'var(--accent)', borderColor: 'var(--accent)' }}>PUBLIC</span>
+                )}
+              </div>
+              <div className="mono" style={{ fontSize: 10, opacity: 0.75, marginTop: 3 }}>{m.sub}</div>
+            </button>
+          )
+        })}
+      </div>
+      <div className="row between center wrap" style={{ gap: 10 }}>
+        <span className="mono dim" style={{ fontSize: 11 }}>
+          {isLive
+            ? 'Visitors are looking at this map. Everything you save here goes straight to the Home page.'
+            : 'You are editing a map visitors cannot see — the Home page still shows the map marked PUBLIC. Editing here changes nothing for them until you publish it.'}
+        </span>
+        {!isLive && (
+          <button className="primary" onClick={onMakeLive} style={{ flex: '0 0 auto' }}>
+            Show this map on the portal
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // Read-only, full-size render of exactly what's on the paint canvas right
 // now — same PixelMap (showCompanyLabels on) + MapLegend the public Home
 // page uses at rest, fed the in-progress `terr`/`editing` state instead of
@@ -323,7 +438,8 @@ function PreviewMapModal({ territory, onClose }) {
 // independently — no more diff-chain, no more "re-recording the start wipes
 // everything after it".
 function CampaignPanel({
-  frames, defaultStartId, terr, territory, editing, onStartEdit, onForceClearEdit,
+  mapId, allFrames, frames, startSlice, defaultStartId, terr, territory,
+  editing, onStartEdit, onForceClearEdit,
   draftFrameCells, onClearDraftFrame, onClearAllDraftFrames,
 }) {
   const { updateSlice } = useData()
@@ -360,8 +476,14 @@ function CampaignPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasRecentFrame])
 
+  // `campaignFrames` is one collection shared by every map, and persisting it
+  // deletes any document not in what we hand over — so each write rebuilds
+  // THIS map's frames and carries every other map's through untouched. Orders
+  // are renumbered within the map, not across the collection.
+  const writeFrames = (rows) => updateSlice('campaignFrames', withMapFrames(allFrames, mapId, rows))
+
   const persist = (nextSorted, message, detail) => {
-    updateSlice('campaignFrames', renumberFrames(nextSorted))
+    writeFrames(renumberFrames(nextSorted))
     audit(message, detail)
   }
 
@@ -371,7 +493,7 @@ function CampaignPanel({
   const publishDraftFrames = () => {
     if (!draftCount) return
     const next = sorted.map((f) => (f.id in draftFrameCells ? { ...f, cells: draftFrameCells[f.id], updatedAt: Date.now() } : f))
-    updateSlice('campaignFrames', next)
+    writeFrames(next)
     audit('Published campaign frame changes', `${draftCount} frame${draftCount === 1 ? '' : 's'}`)
     toast.push(`${draftCount} frame${draftCount === 1 ? '' : 's'} published to the site.`)
     onClearAllDraftFrames()
@@ -379,7 +501,7 @@ function CampaignPanel({
 
   // Snapshot the current live painting as a new frame at the end.
   const addFromLive = () => {
-    const frame = { id: rid(), order: count, cells: terr.cells, label: '', ts: Date.now(), updatedAt: Date.now() }
+    const frame = { id: rid(), map: mapId, order: count, cells: terr.cells, label: '', ts: Date.now(), updatedAt: Date.now() }
     persist([...sorted, frame], count === 0 ? 'Added campaign start frame' : 'Added campaign frame from live map', `frame ${count + 1}`)
     toast.push(count === 0 ? 'Start frame recorded.' : `Frame ${count + 1} recorded.`)
   }
@@ -394,7 +516,7 @@ function CampaignPanel({
 
   const relabel = (i, label) => {
     const next = sorted.map((f, k) => (k === i ? { ...f, label, updatedAt: Date.now() } : f))
-    updateSlice('campaignFrames', next)
+    writeFrames(next)
     audit('Relabelled campaign frame', `frame ${i + 1}`)
   }
 
@@ -406,7 +528,7 @@ function CampaignPanel({
   // on every other frame of the replay too.
   const toggleLabelOverrides = (i) => {
     const next = sorted.map((f, k) => (k === i ? { ...f, useLabelOverrides: !f.useLabelOverrides, updatedAt: Date.now() } : f))
-    updateSlice('campaignFrames', next)
+    writeFrames(next)
     audit(sorted[i].useLabelOverrides ? 'Disabled manual company labels on campaign frame' : 'Enabled manual company labels on campaign frame', `frame ${i + 1}`)
   }
 
@@ -429,7 +551,7 @@ function CampaignPanel({
     if (!ok) return
     if (editing?.id === f.id) onForceClearEdit()
     onClearDraftFrame(f.id)
-    if (defaultStartId === f.id) updateSlice('campaignDefaultStart', null)
+    if (defaultStartId === f.id) updateSlice(startSlice, null)
     persist(sorted.filter((_, k) => k !== i), 'Deleted campaign frame', `frame ${i + 1}`)
     toast.push(`Frame ${i + 1} deleted.`)
   }
@@ -444,8 +566,8 @@ function CampaignPanel({
     if (!ok) return
     onForceClearEdit()
     onClearAllDraftFrames()
-    updateSlice('campaignFrames', [])
-    updateSlice('campaignDefaultStart', null)
+    writeFrames([])
+    updateSlice(startSlice, null)
     audit('Cleared campaign replay history')
   }
 
@@ -455,7 +577,7 @@ function CampaignPanel({
   // behaviour).
   const setDefaultStart = (id) => {
     const next = defaultStartId === id ? null : id
-    updateSlice('campaignDefaultStart', next)
+    updateSlice(startSlice, next)
     audit(next ? 'Set campaign default start frame' : 'Cleared campaign default start frame')
     toast.push(next ? 'Default start frame set.' : 'Default start cleared — replay starts from the earliest frame again.')
   }

@@ -1,4 +1,5 @@
-import { MAP_IMAGE, MAP_PIXEL_WIDTH, MAP_PIXEL_HEIGHT, beaconStateFor } from './territory'
+import { beaconStateFor } from './territory'
+import { mapFor } from './maps'
 import { renderTerritoryLayer, renderWaveLayer, drawCompanyLabels, drawLegend, IMAGE_FILTER } from './terrainRender'
 import { frameCells, frameCaptions, sortFrames, transitionPlan, transitionDuration } from './campaign'
 import { companyLabelPoints, mergedGainLabels, legendCodes } from './companyLabels'
@@ -68,10 +69,10 @@ function loadImage(src) {
 // through a different internal raster path that re-enables smoothing
 // regardless of imageSmoothingEnabled — that was the source of the blurry
 // map art in exported video and images.
-function renderBaseMap(img, W, H) {
+function renderBaseMap(img, map, W, H) {
   const native = document.createElement('canvas')
-  native.width = MAP_PIXEL_WIDTH
-  native.height = MAP_PIXEL_HEIGHT
+  native.width = map.pixelWidth
+  native.height = map.pixelHeight
   const nctx = native.getContext('2d')
   nctx.imageSmoothingEnabled = false
   try { nctx.filter = IMAGE_FILTER } catch { /* keep default */ }
@@ -84,7 +85,7 @@ function renderBaseMap(img, W, H) {
   bctx.imageSmoothingEnabled = false
   bctx.fillStyle = '#0a0f1a'
   bctx.fillRect(0, 0, W, H)
-  bctx.drawImage(native, 0, 0, MAP_PIXEL_WIDTH, MAP_PIXEL_HEIGHT, 0, 0, W, H)
+  bctx.drawImage(native, 0, 0, map.pixelWidth, map.pixelHeight, 0, 0, W, H)
   return base
 }
 
@@ -241,10 +242,11 @@ export function exportCampaignReplay({ territory, frames: campaignFrames, onProg
     const perMs = transitionDuration(transitions, 22000)
     const totalMs = START_HOLD_MS + transitions * (perMs + EXPORT_HOLD_MS) + END_HOLD_MS
 
-    const img = await loadImage(MAP_IMAGE)
+    const map = mapFor(territory)
+    const img = await loadImage(map.image)
     if (cancelled) throw Object.assign(new Error('Export cancelled.'), { cancelled: true })
-    const W = MAP_PIXEL_WIDTH * SCALE
-    const H = MAP_PIXEL_HEIGHT * SCALE
+    const W = map.pixelWidth * SCALE
+    const H = map.pixelHeight * SCALE
     const canvas = document.createElement('canvas')
     canvas.width = W
     canvas.height = H
@@ -254,7 +256,7 @@ export function exportCampaignReplay({ territory, frames: campaignFrames, onProg
     // The base (map art) and the committed hatch layer only change once per
     // move — pre-render both so the per-tick cost is two drawImage calls plus
     // the flat-tint wave.
-    const base = renderBaseMap(img, W, H)
+    const base = renderBaseMap(img, map, W, H)
     let hatch = renderHatch(frames[0], cols, rows, showRHQ, W, H)
     const commitHatch = (cells) => { hatch = renderHatch(cells, cols, rows, showRHQ, W, H) }
 
@@ -456,15 +458,16 @@ export async function exportProgressImage({ territory, frames: campaignFrames, d
   const beforeCells = cells[Math.max(0, recentIdx - 1)]
   const plan = transitionPlan(beforeCells, finalCells, cols, rows)
 
-  const img = await loadImage(MAP_IMAGE)
-  const W = MAP_PIXEL_WIDTH * SCALE
-  const H = MAP_PIXEL_HEIGHT * SCALE
+  const map = mapFor(territory)
+  const img = await loadImage(map.image)
+  const W = map.pixelWidth * SCALE
+  const H = map.pixelHeight * SCALE
   const canvas = document.createElement('canvas')
   canvas.width = W; canvas.height = H
   const ctx = canvas.getContext('2d')
   ctx.imageSmoothingEnabled = false
 
-  ctx.drawImage(renderBaseMap(img, W, H), 0, 0)
+  ctx.drawImage(renderBaseMap(img, map, W, H), 0, 0)
   ctx.drawImage(renderHatch(finalCells, cols, rows, showRHQ, W, H), 0, 0)
   if (plan.clusters.length) renderWaveLayer(ctx, plan, 1, { cols, rows, w: W, h: H })
   drawCompanyLabels(ctx, companyLabelPoints(finalCells, cols, rows, { showRHQ, avoid: territory.places, overrides: territory.labelOverrides }), { cols, rows, w: W, h: H, scale: SCALE })

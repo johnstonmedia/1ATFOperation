@@ -30,6 +30,13 @@ Six separate changes are stuck behind it:
 **How to do it:** Firebase Console → Firestore → Rules → paste
 [firestore.rules](firestore.rules) → Publish. No code change needed.
 
+**Not on that list, and deliberately so:** the second map (2026-09-12) added
+`activeMap` and a per-map `territory_*` / `campaignDefaultStart_*` document,
+and put every map's replay frames in the existing `campaignFrames` collection
+under a `map` field. All of those are covered by rules blocks already in the
+file, so maps add nothing new to publish — but they inherit the
+`campaignFrames` blocker above, for every map rather than one.
+
 ### While you're in there: Storage (added 2026-08-04)
 
 The Briefings editor now takes a **dragged-in video file**, which is the app's

@@ -40,7 +40,8 @@ don't repeat or undo recent work.
 Three **public, no-login** tabs behind the main shell, plus chrome-less
 routes — see [src/App.jsx](src/App.jsx):
 - `/` **Home** — hero + unread-content alert banners (red, above the map —
-  see `useUnseen` below) + pixel territory map + **SMEAC operation brief**
+  see `useUnseen` below) + the pixel territory map of whichever map `activeMap`
+  names (visitors never see any other) + **SMEAC operation brief**
   (`smeacOf()` in seed.js merges older stored narratives) + **Recent
   Movements** + company roles + Meridian brief. *Recent Movements* is
   `narrative.movements` (`{ show, title, intro, entries: [{ id, company, text
@@ -214,20 +215,32 @@ assuming a page exists).
   `hostile` as an identifier — user-visible copy says "threat").
 
 ## Data model
-- Firestore single-value docs under `content/{slice}`: `narrative`, `territory`,
+- Firestore single-value docs under `content/{slice}`: `narrative`,
   `classified`, `branding`, `companyPages`, `video`, `intel`, `intelIntro`,
-  `briefings`, `campaignDefaultStart` (public read, RHQ write) — see
-  `SINGLE_SLICES` in [src/lib/store.js](src/lib/store.js).
+  `briefings`, `staffAccess`, `activeMap`, plus **per map** a `territory` and a
+  `campaignDefaultStart` doc (public read, RHQ write) — see `SINGLE_SLICES` in
+  [src/lib/store.js](src/lib/store.js), which builds that list from the map
+  registry. `activeMap` names the one map the public portal shows;
   `campaignDefaultStart` is just a frame id (or `null`) — see "Campaign
-  replay" below.
+  replay" below. **The primary map keeps the original unsuffixed names**
+  (`territory`, `campaignDefaultStart`) so existing documents are untouched;
+  every other map gets `territory_<mapId>` / `campaignDefaultStart_<mapId>`.
+  Adding a map therefore needs no Firestore rules change — see "Maps" below.
 - Collections: `roster`, `tasks`, `activity`, `support`, `resetRequests`,
   `audit`, `campaignFrames` — see `COLLECTION_SLICES` in the same file.
-  `campaignFrames` is the territory replay history (see "Campaign replay"
-  below): one document per frame, `{ order, cells, label, ts, updatedAt }` —
+  `campaignFrames` is the territory replay history for **every** map (see
+  "Campaign replay" below): one document per frame,
+  `{ order, cells, label, map, ts, updatedAt }` —
   each frame a full grid snapshot, not a diff, so RHQ can edit/reorder/
   duplicate/delete any single frame independently via
   [src/lib/campaign.js](src/lib/campaign.js)'s pure `sortFrames`/
-  `framesValid`/`frameCells`/`frameCaptions`/`renumberFrames` helpers. Plus
+  `framesValid`/`frameCells`/`frameCaptions`/`renumberFrames` helpers.
+  `map` scopes a frame to one map (absent = the primary map) — deliberately
+  one shared collection rather than one per map, so a new map needs no new
+  rules block. ⚠️ `persistCollection` DELETES any document missing from what
+  it is handed, so every write of `campaignFrames` must carry the other maps'
+  frames through: use `withMapFrames()` from `lib/maps.js`, never a bare
+  filtered array. Plus
   two collections managed directly, not through `store.js`:
   `intelSubmissions` (the Company Commander approval queue, via
   [src/lib/submissions.js](src/lib/submissions.js)) and **`intelStats`**
@@ -247,19 +260,56 @@ assuming a page exists).
   `replaceRoster`, `append`, `reportError`, `reload`, `logAudit`.
 - Defaults/seed content in [src/firebase/seed.js](src/firebase/seed.js).
 
+## Maps (`src/lib/maps.js`) — there is more than one (2026-09-12)
+- **`MAPS` in [src/lib/maps.js](src/lib/maps.js) is the single description of
+  what a map is**: art file, native pixel size, territory grid, and an optional
+  `blockFill` (a flat colour in the art that can never be painted). Two ship:
+  - **`nsw`** — NSW Campaign, `public/map/nsw-terrain.png`, 648×336, 216×112
+    grid, ocean `#3c82b4` unpaintable. The **primary** map (`PRIMARY_MAP_ID`).
+  - **`singleton`** — Singleton Military Area (Areas 8 & 9, AUSPEC0196),
+    `public/map/singleton.png`, 648×459, 216×153 grid, nothing unpaintable.
+    Derived from the Defence topo sheet by
+    [tools/map/derive-singleton-map.py](tools/map/derive-singleton-map.py) —
+    read that script before regenerating it; the source PDF is not in the repo.
+    `Ex Admin Area` is the RHQ location, and this is the one map seeded with
+    `showRHQ: true`.
+- **Maps are code, not content.** New art has to be committed and its grid
+  sized to it, so adding a map is a repo change: art in `public/map`, a record
+  in `MAPS`, optionally a seed territory in `seed.js`. No rules change.
+- **A territory object names its own map** (`territory.map`), so `PixelMap`,
+  `CampaignReplayMap` and both exporters resolve art/aspect/grid via
+  `mapFor(territory)` with no extra plumbing. `normalizeTerritory` in store.js
+  stamps it onto pre-2026-09 data and re-seeds any territory whose cols/rows
+  don't match its map.
+- **The public sees exactly one map** — the `activeMap` slice. Home and the
+  Staff Centre read it; there is deliberately no public switcher. RHQ switches
+  in Ops Centre → Map: Territory, where *which map you're editing* and *which
+  map is live* are two separate controls: switching the editor changes nothing
+  for visitors until "Show this map on the portal". Editing state (painting,
+  staged frame edits) is local to the map being edited and is discarded on
+  switch, behind a confirm.
+- **Palette constraint for any new art**: the page draws every map through
+  `IMAGE_FILTER` (`contrast(140%) sepia(60%) …` in `terrainRender.js`), which
+  crushes anything below mid-grey to black and blows out anything much
+  lighter. Both tiles sit inside a narrow mid-tone band on purpose; art that
+  looks right at full size can block up solid in the app. See
+  [public/map/README.md](public/map/README.md).
+
 ## Territory / map system (`src/lib/territory.js`, `src/components/PixelMap.jsx`)
-- Fixed **216×112 cell grid** (`TERR_COLS`/`TERR_ROWS`) overlaid on a raster
-  NSW image (`public/map/nsw-terrain.png`, 648×336, aspect `MAP_ASPECT` =
-  `648/336`). The grid is deliberately sized so each cell is an exact 3×3
-  block of source-image pixels — keep any future resolution change divisible
-  the same way so the grid stays pixel-aligned to the art. Each cell is a
-  single character in a flat string: `.` empty, `A B C D E S` = the six
-  companies, `M` = Meridian, `R` = RHQ (only rendered when `territory.showRHQ`
-  is on). Lowercase = "lighter" variant (newly gained / loosely held).
-- Ocean tiles are unpaintable: `src/lib/oceanMask.js` majority-samples the
-  source image per cell against the flat ocean fill (`OCEAN_COLOR` in
-  `territory.js`, `#3c82b4`) to build a shared `Uint8Array` mask, enforced in
-  `MapEditor`'s paint handler and shown as a dark overlay in edit mode.
+- A **cell grid** (each map's `cols`/`rows`) overlaid on its raster art. The
+  grid is deliberately sized so each cell is an exact 3×3 block of source-image
+  pixels — keep any future resolution divisible the same way so the grid stays
+  pixel-aligned to the art. Each cell is a single character in a flat string:
+  `.` empty, `A B C D E S` = the six companies, `M` = Meridian, `R` = RHQ (only
+  rendered when `territory.showRHQ` is on). Lowercase = "lighter" variant
+  (newly gained / loosely held). `TERR_COLS`/`TERR_ROWS`/`MAP_IMAGE`/
+  `MAP_ASPECT` in `territory.js` are the PRIMARY map's values, derived from the
+  registry and kept only for the code paths that predate multiple maps.
+- Some maps have unpaintable ground: `src/lib/unpaintableMask.js`
+  majority-samples a map's art per cell against its `blockFill` to build a
+  shared `Uint8Array` mask, enforced in `MapEditor`'s paint handler and shown
+  as a dark overlay in edit mode. On NSW that's the ocean; Singleton declares
+  no blocked fill, so the mask is all-zero and the image is never even loaded.
 - **Painting is incremental**: `PixelMap` diffs the grid against the last
   rasterised one and redraws only the dirty cell region; `renderTerritoryLayer`
   clips to it and its hatch-mask scratch canvas is sized to that region (the
@@ -281,7 +331,7 @@ assuming a page exists).
   instead, so painting and navigating never fight over the same gesture.
   Read-only by default; pass `edit`/`brush`/`brushSize`/`onPaint` to enable
   painting, `onMovePlace` to drag place-name labels, `oceanMask` to
-  block/shade ocean cells while editing.
+  block/shade unpaintable cells while editing.
 - **Place-label markers own their own positioning** ([Beacon.jsx](src/components/Beacon.jsx)):
   the dot is pinned to `(x, y)` via its own transform, and the name/tag flow
   right from a separately-positioned span. Don't go back to centring dot +
@@ -344,9 +394,9 @@ assuming a page exists).
   opted in). Unchecked (the default) — a frame always places labels
   automatically. Before this flag existed, dragging a label into place bled
   into every frame of the public replay, not just the one it was fixed for.
-- **Campaign replay** (v2.3, 2026-08-04; v2.4, 2026-08-17): every frame is its
-  OWN Firestore document in the `campaignFrames` collection —
-  `{ id, order, cells, label, ts, updatedAt }`, a full grid snapshot, not a
+- **Campaign replay** (v2.3, 2026-08-04; v2.4, 2026-08-17; per-map 2026-09-12):
+  every frame is its OWN Firestore document in the `campaignFrames` collection —
+  `{ id, order, cells, label, map, ts, updatedAt }`, a full grid snapshot, not a
   diff against the previous frame (that was v2.2's design; see CHANGELOG for
   why it was replaced). In **Map: Territory**'s "Campaign replay" panel:
   **+ Add Frame from Live Map** snapshots the current painting onto the end
@@ -361,7 +411,7 @@ assuming a page exists).
   structural change. Because frames don't chain, editing frame 0 no longer
   wipes anything after it — that was only ever a limitation of the old
   diff-chain. Each row also has **Set as Default Start**, which writes the
-  frame's id to the single-value `campaignDefaultStart` slice (`null` =
+  frame's id to that map's single-value `campaignDefaultStart` slice (`null` =
   "earliest frame", the original behaviour) — this is where the PUBLIC
   replay's auto-play begins; frames before it are untouched, just skipped by
   the automatic playback, and stay reachable through the picker described
@@ -456,6 +506,8 @@ intel)**, Briefings, Welcome Page (Classified), Branding & Assets, Users, Help,
 roster/support/`intelSubmissions` collections) via `updateSlice`/`replaceRoster`,
 and most log an audit entry via `useAudit()`. **Approvals** is the RHQ side of
 the Company Commander workflow (see "Company Commander & intel approval" above).
+**Map: Territory** is the exception to "one section, one slice": it edits one
+map at a time and writes that map's own slices — see "Maps" above.
 
 ### Backups / version history (2026-08-05)
 [src/lib/backups.js](src/lib/backups.js) + the **Backups** section
@@ -611,8 +663,9 @@ styles — there is no CSS-in-JS or component library.
    Storage requires the **Blaze** plan on projects created after Oct 2024.
 
 **Rules coverage** — every collection/doc the app touches has a block:
-`content/*` (all `SINGLE_SLICES` — adding a slice needs no rules change),
-`campaignFrames`, `roster`, `tasks`, `activity`, `users`, `support`,
+`content/*` (all `SINGLE_SLICES` — adding a slice, or a whole MAP, needs no
+rules change; see "Maps" above),
+`campaignFrames` (every map's frames share it), `roster`, `tasks`, `activity`, `users`, `support`,
 `resetRequests`, `audit`, `authIndex`, `intelSubmissions`, `intelStats`,
 `backups` (plus a narrower `content/intel` override for RHQ Staff);
 everything else default-denies. The `content/*`/`roster`/`intelSubmissions`

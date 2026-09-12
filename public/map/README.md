@@ -1,20 +1,50 @@
-# Map background image
+# Map background images
 
-The NSW terrain image lives here named exactly:
+One image per map in the registry (`MAPS` in `src/lib/maps.js`), named exactly
+as that record's `image` field:
 
-    nsw-terrain.png
+    nsw-terrain.png   648x336   NSW Campaign        grid 216x112
+    singleton.png     648x459   Singleton Mil Area  grid 216x153
 
-648x336 px. The territory grid (`TERR_COLS`/`TERR_ROWS` in `src/lib/territory.js`)
-is deliberately sized so each grid cell maps to an exact 3x3 block of this
-image (648/3 = 216, 336/3 = 112) — keeps the colourable grid pixel-aligned to
-the actual map art instead of an arbitrary overlay resolution.
+Each map's territory grid (`cols`/`rows` in the registry) is deliberately sized
+so one grid cell maps to an exact 3x3 block of its image (648/3 = 216, 336/3 =
+112, 459/3 = 153) — that keeps the colourable grid pixel-aligned to the actual
+art instead of straddling it. **Keep any new image divisible the same way.**
 
-Ocean tiles are auto-detected (majority-pixel sampling against the flat
-`#3c82b4` ocean fill, see `src/lib/oceanMask.js`) and can't be painted in the
-Operations Centre editor — if you replace this image, keep ocean rendered as
-that exact colour (or update `OCEAN_COLOR` in `territory.js`).
+A map may declare a `blockFill`: a flat colour in its art that can never be
+painted. On `nsw-terrain.png` that's the `#3c82b4` ocean, auto-detected by
+majority-pixel sampling (`src/lib/unpaintableMask.js`) and blocked in the
+Operations Centre editor. If you replace that image, keep the ocean rendered as
+that exact colour (or update `blockFill`). `singleton.png` is landlocked and
+declares `null`, so nothing on it is blocked.
 
-If you swap in a differently-sized image, update `MAP_PIXEL_WIDTH`/
-`MAP_PIXEL_HEIGHT`, `MAP_ASPECT`, and `TERR_COLS`/`TERR_ROWS` together in
-`src/lib/territory.js` (and the seed's `territory.cells` string length, and
-place marker positions, need to stay in sync — see CLAUDE.md).
+## Palette
+
+Every map is drawn through a `contrast(140%) sepia(60%) brightness(75%)` CSS
+filter (`IMAGE_FILTER` in `src/lib/terrainRender.js`), and the territory hatch
+is composited over the top. Art therefore has to sit in a narrow mid-tone band:
+anything darker than mid-grey crushes to black once filtered, and anything much
+lighter blows out. Both images above stay roughly within a filtered luminance of
+90–175.
+
+## Regenerating singleton.png
+
+It is derived from the Defence AUSPEC0196 1:25,000 sheet (Singleton Range
+Special, Areas 8 & 9) rather than drawn by hand:
+
+    pip install pillow numpy scipy pymupdf
+    python3 tools/map/derive-singleton-map.py Areas_8__9.pdf public/map/singleton.png
+
+That script documents how the sheet's legend colours are separated into
+vegetation, relief, drainage, roads and boundaries. The source PDF is NOT in the
+repo — it is marked FOR DEFENCE PURPOSES ONLY.
+
+## Adding a map
+
+1. Commit the art here at a size divisible by 3.
+2. Add a record to `MAPS` in `src/lib/maps.js` (art, pixel size, grid, block fill).
+3. Optionally seed its starting territory in `src/firebase/seed.js`.
+
+No Firestore rules change is needed — a map's territory and replay-start slices
+are ordinary `content/*` documents, and its replay frames live in the existing
+`campaignFrames` collection under a `map` field.

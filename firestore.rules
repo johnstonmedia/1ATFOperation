@@ -20,12 +20,18 @@ rules_version = '2';
 //
 //   content/{slice}   Public operational content. World-readable, RHQ writes.
 //                     Covers every SINGLE_SLICES entry in lib/store.js —
-//                     narrative, territory, classified, branding, companyPages,
-//                     video, intel, intelIntro, briefings, campaignDefaultStart,
-//                     staffAccess. Adding a slice there needs NO rules change.
-//                     content/intel additionally allows RHQ Staff (approvals).
+//                     narrative, classified, branding, companyPages, video,
+//                     intel, intelIntro, briefings, staffAccess, activeMap, and
+//                     per map (lib/maps.js) a territory + campaignDefaultStart
+//                     doc: `territory`/`campaignDefaultStart` for the primary
+//                     map, `territory_<mapId>`/`campaignDefaultStart_<mapId>`
+//                     for the rest. Adding a slice OR A MAP needs NO rules
+//                     change. content/intel additionally allows RHQ Staff
+//                     (approvals).
 //   campaignFrames    Campaign replay history, one doc per frame (a full cell
-//                     snapshot + label + order). World-readable, RHQ writes.
+//                     snapshot + label + order + the map it belongs to).
+//                     Every map's frames share this one collection, filtered
+//                     client-side. World-readable, RHQ writes.
 //   roster            RHQ reads all; a signed-in member may read ONLY their own
 //                     record. RHQ writes.
 //   users/{uid}       A member reads/updates only their own profile and may not

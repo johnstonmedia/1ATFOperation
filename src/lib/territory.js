@@ -1,26 +1,33 @@
 import { COMPANIES } from '../firebase/seed'
+import { mapById, PRIMARY_MAP_ID } from './maps'
 
-// Pixel-grid territory system. Territory is a fixed grid overlaid on the NSW
-// pixel-art image; each cell holds a single-character colour-state code:
+// Pixel-grid territory system. Territory is a fixed grid overlaid on a
+// pixel-art map tile; each cell holds a single-character colour-state code:
 //   '.'            empty
 //   A B C D E S    the six companies (solid / firmly held)
 //   M              Meridian
 //   R              RHQ (optional — only shown when the map's showRHQ is on)
 //   lowercase      the "lighter" variant: newly gained / loosely held
 //
-// Grid is sized so each cell maps to an exact 3x3 block of source-image
-// pixels (648x336 / 3 = 216x112) — keeps the colourable grid pixel-aligned
-// to the actual map art instead of an arbitrary overlay resolution.
-export const TERR_COLS = 216
-export const TERR_ROWS = 112
-export const MAP_IMAGE = import.meta.env.BASE_URL + 'map/nsw-terrain.png'
-export const MAP_ASPECT = 648 / 336 // the base image's aspect ratio
-export const MAP_PIXEL_WIDTH = 648
-export const MAP_PIXEL_HEIGHT = 336
+// Each map's grid is sized so one cell maps to an exact 3x3 block of its
+// source-image pixels — keeps the colourable grid pixel-aligned to the actual
+// art instead of an arbitrary overlay resolution. Which maps exist, and their
+// art and grid sizes, live in lib/maps.js.
+//
+// The constants below are the PRIMARY map's, kept for the code paths that
+// predate multiple maps; anything that can be handed a second map should read
+// the registry record instead (mapFor(territory) in lib/maps.js).
+const PRIMARY = mapById(PRIMARY_MAP_ID)
+export const TERR_COLS = PRIMARY.cols
+export const TERR_ROWS = PRIMARY.rows
+export const MAP_IMAGE = PRIMARY.image
+export const MAP_ASPECT = PRIMARY.pixelWidth / PRIMARY.pixelHeight
+export const MAP_PIXEL_WIDTH = PRIMARY.pixelWidth
+export const MAP_PIXEL_HEIGHT = PRIMARY.pixelHeight
 
-// Solid ocean fill colour in the source image — cells that sample as
-// majority-ocean can't be painted (see lib/oceanMask.js).
-export const OCEAN_COLOR = '#3c82b4'
+// Solid ocean fill colour in the NSW art — cells that sample as majority-ocean
+// can't be painted (see lib/unpaintableMask.js, which reads it per map).
+export const OCEAN_COLOR = PRIMARY.blockFill
 
 const MERIDIAN_COLOR = '#ff3b46'
 const RHQ_COLOR = COMPANIES.find((c) => c.letter === 'R')?.accent || '#f39c12'

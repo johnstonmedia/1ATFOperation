@@ -6,7 +6,7 @@ import { useAudit } from '../../hooks/useAudit'
 import { OpsHeader } from './OperationsCentre'
 import {
   BACKUP_KEEP, buildFullExport, describeChange, deleteBackup, downloadJson,
-  formatSize, listBackups, sliceLabel, SLICE_LABELS,
+  formatSize, isTerritorySlice, listBackups, sliceLabel, SLICE_LABELS,
 } from '../../lib/backups'
 
 // Backups — the version history of everything RHQ edits.
@@ -289,7 +289,7 @@ function IntelFragmentsView({ backup, current, onRestoreItem }) {
 function ValueView({ slice, value }) {
   // The territory grid is one enormous string of cell letters — dumping it is
   // useless. Summarise it and let Restore + the map editor do the looking.
-  if (slice === 'territory') {
+  if (isTerritorySlice(slice)) {
     const cells = value?.cells || ''
     const held = {}
     for (const ch of cells) {

@@ -1,9 +1,10 @@
 import { useRef, useEffect, useState, useCallback, useMemo } from 'react'
-import { MAP_IMAGE, MAP_ASPECT, beaconStateFor } from '../lib/territory'
+import { beaconStateFor } from '../lib/territory'
+import { mapFor, mapAspect } from '../lib/maps'
 import { renderTerritoryLayer, IMAGE_FILTER } from '../lib/terrainRender'
 import { companyLabelPoints } from '../lib/companyLabels'
 import Beacon from './Beacon'
-import { useOceanOverlayUrl } from '../lib/oceanMask'
+import { useUnpaintableOverlayUrl } from '../lib/unpaintableMask'
 
 const CELL = 8 // fallback canvas pixels per grid cell, used only for the very
                 // first paint before the draw effect below measures the
@@ -17,7 +18,9 @@ const ZOOM_STEP = 1.6 // multiplier per +/- button press
 
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v))
 
-// Pixel-grid territory map over the NSW image.
+// Pixel-grid territory map over a map tile. Which tile (and so which aspect
+// ratio and unpaintable fill) comes from the territory itself — see
+// mapFor() in lib/maps.js — so one component serves every map.
 //
 // Interaction model:
 //  - Zoom: explicit +/- buttons (bottom-right), centred on the map. No wheel
@@ -47,6 +50,7 @@ export default function PixelMap({
            // label sitting over cells you're trying to paint is in the way.
 }) {
   const { cols, rows, cells, showRHQ } = territory
+  const map = mapFor(territory)
   const places = territory.places || []
   const canvasRef = useRef(null)
   const containerRef = useRef(null)
@@ -62,7 +66,7 @@ export default function PixelMap({
   viewRef.current = view
   const dragOrigin = useRef(null) // { pointerId, lastX, lastY } | { pointerId, painting: true }
   const dragging = useRef(null) // { place: id } | { label: code } being dragged
-  const oceanOverlayUrl = useOceanOverlayUrl(edit)
+  const blockedOverlayUrl = useUnpaintableOverlayUrl(map, edit)
 
   // Company name placements are derived from the cells, so they track the
   // committed replay frame exactly like the beacons do. Memoised on the cell
@@ -301,7 +305,7 @@ export default function PixelMap({
         style={{
           position: 'relative',
           width: '100%',
-          aspectRatio: String(MAP_ASPECT),
+          aspectRatio: String(mapAspect(map)),
           overflow: 'hidden',
           borderRadius: 'var(--radius)',
           border: '1px solid var(--line)',
@@ -322,10 +326,10 @@ export default function PixelMap({
             transform: `scale(${scale}) translate(${view.x}px, ${view.y}px)`,
           }}
         >
-          <img src={MAP_IMAGE} alt="NSW operational map" draggable={false}
+          <img src={map.image} alt={`${map.name} operational map`} draggable={false}
             style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', imageRendering: 'pixelated', userSelect: 'none', filter: IMAGE_FILTER }} />
-          {edit && oceanOverlayUrl && (
-            <img src={oceanOverlayUrl} alt="" draggable={false}
+          {edit && blockedOverlayUrl && (
+            <img src={blockedOverlayUrl} alt="" draggable={false}
               style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', imageRendering: 'pixelated', userSelect: 'none', pointerEvents: 'none' }} />
           )}
           <canvas ref={canvasRef} width={cols * CELL} height={rows * CELL}

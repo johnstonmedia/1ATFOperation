@@ -15,21 +15,60 @@ import {
   DEFAULT_BRIEFINGS,
   DEFAULT_STAFF_ACCESS,
   DEFAULT_TERRITORY,
+  DEFAULT_SINGLETON_TERRITORY,
+  DEFAULT_ACTIVE_MAP,
   DEMO_ROSTER,
   DEFAULT_ACTIVITY,
 } from '../firebase/seed'
-import { TERR_COLS, TERR_ROWS } from './territory'
+import { MAPS, PRIMARY_MAP_ID, mapById, mapSlices, territorySlice, campaignStartSlice, frameMapId } from './maps'
 
 const LS_KEY = '1atf-state-v1'
 const LS_AUTHIDX = '1atf-authindex'
-const SINGLE_SLICES = ['narrative', 'territory', 'classified', 'branding', 'companyPages', 'video', 'intel', 'intelIntro', 'briefings', 'campaignDefaultStart', 'staffAccess']
+// Every map contributes its own territory + replay-start slice (see
+// lib/maps.js) — the primary map's keep the original unsuffixed names, so
+// existing Firestore documents are untouched by there being a second map.
+// They are plain `content/*` docs, already covered by the existing rules.
+const SINGLE_SLICES = ['narrative', 'classified', 'branding', 'companyPages', 'video', 'intel', 'intelIntro', 'briefings', 'staffAccess', 'activeMap', ...mapSlices()]
 const COLLECTION_SLICES = ['roster', 'tasks', 'activity', 'support', 'resetRequests', 'audit', 'campaignFrames']
 
 export const isContentSlice = (slice) => SINGLE_SLICES.includes(slice)
 
+// Seed value for each map's territory. A map with no entry here starts empty
+// rather than blowing up — adding art to lib/maps.js is enough to get a
+// paintable map, and a seed is only a nicety on top.
+const TERRITORY_SEED = {
+  nsw: DEFAULT_TERRITORY,
+  singleton: DEFAULT_SINGLETON_TERRITORY,
+}
+const blankTerritory = (map) => ({
+  map: map.id,
+  cols: map.cols,
+  rows: map.rows,
+  showRHQ: false,
+  cells: '.'.repeat(map.cols * map.rows),
+  places: [],
+})
+export const defaultTerritoryFor = (mapId) => {
+  const map = mapById(mapId)
+  return structuredClone(TERRITORY_SEED[map.id] || blankTerritory(map))
+}
+
+const DEFAULT_MAP_STATE = MAPS.reduce((acc, m) => {
+  acc[territorySlice(m.id)] = defaultTerritoryFor(m.id)
+  // Frame id the public replay's auto-play starts from (null = the earliest
+  // frame, i.e. the original behaviour). Earlier frames still exist and
+  // remain reachable via the replay's manual frame picker — this only
+  // controls where the AUTO-PLAY begins.
+  acc[campaignStartSlice(m.id)] = null
+  return acc
+}, {})
+
 const DEFAULT_STATE = {
   narrative: DEFAULT_NARRATIVE,
-  territory: DEFAULT_TERRITORY,
+  ...DEFAULT_MAP_STATE,
+  // Which map the public portal shows. Signed-out visitors see this one and
+  // no other; RHQ switches it from Map: Territory.
+  activeMap: DEFAULT_ACTIVE_MAP,
   classified: DEFAULT_CLASSIFIED,
   branding: DEFAULT_BRANDING,
   companyPages: DEFAULT_COMPANY_PAGES,
@@ -37,11 +76,6 @@ const DEFAULT_STATE = {
   intel: DEFAULT_INTEL,
   intelIntro: DEFAULT_INTEL_INTRO,
   briefings: DEFAULT_BRIEFINGS,
-  // Frame id the public replay's auto-play starts from (null = the earliest
-  // frame, i.e. the original behaviour). Earlier frames still exist and
-  // remain reachable via the replay's manual frame picker — this only
-  // controls where the AUTO-PLAY begins.
-  campaignDefaultStart: null,
   staffAccess: DEFAULT_STAFF_ACCESS,
   roster: FIREBASE_ENABLED ? [] : DEMO_ROSTER,
   tasks: [],
@@ -175,10 +209,18 @@ async function persistCollection(coll, rows) {
 // (cells lose square alignment). Fall back to the fresh default rather than
 // render a broken grid; RHQ re-saving in the map editor persists the fix.
 function normalizeTerritory(state) {
-  const t = state.territory
-  if (!t || t.cols !== TERR_COLS || t.rows !== TERR_ROWS) {
-    state.territory = structuredClone(DEFAULT_TERRITORY)
+  for (const map of MAPS) {
+    const slice = territorySlice(map.id)
+    const t = state[slice]
+    if (!t || t.cols !== map.cols || t.rows !== map.rows || t.cells?.length !== map.cols * map.rows) {
+      state[slice] = defaultTerritoryFor(map.id)
+    } else if (t.map !== map.id) {
+      // Territory saved before maps were a thing carries no id. Stamp it so
+      // everything downstream can ask a territory which art it belongs to.
+      state[slice] = { ...t, map: map.id }
+    }
   }
+  if (!MAPS.some((m) => m.id === state.activeMap)) state.activeMap = PRIMARY_MAP_ID
   return state
 }
 
@@ -205,15 +247,19 @@ function normalizeNarrative(state) {
 }
 
 // Same idea for the campaign replay frames: a frame recorded against a
-// different grid resolution can't be replayed over the current art. Drop the
-// whole set rather than render a broken/mixed-resolution replay — RHQ adds a
-// fresh frame from the current map to begin a new history.
+// different grid resolution can't be replayed over the current art. Drop that
+// map's whole set rather than render a broken/mixed-resolution replay — RHQ
+// adds a fresh frame from the current map to begin a new history. Judged per
+// map, since the collection now holds every map's history together and one
+// map's stale frames must not take another map's history down with them.
 function normalizeCampaignFrames(state) {
   const frames = Array.isArray(state.campaignFrames) ? state.campaignFrames : []
-  const size = state.territory.cols * state.territory.rows
-  state.campaignFrames = frames.every((f) => typeof f.cells === 'string' && f.cells.length === size)
-    ? frames
-    : []
+  const broken = new Set()
+  for (const f of frames) {
+    const map = mapById(frameMapId(f))
+    if (typeof f.cells !== 'string' || f.cells.length !== map.cols * map.rows) broken.add(map.id)
+  }
+  state.campaignFrames = broken.size ? frames.filter((f) => !broken.has(frameMapId(f))) : frames
   return state
 }
 

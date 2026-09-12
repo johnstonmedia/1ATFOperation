@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import CampaignReplayMap from '../components/CampaignReplayMap'
 import { useData } from '../context/DataContext'
@@ -6,6 +6,7 @@ import { useCompany } from '../context/CompanyContext'
 import { useUnseen, useUnseenIntel, hasIntelBaseline, markIntelSeen } from '../hooks/useUnseen'
 import { decryptProgress } from '../lib/intelProgress'
 import { COMPANIES, PHONETIC, smeacOf, movementsOf } from '../firebase/seed'
+import { mapById, territorySlice, campaignStartSlice, framesForMap } from '../lib/maps'
 
 const RECRUITS = ['Alpha', 'Bravo', 'Charlie', 'Delta']
 const badge = (c) => (
@@ -50,6 +51,13 @@ export default function Home() {
   const progress = decryptProgress(state.intel, company)
   const outstanding = progress.total - progress.done
 
+  // The portal carries more than one map, but a visitor only ever sees the
+  // one RHQ has made active — there is deliberately no public switcher, and
+  // no other map's territory or replay reaches this page at all.
+  const live = mapById(state.activeMap)
+  const territory = state[territorySlice(live.id)]
+  const frames = useMemo(() => framesForMap(state.campaignFrames, live.id), [state.campaignFrames, live.id])
+
   // First visit (or straight after switching company): record the current
   // intel as the baseline so the alert only ever fires on a real change.
   useEffect(() => {
@@ -91,7 +99,7 @@ export default function Home() {
 
       {/* Animated campaign-history replay; plain static map when no campaign
           start state has been recorded yet. */}
-      <CampaignReplayMap territory={state.territory} frames={state.campaignFrames} defaultStartId={state.campaignDefaultStart} />
+      <CampaignReplayMap territory={territory} frames={frames} defaultStartId={state[campaignStartSlice(live.id)]} />
 
       <div className="row wrap" style={{ marginTop: 20, gap: 16, alignItems: 'flex-start' }}>
         <div style={{ flex: '1 1 420px' }}>

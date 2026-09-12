@@ -9,6 +9,7 @@ import PixelMap from '../components/PixelMap'
 import MapLegend from '../components/MapLegend'
 import { COMPANIES, PHONETIC, smeacOf, movementsOf } from '../firebase/seed'
 import { framesValid, sortFrames } from '../lib/campaign'
+import { mapById, territorySlice, framesForMap } from '../lib/maps'
 import { listSubmissions } from '../lib/submissions'
 import LoginModal from '../components/LoginModal'
 import ApprovalsQueue from '../components/ApprovalsQueue'
@@ -137,8 +138,12 @@ function StaffDashboard({ onLock }) {
   const activity = state.activity || []
   const video = state.video || {}
   const briefings = state.briefings || {}
-  const campaignFrames = state.campaignFrames
-  const hasCampaign = framesValid(campaignFrames, state.territory.cols, state.territory.rows)
+  // The Staff Centre mirrors the public portal, so it shows the map visitors
+  // are actually looking at — not every map the portal carries.
+  const liveMap = mapById(state.activeMap)
+  const territory = state[territorySlice(liveMap.id)]
+  const campaignFrames = framesForMap(state.campaignFrames, liveMap.id)
+  const hasCampaign = framesValid(campaignFrames, territory.cols, territory.rows)
   const scheduled = video.live && video.publishAt && video.publishAt > Date.now()
 
   const SECTIONS = [
@@ -172,7 +177,7 @@ function StaffDashboard({ onLock }) {
     {
       id: 'map',
       title: 'Operational Map',
-      sub: 'Territory & campaign replay',
+      sub: `${liveMap.name} — territory & campaign replay`,
       stat: hasCampaign ? `${campaignFrames.length} frame${campaignFrames.length === 1 ? '' : 's'}` : 'no replay',
     },
     {
@@ -266,10 +271,10 @@ function StaffDashboard({ onLock }) {
           {view === 'intel' && <IntelDetail intel={intel} updatedAt={meta.intel?.updatedAt} intro={state.intelIntro} />}
           {view === 'video' && <VideoDetail video={video} briefings={briefings} />}
           {view === 'briefings' && <BriefingsDetail briefings={briefings} updatedAt={meta.briefings?.updatedAt} />}
-          {view === 'map' && <MapDetail territory={state.territory} campaignFrames={campaignFrames} hasCampaign={hasCampaign} updatedAt={meta.territory?.updatedAt} />}
+          {view === 'map' && <MapDetail map={liveMap} territory={territory} campaignFrames={campaignFrames} hasCampaign={hasCampaign} updatedAt={meta[territorySlice(liveMap.id)]?.updatedAt} />}
           {view === 'activity' && <ActivityDetail activity={activity} />}
           {view === 'narrative' && <NarrativeDetail narrative={state.narrative} classified={state.classified} />}
-          {view === 'freshness' && <FreshnessDetail meta={meta} />}
+          {view === 'freshness' && <FreshnessDetail meta={meta} map={liveMap} />}
         </div>
       )}
     </div>
@@ -453,11 +458,11 @@ function BriefingsDetail({ briefings, updatedAt }) {
   )
 }
 
-function MapDetail({ territory, campaignFrames, hasCampaign, updatedAt }) {
+function MapDetail({ map, territory, campaignFrames, hasCampaign, updatedAt }) {
   const sorted = hasCampaign ? sortFrames(campaignFrames) : []
   return (
     <>
-      <Muted>Territory last updated {when(updatedAt)}. Live state shown — use +/- to zoom.</Muted>
+      <Muted>{map.name} — the map the portal is currently showing. Territory last updated {when(updatedAt)}. Live state shown — use +/- to zoom.</Muted>
       <PixelMap territory={territory} showCompanyLabels />
       <MapLegend showRHQ={territory.showRHQ} />
       <Panel>
@@ -569,10 +574,10 @@ function NarrativeDetail({ narrative, classified }) {
   )
 }
 
-function FreshnessDetail({ meta }) {
+function FreshnessDetail({ meta, map }) {
   const rows = [
     ['Operation brief (SMEAC / narrative)', 'narrative'],
-    ['Map territory', 'territory'],
+    [`Map territory (${map.name})`, territorySlice(map.id)],
     ['Campaign replay', 'campaign'],
     ['Intercepted intelligence', 'intel'],
     ['Intel intro', 'intelIntro'],
