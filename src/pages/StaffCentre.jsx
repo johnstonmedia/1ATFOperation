@@ -9,7 +9,7 @@ import PixelMap from '../components/PixelMap'
 import MapLegend from '../components/MapLegend'
 import { COMPANIES, PHONETIC, smeacOf, movementsOf } from '../firebase/seed'
 import { framesValid, sortFrames } from '../lib/campaign'
-import { mapById, territorySlice, framesForMap } from '../lib/maps'
+import { mapById, territorySlice, framesForMap, gridRefOf } from '../lib/maps'
 import { listSubmissions } from '../lib/submissions'
 import LoginModal from '../components/LoginModal'
 import ApprovalsQueue from '../components/ApprovalsQueue'
@@ -472,6 +472,7 @@ function MapDetail({ map, territory, campaignFrames, hasCampaign, updatedAt }) {
           <div key={p.id} className="row between center wrap" style={{ gap: 8, borderTop: '1px solid var(--line)', paddingTop: 6 }}>
             <span style={{ fontSize: 13 }}>{p.name}</span>
             <span className="mono dim" style={{ fontSize: 10 }}>
+              {gridRefOf(map, p.x, p.y) ? `GR ${gridRefOf(map, p.x, p.y)} · ` : ''}
               {p.hostile ? 'Meridian stronghold' : 'Standard location'}
             </span>
           </div>

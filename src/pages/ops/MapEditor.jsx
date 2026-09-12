@@ -10,7 +10,7 @@ import PixelMap from '../../components/PixelMap'
 import MapLegend from '../../components/MapLegend'
 import { PAINT, RHQ_PAINT, colorOf, coyLabelOf } from '../../lib/territory'
 import { useUnpaintableMask } from '../../lib/unpaintableMask'
-import { MAPS, mapById, mapFor, territorySlice, campaignStartSlice, framesForMap, withMapFrames } from '../../lib/maps'
+import { MAPS, mapById, mapFor, gridRefOf, territorySlice, campaignStartSlice, framesForMap, withMapFrames } from '../../lib/maps'
 import { sortFrames, framesValid, renumberFrames } from '../../lib/campaign'
 import { exportCampaignReplay, exportProgressImage, exportSupported, downloadBlob, defaultProgressTitle } from '../../lib/replayExport'
 
@@ -312,6 +312,9 @@ export default function MapEditor() {
               <input type="checkbox" checked={!!p.hostile} onChange={(e) => setPlace(p.id, { hostile: e.target.checked })} style={{ width: 'auto' }} />
               <span className="mono" style={{ fontSize: 10, color: p.hostile ? 'var(--hostile)' : 'var(--text-dim)' }}>Meridian stronghold</span>
             </label>
+            {gridRefOf(map, p.x, p.y)
+              ? <span className="mono accent" style={{ fontSize: 10 }} title={`${map.geo.crs} grid reference`}>GR {gridRefOf(map, p.x, p.y)}</span>
+              : null}
             <span className="mono dim" style={{ fontSize: 10 }}>drag its dot on the map</span>
             <button className="danger ghost" onClick={() => delPlace(p.id)}>Remove</button>
           </div>

@@ -22,9 +22,16 @@
 //   variant      'plain' (default) | 'boxed' — boxed frames the tag in its own
 //                colour, used to make the recaptured-stronghold state
 //                visually distinct from an ordinary occupier tag.
+//   gridRef      optional map grid reference for the point, surfaced as the
+//                marker's tooltip (see geo/gridRefOf in lib/maps.js).
 //   draggable    when true, the marker accepts pointer-down (for the map
 //                editor's drag-to-move) and shows a move cursor.
 //   onPointerDown  handler wired up only when draggable is true.
+//
+// The name flows RIGHT of the dot, except near the right-hand edge where it
+// would run off the map — there it flows left instead. Without that, a marker
+// on a real feature close to the edge had to be nudged inboard to stay
+// readable, which is the wrong trade: the dot marks actual ground.
 export default function Beacon({
   x,
   y,
@@ -36,15 +43,19 @@ export default function Beacon({
   tag,
   tagColor,
   variant = 'plain',
+  gridRef,
   draggable = false,
   onPointerDown,
 }) {
   const dot = color || '#dfe6f2'
   const tagCol = tagColor || dot
+  // Flip the label inboard once the point sits in the last fifth of the map.
+  const flip = cols > 0 && x / cols > 0.8
 
   return (
     <div
       onPointerDown={draggable ? onPointerDown : undefined}
+      title={gridRef ? `${label} — GR ${gridRef}` : label}
       style={{
         position: 'absolute',
         left: `${(x / cols) * 100}%`,
@@ -74,11 +85,14 @@ export default function Beacon({
         )}
       </span>
 
-      {/* Name + occupier tag, flowing right from the pinned point — never
+      {/* Name + occupier tag, flowing away from the pinned point — never
           moves the dot above. */}
       <span style={{
-        position: 'absolute', left: 8, top: 0, transform: 'translateY(-50%)',
-        display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap',
+        position: 'absolute', top: 0, whiteSpace: 'nowrap',
+        ...(flip
+          ? { right: 8, flexDirection: 'row-reverse', transform: 'translateY(-50%)' }
+          : { left: 8, transform: 'translateY(-50%)' }),
+        display: 'flex', alignItems: 'center', gap: 4,
       }}>
         <span style={{
           color: '#d3dced', fontWeight: 600, font: "600 11px 'JetBrains Mono',monospace",

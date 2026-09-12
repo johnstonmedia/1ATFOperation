@@ -17,6 +17,48 @@ keep entries short and focused on what a new collaborator needs to know.
 
 ---
 
+## 2026-09-12 (third) — Singleton map georeferenced; grid references on every point
+Asked to rebuild the map from Google satellite/road data. **Could not**: this
+environment's egress proxy blocks `maps.app.goo.gl`, `maps.googleapis.com`
+without a key, and `openstreetmap.org`/Overpass as well — and Google's imagery
+and road data are not licensed for tracing into a committed map asset in any
+case. Said so, and took the route that needed no external data at all.
+
+**The sheet georeferences itself.** AUSPEC0196 prints a 1000m MGA Zone 56 grid.
+Fitting a comb to those lines gives **195.25 source px per kilometre** (11
+vertical lines matched; the horizontal lines are obscured, so the spacing is
+carried across and pinned against the printed grid numbers). Two independent
+confirmations: the sheet's north edge lands on the New England Highway
+alignment, and a surveyed coordinate supplied for the Ex Admin Area
+(−32.762633, 151.182543) falls on cell (103.31, 95.32) — the cell it had
+already been seeded at, i.e. inside one cell (~48 m).
+
+- `geo` on the map record ([src/lib/maps.js](src/lib/maps.js)) holds the
+  georeference, with `gridRefOf()` / `eastingNorthingOf()` beside it. Only the
+  linear easting/northing is kept: a **grid reference** is what this map needs,
+  and lat/lon would mean carrying a projection library for no operational gain.
+  NSW declares no `geo` and the helpers return null for it.
+- Grid references now show on the marker tooltip, in Ops Centre → Map:
+  Territory's place list, and in the Staff Centre's. They are derived from the
+  cell, so dragging a marker moves its GR with it — nothing to keep in sync.
+- Verified every seeded reference point against the sheet feature by feature.
+  Two were wrong and are fixed: **Sentry Post No10** was 10.5 cells (~500 m)
+  west of the actual post symbol, and Sector 8 ~2 cells off.
+
+**Beacon labels now flip inboard near the right edge.** Sentry Post No10 sits
+in the last fifth of the sheet, and a name flowing right ran off the map — the
+previous fix for that was to nudge the marker inboard, which is the wrong trade
+because the dot marks real ground. It now places accurately and the label
+flows left instead.
+
+**Fixed dead code found while fitting the grid:** the generator's graticule
+guard tested for a column more than 45% inked, but the grid is fine enough that
+its inkiest column reaches only 31% — so the guard had never fired once. It is
+replaced by a mask built from the fitted grid geometry, which is the same
+constant that georeferences the map (`GRID_PX`/`GRID_X0`/`GRID_Y0` in the
+script, mirroring `geo`). Contamination had been minor (4.7% of track pixels
+against 3.8% expected by area) but the straight-line artefacts are now gone.
+
 ## 2026-09-12 (later) — Singleton map: the road network, and the legend on the page
 The second map shipped earlier the same day was thin: the road network barely
 appeared, and nothing told a reader what the colours meant. Both fixed.

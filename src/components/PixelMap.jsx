@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState, useCallback, useMemo } from 'react'
 import { beaconStateFor } from '../lib/territory'
-import { mapFor, mapAspect } from '../lib/maps'
+import { mapFor, mapAspect, gridRefOf } from '../lib/maps'
 import { renderTerritoryLayer, IMAGE_FILTER } from '../lib/terrainRender'
 import { companyLabelPoints } from '../lib/companyLabels'
 import Beacon from './Beacon'
@@ -364,6 +364,7 @@ export default function PixelMap({
                 pulse={b.pulse}
                 label={p.name}
                 tag={b.tag}
+                gridRef={gridRefOf(map, p.x, p.y)}
                 variant={b.recaptured ? 'boxed' : 'plain'}
                 draggable={!!onMovePlace}
                 onPointerDown={onMovePlace ? (e) => { e.stopPropagation(); dragging.current = { place: p.id } } : undefined}

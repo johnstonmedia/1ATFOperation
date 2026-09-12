@@ -254,11 +254,13 @@ export const DEFAULT_TERRITORY = {
 // Pixel-grid territory over the Singleton Military Area sheet (AUSPEC0196,
 // Areas 8 & 9). 216x153 = one cell per exact 3x3 block of the 648x459 art.
 //
-// Positions below are read off the sheet itself, so the beacons land on the
-// real features: RHQ sits on the Ex Admin Area, the sentry posts sit on the
-// northern boundary along the highway, and the ranges/strongholds sit where
-// the sheet puts them. The starting paint is only a starting point — RHQ
-// repaints all of it in Map: Territory.
+// Positions below are read off the sheet and checked against the map's
+// georeference (`geo` in lib/maps.js), so the beacons land on the real ground:
+// the Ex Admin Area cell was confirmed against a surveyed coordinate
+// (-32.762633, 151.182543 -> cell 103.31, 95.32), and the rest were verified
+// feature by feature against the sheet. Grid references follow from the cell,
+// so moving a marker moves its GR with it. The starting paint is only a
+// starting point — RHQ repaints all of it in Map: Territory.
 const S_COLS = 216
 const S_ROWS = 153
 function buildSingletonCells() {
@@ -288,16 +290,16 @@ export const DEFAULT_SINGLETON_TERRITORY = {
     { id: 'sg-rhq', name: 'Ex Admin Area Bravo', x: 103, y: 95 },
     { id: 'sg-war', name: 'Warringah', x: 99, y: 99 },
     { id: 'sg-s7', name: 'Sector 7', x: 75, y: 11 },
-    { id: 'sg-s8', name: 'Sector 8', x: 95, y: 75 },
+    { id: 'sg-s8', name: 'Sector 8', x: 97, y: 75 },
     { id: 'sg-s9', name: 'Sector 9', x: 160, y: 64 },
     { id: 'sg-sp5', name: 'Sentry Post No5', x: 124, y: 26 },
     { id: 'sg-sp4', name: 'Sentry Post No4', x: 149, y: 30 },
-    { id: 'sg-sp10', name: 'Sentry Post No10', x: 188, y: 21 },
+    { id: 'sg-sp10', name: 'Sentry Post No10', x: 198, y: 21 },
     { id: 'sg-dfsw', name: 'DFSW2 Firing Range', x: 135, y: 22 },
     { id: 'sg-cave', name: 'Yellow Billys Cave', x: 141, y: 84, hostile: true },
     { id: 'sg-calf', name: 'Calf Pen', x: 146, y: 77 },
     { id: 'sg-retrans', name: 'Retrans Peak', x: 25, y: 12 },
-    { id: 'sg-bbr', name: 'Broken Back Range', x: 178, y: 131, hostile: true },
+    { id: 'sg-bbr', name: 'Broken Back Range', x: 182, y: 131, hostile: true },
   ],
 }
 

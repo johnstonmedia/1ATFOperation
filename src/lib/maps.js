@@ -62,6 +62,23 @@ export const MAPS = [
     // Landlocked: every cell on the sheet is ground somebody can hold.
     blockFill: null,
     blockLabel: null,
+    // GEOREFERENCE. The sheet prints a 1000m MGA Zone 56 grid, and fitting a
+    // comb to those lines pins the art to real ground: 195.25 source px per
+    // kilometre, which is 20.5928 grid cells per km at this resolution. Two
+    // independent checks: the north edge lands on the New England Highway
+    // alignment, and a surveyed point supplied for the Ex Admin Area
+    // (-32.762633, 151.182543) falls on cell (103.31, 95.32) — the cell it was
+    // already seeded at.
+    //
+    // Only the linear easting/northing is kept here, because a grid reference
+    // is all this map needs; converting to lat/lon would mean carrying a
+    // projection library for no operational gain.
+    geo: {
+      crs: 'MGA94 / Zone 56',   // EPSG:28356
+      cellsPerKm: 20.5928,
+      originE: 324739,          // easting  at cell x = 0
+      originN: 6378195,         // northing at cell y = 0 (north edge; y runs south)
+    },
     // What the art's colours mean, shown as a terrain key under the map.
     // These mirror the palette in tools/map/derive-singleton-map.py, which is
     // the source of truth — change them together or the key starts lying.
@@ -117,6 +134,28 @@ export function mapOfSlice(slice) {
 // into SINGLE_SLICES so each map is loaded, persisted and version-backed
 // exactly like any other piece of content.
 export const mapSlices = () => MAPS.flatMap((m) => [territorySlice(m.id), campaignStartSlice(m.id)])
+
+/* ------------------------------ georeference ----------------------------- */
+
+// Real-world easting/northing of a grid cell, for a map that declares `geo`.
+// null for one that doesn't (the NSW art is a stylised continent, not a survey).
+export function eastingNorthingOf(map, x, y) {
+  const g = map?.geo
+  if (!g) return null
+  return {
+    e: g.originE + (x / g.cellsPerKm) * 1000,
+    n: g.originN - (y / g.cellsPerKm) * 1000,
+  }
+}
+
+// Standard six-figure grid reference, e.g. "297 735" — the 100m digits of the
+// easting and northing, which is how anyone on the ground would call a point in.
+export function gridRefOf(map, x, y) {
+  const en = eastingNorthingOf(map, x, y)
+  if (!en) return null
+  const part = (v) => String(Math.floor((((v % 100000) + 100000) % 100000) / 100)).padStart(3, '0')
+  return `${part(en.e)} ${part(en.n)}`
+}
 
 /* ---------------------------- campaign frames ---------------------------- */
 

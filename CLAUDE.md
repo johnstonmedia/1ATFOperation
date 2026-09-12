@@ -277,6 +277,17 @@ assuming a page exists).
     defence-area boundaries, cultivated land and the vegetation density bands.
     `Ex Admin Area` is the RHQ location, and this is the one map seeded with
     `showRHQ: true`.
+  - **Singleton is georeferenced** (`geo` on its map record): the sheet prints
+    a 1000m MGA Zone 56 grid, fitted at 195.25 source px/km = **20.5928 grid
+    cells per km**, origin E324739 / N6378195 at cell (0,0). Confirmed against
+    a surveyed Ex Admin Area coordinate (−32.762633, 151.182543 → cell
+    103.31, 95.32) and the New England Highway alignment. `gridRefOf(map, x, y)`
+    gives the six-figure grid reference for any cell — shown on marker
+    tooltips, the ops place list and the Staff Centre. Deliberately linear
+    easting/northing only: a grid reference is all this map needs, and lat/lon
+    would mean shipping a projection library. Maps without `geo` (NSW) return
+    null. ⚠️ The same constants appear as `GRID_PX`/`GRID_X0`/`GRID_Y0` in the
+    derivation script, where they also mask the graticule — keep them in step.
   - A map may declare a **`terrainKey`**: what its own art's colours mean,
     rendered by [MapLegend.jsx](src/components/MapLegend.jsx) behind a
     `+ TERRAIN` toggle next to the company key. Singleton has one; NSW doesn't,

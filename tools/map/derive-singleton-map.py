@@ -49,6 +49,12 @@ from scipy import ndimage as ndi
 
 OUT_W, OUT_H = 648, 459   # 216 x 153 territory cells @ 3x3 source px per cell
 
+# The sheet's printed 1000m MGA Zone 56 grid, fitted to the scan. Also the
+# map's georeference - keep in step with `geo` in src/lib/maps.js.
+GRID_PX = 195.25          # source pixels per kilometre
+GRID_X0, GRID_Y0 = 51.0, 38.0   # first grid line (E 325000, N 6378000)
+GRID_HALF = 2             # half-width of the band masked out around each line
+
 
 def load_sheet(path):
     """The sheet, as an RGB array. Accepts the PDF or an already-extracted image."""
@@ -113,13 +119,24 @@ def derive(im):
     dark_ink = ndi.binary_erosion(V < 0.52, ones(3))
     lettering = ndi.binary_dilation(dark_ink & ~keep_lines(dark_ink, 45, 0.30), ones(7))
 
-    # The 1000m grid prints as full-length hairlines. Drop the rows and columns
-    # it saturates, or the graticule survives as a dead-straight road.
-    inkish = lines & ~lettering
-    graticule = np.zeros_like(inkish)
-    graticule[inkish.mean(1) > 0.45, :] = True
-    graticule[:, inkish.mean(0) > 0.45] = True
-    graticule = ndi.binary_dilation(graticule, ones(5))
+    # The 1000m MGA grid prints as full-length hairlines, and a dead-straight
+    # line is exactly what the road tests are looking for. Mask it by its known
+    # geometry rather than by "which columns are inky": the earlier threshold
+    # test (> 0.45 of a column) NEVER fired, because the grid is fine enough
+    # that its inkiest column only reaches 0.31 - the guard was dead code.
+    #
+    # The comb below is fitted to this sheet (GRID_PX apart, first line at
+    # GRID_X0/GRID_Y0), which is also what georeferences the map: see `geo` in
+    # src/lib/maps.js. Re-fit it if the source scan is ever replaced.
+    graticule = np.zeros(( H, W), bool)
+    for k in range(-1, int(W / GRID_PX) + 2):
+        x = int(round(GRID_X0 + GRID_PX * k))
+        if 0 <= x < W:
+            graticule[:, max(0, x - GRID_HALF):x + GRID_HALF + 1] = True
+    for k in range(-1, int(H / GRID_PX) + 2):
+        y = int(round(GRID_Y0 + GRID_PX * k))
+        if 0 <= y < H:
+            graticule[max(0, y - GRID_HALF):y + GRID_HALF + 1, :] = True
     clean = lines & ~lettering & ~graticule
 
     # Contours crowd together on the scarps until they merge into a solid
