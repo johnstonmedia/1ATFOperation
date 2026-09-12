@@ -1,0 +1,1130 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>1ATF // MAP PAINTER</title>
+<!--
+  1ATF standalone territory painter.
+
+  A single self-contained HTML file that reproduces the Operations Centre
+  "Map: Territory" editor (src/pages/ops/MapEditor.jsx + PixelMap.jsx +
+  lib/terrainRender.js) over ANY map image you load from disk — no build, no
+  Firebase, no server. Open it in a browser, drop in a map image, paint.
+
+  Differences from the site, all deliberate:
+    - the map image is loaded from a file (drag & drop / browse) and displayed
+      at its own aspect ratio with NO filter applied;
+    - the paint grid is adjustable (cell size in image pixels, or cols x rows);
+    - one extra colour: "Occupied" (code O, white), plus a larger brush range;
+    - work is autosaved in this browser (localStorage) per image, and can be
+      downloaded / reloaded as JSON or exported as a PNG.
+  The hatch fill, boundary outline, swatches, brush behaviour, zoom buttons
+  and pan gestures are the site's own code, lifted across.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&family=Rajdhani:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+/* ---- theme: copied from src/index.css ---- */
+:root {
+  --bg: #070b14;
+  --bg-2: #0a0f1d;
+  --panel: rgba(16, 24, 43, 0.72);
+  --panel-solid: #0e1526;
+  --grid: rgba(54, 224, 192, 0.06);
+  --line: rgba(99, 130, 190, 0.22);
+  --primary: #3a4794;
+  --accent: #36e0c0;
+  --accent-2: #4ea8ff;
+  --hostile: #ff3b46;
+  --hostile-dim: #c0392b;
+  --text: #d7e2f4;
+  --text-dim: #8294b5;
+  --warn: #ffcf4a;
+  --radius: 4px;
+  --mono: 'JetBrains Mono', ui-monospace, monospace;
+  --head: 'Orbitron', sans-serif;
+  --body: 'Rajdhani', sans-serif;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--body);
+  letter-spacing: 0.2px;
+  -webkit-font-smoothing: antialiased;
+}
+body::before {
+  content: '';
+  position: fixed; inset: 0; pointer-events: none; z-index: 0;
+  background-image:
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px),
+    radial-gradient(1200px 600px at 80% -10%, rgba(58, 71, 148, 0.18), transparent 60%),
+    radial-gradient(900px 500px at -10% 110%, rgba(54, 224, 192, 0.08), transparent 55%);
+  background-size: 40px 40px, 40px 40px, 100% 100%, 100% 100%;
+}
+body::after {
+  content: '';
+  position: fixed; inset: 0; pointer-events: none; z-index: 1;
+  background: repeating-linear-gradient(0deg, rgba(0,0,0,0) 0px, rgba(0,0,0,0.12) 2px, rgba(0,0,0,0) 3px);
+  opacity: 0.35;
+  mix-blend-mode: overlay;
+}
+#root { position: relative; z-index: 2; }
+h1, h2, h3, .head { font-family: var(--head); letter-spacing: 1.5px; }
+.mono { font-family: var(--mono); }
+.dim { color: var(--text-dim); }
+.hostile { color: var(--hostile); }
+.accent { color: var(--accent); }
+
+button, .btn {
+  font-family: var(--head);
+  font-size: 12px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--text);
+  background: linear-gradient(180deg, rgba(58, 71, 148, 0.35), rgba(20, 28, 50, 0.6));
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 10px 16px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  position: relative;
+}
+button:hover, .btn:hover { border-color: var(--accent); box-shadow: 0 0 14px rgba(54, 224, 192, 0.25); color: #fff; }
+button.primary, .btn.primary { background: linear-gradient(180deg, rgba(54, 224, 192, 0.25), rgba(54, 224, 192, 0.08)); border-color: var(--accent); }
+button.danger { border-color: var(--hostile); color: var(--hostile); }
+button.ghost { background: transparent; }
+button:disabled { opacity: 0.45; cursor: not-allowed; }
+
+input, select, textarea {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--text);
+  background: rgba(7, 12, 22, 0.8);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  width: 100%;
+}
+input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 1px rgba(54, 224, 192, 0.3); }
+input[type=checkbox] { width: auto; }
+input.sm { width: 84px; padding: 6px 8px; }
+input[type=range] { padding: 0; background: transparent; border: none; }
+label { font-size: 12px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; }
+
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); backdrop-filter: blur(6px); position: relative; }
+.panel::before { content: ''; position: absolute; top: -1px; left: -1px; width: 14px; height: 14px; border-top: 2px solid var(--accent); border-left: 2px solid var(--accent); }
+.panel-pad { padding: 20px; }
+.tag { display: inline-block; font-family: var(--mono); font-size: 10px; letter-spacing: 2px; text-transform: uppercase; padding: 3px 8px; border: 1px solid var(--line); border-radius: 2px; color: var(--text-dim); }
+.tag.live { color: var(--accent); border-color: var(--accent); }
+.divider { height: 1px; background: var(--line); margin: 16px 0; }
+.row { display: flex; gap: 12px; }
+.col { display: flex; flex-direction: column; gap: 12px; }
+.wrap { flex-wrap: wrap; }
+.center { align-items: center; justify-content: center; }
+.between { justify-content: space-between; }
+.grow { flex: 1; }
+.container { max-width: 1280px; margin: 0 auto; padding: 0 20px; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: var(--bg-2); }
+::-webkit-scrollbar-thumb { background: var(--primary); border-radius: 6px; }
+
+/* ---- page ---- */
+.page { padding-block: 22px 60px; }
+.ops-header { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+.ops-header h1 { margin: 0; font-size: 20px; color: var(--accent); }
+.ops-header .sub { font-family: var(--mono); font-size: 10px; letter-spacing: 3px; color: var(--text-dim); margin-top: 4px; }
+.swatch { padding: 6px 9px; border: 1px solid var(--line); color: #04121b; font-size: 11px; font-family: var(--mono); border-radius: 4px; cursor: pointer; text-transform: none; letter-spacing: 0; }
+.swatch.active { border: 2px solid #fff; }
+.swatch.erase { background: transparent; color: var(--text); padding: 6px 12px; }
+.brush-btn { padding: 3px 9px; }
+
+.dropzone {
+  border: 1px dashed var(--line); border-radius: var(--radius); padding: 18px; text-align: center;
+  font-family: var(--mono); font-size: 12px; color: var(--text-dim); cursor: pointer; transition: all .15s ease;
+  background: rgba(7, 12, 22, 0.5);
+}
+.dropzone:hover, .dropzone.over { border-color: var(--accent); color: var(--accent); box-shadow: 0 0 14px rgba(54,224,192,0.18); }
+
+/* map stage — mirrors PixelMap's inline styles */
+.map-wrap { position: relative; width: 100%; }
+.map-box {
+  position: relative; width: 100%; aspect-ratio: 1 / 1; overflow: hidden;
+  border-radius: var(--radius); border: 1px solid var(--line); background: #0a0f1a;
+  touch-action: none; cursor: crosshair;
+}
+.map-box.empty { display: flex; align-items: center; justify-content: center; cursor: default; aspect-ratio: 648 / 336; }
+.map-stage { position: absolute; inset: 0; width: 100%; height: 100%; transform-origin: center center; }
+.map-stage > img, .map-stage > canvas { position: absolute; inset: 0; width: 100%; height: 100%; user-select: none; -webkit-user-drag: none; }
+.map-stage > canvas, .map-stage > img.overlay { pointer-events: none; }
+.map-stage.pixelated > img, .map-stage > canvas { image-rendering: pixelated; }
+.zoom-ctl { position: absolute; right: 10px; bottom: 10px; display: flex; flex-direction: column; gap: 6px; z-index: 5; }
+.zoom-ctl button {
+  width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; padding: 0;
+  border: 1px solid var(--accent); border-radius: var(--radius); background: rgba(20,26,36,0.65); backdrop-filter: blur(6px);
+  color: var(--accent); font-family: var(--mono); font-size: 16px; font-weight: 700; letter-spacing: 0;
+}
+.zoom-ctl button:disabled { opacity: .4; }
+.legend-swatch { width: 26px; height: 14px; border-radius: 2px; display: block; flex: 0 0 auto; }
+.picking .map-box { cursor: cell; }
+
+#toast { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); z-index: 50; display: flex; flex-direction: column; gap: 6px; pointer-events: none; }
+#toast > div { background: var(--panel-solid); border: 1px solid var(--accent); color: var(--text); font-family: var(--mono); font-size: 12px; padding: 8px 14px; border-radius: var(--radius); box-shadow: 0 0 18px rgba(54,224,192,.2); }
+kbd { font-family: var(--mono); font-size: 10px; border: 1px solid var(--line); border-radius: 3px; padding: 1px 5px; color: var(--text-dim); }
+</style>
+</head>
+<body>
+<div id="root"><div class="container page">
+
+  <div class="ops-header">
+    <div>
+      <h1>MAP: TERRITORY</h1>
+      <div class="sub">STANDALONE PAINTER // EDIT // PIXEL TERRITORY</div>
+    </div>
+    <div class="row center wrap" style="gap:10px">
+      <label class="row center" style="gap:6px;font-size:11px"><input type="checkbox" id="showRHQ"> Show RHQ on map</label>
+      <button class="ghost" id="undoBtn" title="Undo the last stroke (Ctrl+Z)" disabled>Undo</button>
+      <button class="ghost" id="loadJsonBtn" title="Load a painting saved from this tool">Load JSON</button>
+      <button class="ghost" id="saveJsonBtn" title="Download the painting (grid + cells) as a JSON file" disabled>Save JSON</button>
+      <button class="primary" id="exportPngBtn" title="Download the map with the territory drawn on it, at the image's own resolution" disabled>Export PNG</button>
+      <input type="file" id="jsonFile" accept="application/json,.json" hidden>
+    </div>
+  </div>
+
+  <div class="panel panel-pad col" style="gap:12px;margin-bottom:14px">
+    <div class="row between center wrap" style="gap:8px">
+      <strong class="head" style="font-size:14px">Map image &amp; grid</strong>
+      <span class="mono dim" id="imgInfo" style="font-size:10px;letter-spacing:1px">NO IMAGE LOADED</span>
+    </div>
+    <div class="dropzone" id="dropzone">DROP A MAP IMAGE HERE — or click to browse (PNG / JPG / WebP, any size)</div>
+    <input type="file" id="imgFile" accept="image/*" hidden>
+    <div class="row wrap center" style="gap:14px;row-gap:10px">
+      <span class="mono dim" style="font-size:11px">Cell size</span>
+      <input class="sm" type="number" id="cellPx" min="1" step="1" value="8" title="Image pixels per grid cell (the site uses 3 on its 648×336 map). Cells stay square and pixel-aligned to the art.">
+      <span class="mono dim" style="font-size:11px">px per cell &nbsp;→&nbsp; grid</span>
+      <input class="sm" type="number" id="colsIn" min="8" step="1" value="256" title="Columns">
+      <span class="mono dim" style="font-size:11px">×</span>
+      <input class="sm" type="number" id="rowsIn" min="8" step="1" value="256" title="Rows">
+      <button class="primary" id="applyGrid" disabled>Apply grid</button>
+      <span class="mono dim" id="gridNote" style="font-size:10px"></span>
+    </div>
+    <div class="row wrap center" style="gap:14px;row-gap:10px">
+      <span class="mono dim" style="font-size:11px">Canvas width</span>
+      <input type="range" id="widthRange" min="320" max="1600" step="10" value="1000" style="width:180px">
+      <span class="mono dim" id="widthVal" style="font-size:11px;width:60px">1000px</span>
+      <label class="row center" style="gap:6px;font-size:11px" title="Nearest-neighbour scaling, the site's pixel-art look. Off = smooth scaling (better for a photo-like map)."><input type="checkbox" id="pixelated"> Pixel-art rendering</label>
+    </div>
+    <div class="mono dim" style="font-size:10px">
+      Changing the grid re-samples the existing painting onto the new grid (nearest cell), so nothing is lost — but a coarser grid will blur fine edges. Painting autosaves in this browser per image; use Save JSON for a copy you can move between machines.
+    </div>
+  </div>
+
+  <div class="mono dim" style="font-size:11px;margin-bottom:10px">
+    Pick a colour, then paint on the map — one finger/click paints, the +/- buttons zoom, two-finger drag or middle/right-mouse drag pans while zoomed. Blocked tiles (shaded dark, see “Unpaintable colour” below) can't be painted. "Full" is solid/firmly held; "Contested" is the lighter, newly-gained/loosely-held variant. Erase removes. <kbd>Ctrl</kbd>+<kbd>Z</kbd> undoes a stroke.
+  </div>
+
+  <div class="row wrap center" style="gap:6px;margin-bottom:8px">
+    <span class="mono dim" style="font-size:10px;width:66px;flex:0 0 auto">Full</span>
+    <span id="swatchesFull" class="row wrap center" style="gap:6px"></span>
+  </div>
+  <div class="row wrap center" style="gap:6px;margin-bottom:8px">
+    <span class="mono dim" style="font-size:10px;width:66px;flex:0 0 auto">Contested</span>
+    <span id="swatchesLight" class="row wrap center" style="gap:6px"></span>
+  </div>
+  <div class="row center wrap" style="gap:8px;margin-bottom:12px">
+    <span class="mono dim" style="font-size:11px">Brush size</span>
+    <span id="brushSizes" class="row center wrap" style="gap:8px"></span>
+    <input class="sm" type="number" id="brushCustom" min="1" max="64" step="1" value="2" title="Any brush size, in cells" style="width:64px">
+    <button class="danger ghost" id="clearAll" style="margin-left:auto">Clear all</button>
+  </div>
+
+  <div class="map-wrap" id="mapWrap">
+    <div class="map-box empty" id="mapBox">
+      <div class="map-stage" id="stage" hidden>
+        <img id="mapImg" alt="Operational map" draggable="false">
+        <img id="blockOverlay" class="overlay" alt="" draggable="false" hidden>
+        <canvas id="terrCanvas"></canvas>
+      </div>
+      <div class="mono dim" id="emptyMsg" style="font-size:12px;letter-spacing:2px">LOAD A MAP IMAGE ABOVE TO BEGIN</div>
+      <div class="zoom-ctl" id="zoomCtl" hidden>
+        <button type="button" id="zoomIn" aria-label="Zoom in">+</button>
+        <button type="button" id="zoomOut" aria-label="Zoom out">−</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="row wrap center" id="legend" style="gap:14px;row-gap:8px;margin-top:12px"></div>
+
+  <div class="panel panel-pad col" style="gap:8px;margin-top:14px">
+    <div class="row between center wrap" style="gap:8px">
+      <strong class="head" style="font-size:14px">Unpaintable colour (ocean)</strong>
+      <label class="row center" style="gap:6px;font-size:11px"><input type="checkbox" id="blockOn"> Enabled</label>
+    </div>
+    <div class="mono dim" style="font-size:11px">
+      The site blocks ocean tiles by matching the map's flat ocean colour. Pick a colour off your map and any cell that is mostly that colour becomes unpaintable (shaded dark while editing). Optional — leave it off if your map has no such fill.
+    </div>
+    <div class="row wrap center" style="gap:12px">
+      <button class="ghost" id="pickBtn" disabled>Pick colour from map</button>
+      <span id="blockSwatch" style="width:26px;height:18px;border:1px solid var(--line);border-radius:3px;background:transparent;flex:0 0 auto"></span>
+      <span class="mono dim" id="blockHex" style="font-size:11px">none</span>
+      <span class="mono dim" style="font-size:11px;margin-left:8px">Tolerance</span>
+      <input class="sm" type="number" id="blockTol" min="0" max="120" step="1" value="18" title="Per-channel RGB tolerance (the site uses 18 for its flat fill; raise it for a textured/gradient ocean)">
+      <span class="mono dim" id="blockInfo" style="font-size:10px"></span>
+    </div>
+  </div>
+
+</div></div>
+<div id="toast"></div>
+
+<script>
+(() => {
+'use strict'
+
+/* =========================== palette (lib/territory.js) =========================== */
+const COMPANIES = [
+  { letter: 'A', name: 'Alpha',   accent: '#2e7dd1' },
+  { letter: 'B', name: 'Bravo',   accent: '#1faa8b' },
+  { letter: 'C', name: 'Charlie', accent: '#c9a227' },
+  { letter: 'D', name: 'Delta',   accent: '#8e54c4' },
+  { letter: 'E', name: 'Echo',    accent: '#d1632e' },
+  { letter: 'S', name: 'Support', accent: '#c9528a' },
+  { letter: 'R', name: 'RHQ',     accent: '#f39c12' },
+]
+const MERIDIAN_COLOR = '#ff3b46'
+// New for the standalone painter: an "Occupied" state, white. White can't be
+// lightened, so its Contested variant is a pale grey instead (LIGHT_OVERRIDE).
+const OCCUPIED = { code: 'O', label: 'Occupied', color: '#ffffff' }
+const LIGHT_OVERRIDE = { O: '#b9c3d2' }
+
+const PAINT = [
+  ...COMPANIES.filter((c) => c.letter !== 'R').map((c) => ({ code: c.letter, label: c.name, color: c.accent })),
+  { code: 'M', label: 'Meridian', color: MERIDIAN_COLOR },
+  OCCUPIED,
+]
+const RHQ_PAINT = { code: 'R', label: 'RHQ', color: COMPANIES.find((c) => c.letter === 'R').accent }
+const BASE_COLOR = {}
+;[...PAINT, RHQ_PAINT].forEach((p) => { BASE_COLOR[p.code] = p.color })
+
+function lighten(hex, amt = 0.5) {
+  const n = parseInt(hex.slice(1), 16)
+  let r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255
+  r = Math.round(r + (255 - r) * amt)
+  g = Math.round(g + (255 - g) * amt)
+  b = Math.round(b + (255 - b) * amt)
+  return `#${((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1)}`
+}
+const isRHQCode = (code) => !!code && code.toUpperCase() === 'R'
+const isMeridianCode = (code) => !!code && code.toUpperCase() === 'M'
+function labelOf(code) {
+  if (!code || code === '.') return null
+  const up = code.toUpperCase()
+  return [...PAINT, RHQ_PAINT].find((p) => p.code === up)?.label || null
+}
+function coyLabelOf(code) {
+  if (!code || code === '.') return null
+  const up = code.toUpperCase()
+  if (isMeridianCode(up)) return 'MERIDIAN'
+  if (isRHQCode(up)) return 'RHQ'
+  if (up === 'O') return 'OCCUPIED'
+  return labelOf(up) ? `${up}-COY` : null
+}
+const colorCache = new Map()
+function colorOf(code) {
+  if (!code || code === '.') return null
+  let c = colorCache.get(code)
+  if (c !== undefined) return c
+  const up = code.toUpperCase()
+  const base = BASE_COLOR[up]
+  if (!base) c = null
+  else if (code === up) c = base
+  else c = LIGHT_OVERRIDE[up] || lighten(base, 0.5)
+  colorCache.set(code, c)
+  return c
+}
+
+/* ====================== hatch renderer (lib/terrainRender.js) ====================== */
+const HATCH_ANGLE = 45
+const HATCH_SPACING = 9.6
+const HATCH_THICKNESS = 3.1
+const HATCH_OPACITY = 0.48
+const HATCH_DASH = 0
+const BORDER_COLOR = 'rgba(6, 10, 18, 0.6)'
+const BORDER_WIDTH = 3
+
+const hatchCache = new Map()
+const HATCH_CACHE_MAX = 48
+function hatchFor(code, w, h) {
+  const key = `${code}|${w}x${h}`
+  let cv = hatchCache.get(key)
+  if (cv) return cv
+  if (hatchCache.size >= HATCH_CACHE_MAX) hatchCache.clear()
+  cv = document.createElement('canvas')
+  cv.width = w; cv.height = h
+  const lctx = cv.getContext('2d')
+  const diag = Math.ceil(Math.sqrt(w * w + h * h))
+  lctx.save()
+  lctx.translate(w / 2, h / 2)
+  lctx.rotate((HATCH_ANGLE * Math.PI) / 180)
+  lctx.globalAlpha = HATCH_OPACITY
+  lctx.strokeStyle = colorOf(code)
+  lctx.lineWidth = HATCH_THICKNESS
+  if (HATCH_DASH > 0) lctx.setLineDash([HATCH_DASH, HATCH_DASH])
+  lctx.beginPath()
+  for (let d = -diag; d <= diag; d += HATCH_SPACING) {
+    lctx.moveTo(d, -diag)
+    lctx.lineTo(d, diag)
+  }
+  lctx.stroke()
+  lctx.restore()
+  hatchCache.set(key, cv)
+  return cv
+}
+
+let scratch = null
+function scratchFor(w, h) {
+  const q = (v) => Math.max(128, Math.ceil(v / 128) * 128)
+  const W = q(w), H = q(h)
+  if (!scratch || scratch.width < W || scratch.height < H || scratch.width * scratch.height > W * H * 4) {
+    scratch = document.createElement('canvas')
+    scratch.width = W
+    scratch.height = H
+  }
+  return scratch
+}
+
+// Same as the site's renderTerritoryLayer, except the cell width and height
+// are computed separately (the site's grid is exactly square; here the user
+// may type any cols x rows).
+function renderTerritoryLayer(ctx, { cells, cols, rows, showRHQ, w, h, region }) {
+  const vis = (c) => (isRHQCode(c) && !showRHQ ? '.' : c)
+  const at = (x, y) => (x < 0 || y < 0 || x >= cols || y >= rows ? '.' : vis(cells[y * cols + x]))
+  const cw = w / cols, chh = h / rows
+
+  const x0 = region ? Math.max(0, region.x0) : 0
+  const y0 = region ? Math.max(0, region.y0) : 0
+  const x1 = region ? Math.min(cols - 1, region.x1) : cols - 1
+  const y1 = region ? Math.min(rows - 1, region.y1) : rows - 1
+  if (x1 < x0 || y1 < y0) return
+  const rx = x0 * cw, ry = y0 * chh
+  const rw = (x1 - x0 + 1) * cw, rh = (y1 - y0 + 1) * chh
+
+  if (region) {
+    ctx.save()
+    ctx.beginPath()
+    ctx.rect(rx, ry, rw, rh)
+    ctx.clip()
+    ctx.clearRect(rx, ry, rw, rh)
+  }
+
+  const buckets = new Map()
+  for (let y = y0; y <= y1; y++) {
+    for (let x = x0; x <= x1; x++) {
+      const code = at(x, y)
+      if (!colorOf(code)) continue
+      let b = buckets.get(code)
+      if (!b) { b = []; buckets.set(code, b) }
+      b.push(x, y)
+    }
+  }
+
+  const sc = scratchFor(rw, rh)
+  const sctx = sc.getContext('2d')
+  for (const [code, b] of buckets) {
+    sctx.globalCompositeOperation = 'source-over'
+    sctx.clearRect(0, 0, sc.width, sc.height)
+    sctx.fillStyle = '#000'
+    for (let i = 0; i < b.length; i += 2) sctx.fillRect(b[i] * cw - rx, b[i + 1] * chh - ry, cw, chh)
+    sctx.globalCompositeOperation = 'source-in'
+    sctx.drawImage(hatchFor(code, w, h), rx, ry, rw, rh, 0, 0, rw, rh)
+    ctx.globalAlpha = 1
+    ctx.drawImage(sc, 0, 0, rw, rh, rx, ry, rw, rh)
+  }
+
+  ctx.globalAlpha = 1
+  ctx.strokeStyle = BORDER_COLOR
+  ctx.lineWidth = BORDER_WIDTH
+  ctx.beginPath()
+  for (let y = y0; y <= y1; y++) {
+    for (let x = x0; x <= x1; x++) {
+      const code = at(x, y)
+      if (!colorOf(code)) continue
+      const px = x * cw, py = y * chh
+      if (at(x - 1, y) !== code) { ctx.moveTo(px, py); ctx.lineTo(px, py + chh) }
+      if (at(x + 1, y) !== code) { ctx.moveTo(px + cw, py); ctx.lineTo(px + cw, py + chh) }
+      if (at(x, y - 1) !== code) { ctx.moveTo(px, py); ctx.lineTo(px + cw, py) }
+      if (at(x, y + 1) !== code) { ctx.moveTo(px, py + chh); ctx.lineTo(px + cw, py + chh) }
+    }
+  }
+  ctx.stroke()
+
+  if (region) ctx.restore()
+}
+
+const SWATCH_BG = '#121a28'
+function renderHatchSwatch(ctx, code, w, h) {
+  ctx.clearRect(0, 0, w, h)
+  ctx.fillStyle = SWATCH_BG
+  ctx.fillRect(0, 0, w, h)
+  const hatch = hatchFor(code, w, h)
+  if (hatch) ctx.drawImage(hatch, 0, 0)
+  ctx.globalAlpha = 0.55
+  ctx.strokeStyle = colorOf(code) || '#8fa2bd'
+  ctx.lineWidth = 1
+  ctx.strokeRect(0.5, 0.5, w - 1, h - 1)
+  ctx.globalAlpha = 1
+}
+
+/* ================================== state ================================== */
+const MAX_SCALE = 8      // the site caps at 4; a 2048px map deserves more
+const ZOOM_STEP = 1.6
+const UNDO_MAX = 40
+const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v))
+
+const S = {
+  img: null, imgName: '', imgW: 0, imgH: 0, pixelData: null, // {width,height,data}
+  cols: 0, rows: 0, cells: null,   // cells: Array of single-char strings
+  showRHQ: false, brush: 'M', size: 2, pixelated: false,
+  blockOn: false, blockRGB: null, blockTol: 18, blocked: null, // Uint8Array or null
+}
+let view = { scale: 1, x: 0, y: 0 }
+const undoStack = []
+
+const $ = (id) => document.getElementById(id)
+const el = {
+  mapWrap: $('mapWrap'), mapBox: $('mapBox'), stage: $('stage'), mapImg: $('mapImg'), overlay: $('blockOverlay'),
+  canvas: $('terrCanvas'), emptyMsg: $('emptyMsg'), zoomCtl: $('zoomCtl'), zoomIn: $('zoomIn'), zoomOut: $('zoomOut'),
+  dropzone: $('dropzone'), imgFile: $('imgFile'), imgInfo: $('imgInfo'),
+  cellPx: $('cellPx'), colsIn: $('colsIn'), rowsIn: $('rowsIn'), applyGrid: $('applyGrid'), gridNote: $('gridNote'),
+  widthRange: $('widthRange'), widthVal: $('widthVal'), pixelated: $('pixelated'),
+  showRHQ: $('showRHQ'), undoBtn: $('undoBtn'), saveJsonBtn: $('saveJsonBtn'), loadJsonBtn: $('loadJsonBtn'), jsonFile: $('jsonFile'),
+  exportPngBtn: $('exportPngBtn'), swatchesFull: $('swatchesFull'), swatchesLight: $('swatchesLight'),
+  brushSizes: $('brushSizes'), brushCustom: $('brushCustom'), clearAll: $('clearAll'), legend: $('legend'),
+  blockOn: $('blockOn'), pickBtn: $('pickBtn'), blockSwatch: $('blockSwatch'), blockHex: $('blockHex'), blockTol: $('blockTol'), blockInfo: $('blockInfo'),
+  toast: $('toast'),
+}
+const ctx = el.canvas.getContext('2d')
+
+function toast(msg, ms = 2600) {
+  const d = document.createElement('div')
+  d.textContent = msg
+  el.toast.appendChild(d)
+  setTimeout(() => d.remove(), ms)
+}
+
+/* ============================== drawing ============================== */
+let drawnValid = false
+let dirty = null
+let raf = 0
+function markDirty(x, y) {
+  if (!dirty) dirty = { x0: x, y0: y, x1: x, y1: y }
+  else {
+    if (x < dirty.x0) dirty.x0 = x
+    if (x > dirty.x1) dirty.x1 = x
+    if (y < dirty.y0) dirty.y0 = y
+    if (y > dirty.y1) dirty.y1 = y
+  }
+}
+function scheduleDraw() { if (!raf) raf = requestAnimationFrame(() => { raf = 0; draw() }) }
+function invalidateAll() { drawnValid = false; dirty = null; scheduleDraw() }
+
+function draw() {
+  if (!S.cells) return
+  const rect = el.mapBox.getBoundingClientRect()
+  if (!rect.width) return
+  const dpr = window.devicePixelRatio || 1
+  const w = Math.max(1, Math.round(rect.width * dpr))
+  const h = Math.max(1, Math.round(rect.height * dpr))
+  const { cols, rows } = S
+  const sameSize = el.canvas.width === w && el.canvas.height === h
+  let region = null
+  if (drawnValid && sameSize) {
+    if (!dirty) return
+    const pad = 2
+    const area = (dirty.x1 - dirty.x0 + 1 + pad * 2) * (dirty.y1 - dirty.y0 + 1 + pad * 2)
+    if (area < cols * rows * 0.25) region = { x0: dirty.x0 - pad, y0: dirty.y0 - pad, x1: dirty.x1 + pad, y1: dirty.y1 + pad }
+  }
+  if (!region) {
+    el.canvas.width = w
+    el.canvas.height = h
+    ctx.clearRect(0, 0, w, h)
+  }
+  renderTerritoryLayer(ctx, { cells: S.cells, cols, rows, showRHQ: S.showRHQ, w, h, region })
+  drawnValid = true
+  dirty = null
+}
+
+let resizeTimer = null
+new ResizeObserver(() => {
+  clearTimeout(resizeTimer)
+  resizeTimer = setTimeout(() => { drawnValid = false; scheduleDraw() }, 120)
+}).observe(el.mapBox)
+
+/* ============================== zoom / pan ============================== */
+function clampPan(p, s) {
+  const W = el.mapBox.clientWidth || 1
+  const H = el.mapBox.clientHeight || 1
+  const maxX = (W * (s - 1)) / (2 * s)
+  const maxY = (H * (s - 1)) / (2 * s)
+  return { x: clamp(p.x, -maxX, maxX), y: clamp(p.y, -maxY, maxY) }
+}
+function applyView() {
+  el.stage.style.transform = `scale(${view.scale}) translate(${view.x}px, ${view.y}px)`
+  el.zoomIn.disabled = view.scale >= MAX_SCALE
+  el.zoomOut.disabled = view.scale <= 1
+}
+function zoomAt(c, factor) {
+  const s2 = clamp(view.scale * factor, 1, MAX_SCALE)
+  if (s2 === view.scale) return
+  if (s2 === 1) { view = { scale: 1, x: 0, y: 0 }; applyView(); return }
+  const t2 = { x: c.x / s2 - c.x / view.scale + view.x, y: c.y / s2 - c.y / view.scale + view.y }
+  view = { scale: s2, ...clampPan(t2, s2) }
+  applyView()
+}
+el.zoomIn.addEventListener('pointerdown', (e) => e.stopPropagation())
+el.zoomOut.addEventListener('pointerdown', (e) => e.stopPropagation())
+el.zoomIn.addEventListener('click', (e) => { e.stopPropagation(); zoomAt({ x: 0, y: 0 }, ZOOM_STEP) })
+el.zoomOut.addEventListener('click', (e) => { e.stopPropagation(); zoomAt({ x: 0, y: 0 }, 1 / ZOOM_STEP) })
+
+/* ============================== painting ============================== */
+function cellFromPoint(clientX, clientY) {
+  const r = el.stage.getBoundingClientRect()
+  const x = Math.floor(((clientX - r.left) / r.width) * S.cols)
+  const y = Math.floor(((clientY - r.top) / r.height) * S.rows)
+  if (x < 0 || y < 0 || x >= S.cols || y >= S.rows) return null
+  return { x, y }
+}
+
+// NxN brush stamp over each point, exactly as MapEditor's brushOver; blocked
+// (ocean) cells are skipped unless erasing. Mutates S.cells in place and
+// records the dirty bounds so the redraw only touches what changed.
+function brushOver(points, code, sz) {
+  const { cols, rows, cells, blocked } = S
+  const half = Math.floor(sz / 2)
+  let changed = false
+  for (const { x, y } of points) {
+    for (let dy = -half; dy < sz - half; dy++) for (let dx = -half; dx < sz - half; dx++) {
+      const nx = x + dx, ny = y + dy
+      if (nx < 0 || nx >= cols || ny < 0 || ny >= rows) continue
+      const i = ny * cols + nx
+      if (code !== '.' && blocked && blocked[i]) continue
+      if (cells[i] === code) continue
+      cells[i] = code
+      markDirty(nx, ny)
+      changed = true
+    }
+  }
+  if (changed) { scheduleDraw(); autosaveSoon() }
+}
+
+// Bresenham walk from the last painted cell so fast drags stay continuous.
+let lastPaintCell = null
+function strokeTo(c, out) {
+  const from = lastPaintCell
+  if (!from) { out.push(c); lastPaintCell = c; return }
+  if (from.x === c.x && from.y === c.y) return
+  let { x, y } = from
+  const dx = Math.abs(c.x - x), sx = x < c.x ? 1 : -1
+  const dy = -Math.abs(c.y - y), sy = y < c.y ? 1 : -1
+  let err = dx + dy
+  while (x !== c.x || y !== c.y) {
+    const e2 = 2 * err
+    if (e2 >= dy) { err += dy; x += sx }
+    if (e2 <= dx) { err += dx; y += sy }
+    out.push({ x, y })
+  }
+  lastPaintCell = c
+}
+function paintAt(e) {
+  const samples = typeof e.getCoalescedEvents === 'function' && e.getCoalescedEvents().length ? e.getCoalescedEvents() : [e]
+  const pts = []
+  for (const s of samples) {
+    const c = cellFromPoint(s.clientX, s.clientY)
+    if (c) strokeTo(c, pts)
+  }
+  if (pts.length) brushOver(pts, S.brush, S.size)
+}
+
+function pushUndo() {
+  undoStack.push(S.cells.join(''))
+  if (undoStack.length > UNDO_MAX) undoStack.shift()
+  el.undoBtn.disabled = false
+}
+function undo() {
+  const prev = undoStack.pop()
+  if (prev == null) return
+  S.cells = prev.split('')
+  invalidateAll()
+  autosaveSoon()
+  el.undoBtn.disabled = undoStack.length === 0
+}
+
+// Pointer model, from PixelMap: left button / pen / single finger paints;
+// middle or right mouse drag pans; a second finger switches the gesture to a
+// two-finger pan (the paint stroke in progress ends).
+let dragOrigin = null
+const touches = new Map() // pointerId -> {x, y} for touch pointers
+let picking = false
+
+el.mapBox.addEventListener('contextmenu', (e) => e.preventDefault())
+el.mapBox.addEventListener('pointerdown', (e) => {
+  if (!S.cells) return
+  if (picking) { pickColourAt(e); return }
+  el.mapBox.setPointerCapture?.(e.pointerId)
+  if (e.pointerType === 'touch') {
+    touches.set(e.pointerId, { x: e.clientX, y: e.clientY })
+    if (touches.size >= 2) {
+      // second finger: stop painting, start a two-finger pan at the midpoint
+      const [a, b] = [...touches.values()]
+      dragOrigin = { pointerId: null, twoFinger: true, lastX: (a.x + b.x) / 2, lastY: (a.y + b.y) / 2 }
+      lastPaintCell = null
+      return
+    }
+  }
+  if (e.pointerType === 'mouse' && e.button !== 0) {
+    e.preventDefault()
+    dragOrigin = { pointerId: e.pointerId, lastX: e.clientX, lastY: e.clientY }
+    return
+  }
+  pushUndo()
+  dragOrigin = { pointerId: e.pointerId, painting: true }
+  lastPaintCell = null
+  const c = cellFromPoint(e.clientX, e.clientY)
+  if (c) { brushOver([c], S.brush, S.size); lastPaintCell = c }
+})
+el.mapBox.addEventListener('pointermove', (e) => {
+  const o = dragOrigin
+  if (!o) return
+  if (o.twoFinger) {
+    if (e.pointerType !== 'touch' || !touches.has(e.pointerId)) return
+    touches.set(e.pointerId, { x: e.clientX, y: e.clientY })
+    if (touches.size < 2) return
+    const [a, b] = [...touches.values()]
+    const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2
+    const dx = mx - o.lastX, dy = my - o.lastY
+    o.lastX = mx; o.lastY = my
+    view = { scale: view.scale, ...clampPan({ x: view.x + dx / view.scale, y: view.y + dy / view.scale }, view.scale) }
+    applyView()
+    return
+  }
+  if (o.pointerId !== e.pointerId) return
+  if (o.painting) {
+    paintAt(e)
+  } else {
+    const dx = e.clientX - o.lastX, dy = e.clientY - o.lastY
+    o.lastX = e.clientX; o.lastY = e.clientY
+    view = { scale: view.scale, ...clampPan({ x: view.x + dx / view.scale, y: view.y + dy / view.scale }, view.scale) }
+    applyView()
+  }
+})
+function endPointer(e) {
+  touches.delete(e.pointerId)
+  if (dragOrigin?.twoFinger) { if (touches.size < 2) dragOrigin = null; return }
+  if (dragOrigin?.pointerId === e.pointerId) dragOrigin = null
+  lastPaintCell = null
+}
+el.mapBox.addEventListener('pointerup', endPointer)
+el.mapBox.addEventListener('pointercancel', endPointer)
+el.mapBox.addEventListener('pointerleave', endPointer)
+
+document.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'z') {
+    const t = e.target
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA')) return
+    e.preventDefault()
+    undo()
+  }
+})
+
+/* ============================== swatches / brush ============================== */
+function renderSwatches() {
+  const swatches = [...PAINT, ...(S.showRHQ ? [RHQ_PAINT] : [])]
+  const make = (host, variant, light) => {
+    host.innerHTML = ''
+    for (const p of swatches) {
+      const code = variant(p.code)
+      const b = document.createElement('button')
+      b.className = 'swatch' + (S.brush === code ? ' active' : '')
+      b.title = `${p.label}${light ? ' (light)' : ''}`
+      b.style.background = colorOf(code)
+      b.textContent = p.code + (light ? '·' : '')
+      b.addEventListener('click', () => { S.brush = code; renderSwatches() })
+      host.appendChild(b)
+    }
+    if (!light) {
+      const e = document.createElement('button')
+      e.className = 'swatch erase' + (S.brush === '.' ? ' active' : '')
+      e.textContent = 'Erase'
+      e.addEventListener('click', () => { S.brush = '.'; renderSwatches() })
+      host.appendChild(e)
+    }
+  }
+  make(el.swatchesFull, (c) => c, false)
+  make(el.swatchesLight, (c) => c.toLowerCase(), true)
+}
+const BRUSH_PRESETS = [1, 2, 3, 5, 8, 12, 20]
+function renderBrushSizes() {
+  el.brushSizes.innerHTML = ''
+  for (const s of BRUSH_PRESETS) {
+    const b = document.createElement('button')
+    b.className = 'brush-btn ' + (S.size === s ? 'primary' : 'ghost')
+    b.textContent = s
+    b.addEventListener('click', () => { S.size = s; el.brushCustom.value = s; renderBrushSizes() })
+    el.brushSizes.appendChild(b)
+  }
+}
+el.brushCustom.addEventListener('change', () => {
+  const v = clamp(Math.round(Number(el.brushCustom.value) || 1), 1, 64)
+  el.brushCustom.value = v
+  S.size = v
+  renderBrushSizes()
+})
+el.showRHQ.addEventListener('change', () => {
+  S.showRHQ = el.showRHQ.checked
+  if (!S.showRHQ && isRHQCode(S.brush)) S.brush = 'M'
+  renderSwatches(); renderLegend(); invalidateAll(); autosaveSoon()
+})
+el.clearAll.addEventListener('click', () => {
+  if (!S.cells) return
+  if (!window.confirm('Clear every painted cell on this map?')) return
+  pushUndo()
+  S.cells = new Array(S.cols * S.rows).fill('.')
+  invalidateAll(); autosaveSoon()
+})
+el.undoBtn.addEventListener('click', undo)
+
+/* ============================== legend ============================== */
+function renderLegend() {
+  el.legend.innerHTML = ''
+  const tag = document.createElement('span')
+  tag.className = 'tag'; tag.textContent = 'MAP KEY'
+  el.legend.appendChild(tag)
+  const codes = [...PAINT.map((p) => p.code), ...(S.showRHQ ? ['R'] : [])]
+  const dpr = window.devicePixelRatio || 1
+  for (const code of codes) {
+    const item = document.createElement('span')
+    item.className = 'row center'; item.style.gap = '6px'; item.style.flex = '0 0 auto'
+    item.title = labelOf(code) || ''
+    const cv = document.createElement('canvas')
+    cv.className = 'legend-swatch'
+    cv.width = Math.round(26 * dpr); cv.height = Math.round(14 * dpr)
+    renderHatchSwatch(cv.getContext('2d'), code, cv.width, cv.height)
+    const t = document.createElement('span')
+    t.className = 'mono'; t.style.fontSize = '11px'; t.style.letterSpacing = '1px'
+    t.textContent = coyLabelOf(code)
+    item.append(cv, t)
+    el.legend.appendChild(item)
+  }
+}
+
+/* ============================== image loading ============================== */
+function loadImageFile(file) {
+  if (!file || !file.type.startsWith('image/')) { toast('That is not an image file.'); return }
+  const url = URL.createObjectURL(file)
+  const img = new Image()
+  img.onload = () => {
+    S.img = img; S.imgName = file.name; S.imgW = img.naturalWidth; S.imgH = img.naturalHeight
+    el.mapImg.src = url
+    // Source pixel data — used only by the optional unpaintable-colour mask.
+    try {
+      const c = document.createElement('canvas')
+      c.width = S.imgW; c.height = S.imgH
+      const cx = c.getContext('2d', { willReadFrequently: true })
+      cx.drawImage(img, 0, 0)
+      S.pixelData = { width: S.imgW, height: S.imgH, data: cx.getImageData(0, 0, S.imgW, S.imgH).data }
+    } catch { S.pixelData = null }
+
+    el.mapBox.classList.remove('empty')
+    el.mapBox.style.aspectRatio = `${S.imgW} / ${S.imgH}`
+    el.stage.hidden = false
+    el.emptyMsg.hidden = true
+    el.zoomCtl.hidden = false
+    el.imgInfo.textContent = `${file.name} — ${S.imgW}×${S.imgH} px`
+    ;[el.applyGrid, el.saveJsonBtn, el.exportPngBtn, el.pickBtn].forEach((b) => { b.disabled = false })
+    view = { scale: 1, x: 0, y: 0 }; applyView()
+
+    const saved = loadAutosave()
+    if (saved) {
+      setGrid(saved.cols, saved.rows, saved.cells)
+      if (saved.showRHQ != null) { S.showRHQ = !!saved.showRHQ; el.showRHQ.checked = S.showRHQ; renderSwatches(); renderLegend() }
+      if (saved.block) {
+        S.blockRGB = saved.block.rgb || null; S.blockTol = saved.block.tol ?? 18; S.blockOn = !!saved.block.on
+        el.blockTol.value = S.blockTol; el.blockOn.checked = S.blockOn
+        updateBlockUI(); rebuildBlocked()
+      }
+      toast('Restored your previous painting for this image.')
+    } else {
+      // Default grid: aim for ~256 columns, cells square in image pixels.
+      const cellPx = Math.max(1, Math.round(S.imgW / 256))
+      el.cellPx.value = cellPx
+      syncFromCellPx()
+      setGrid(Number(el.colsIn.value), Number(el.rowsIn.value), null)
+      S.blocked = null; S.blockRGB = null; S.blockOn = false; el.blockOn.checked = false; updateBlockUI()
+    }
+    undoStack.length = 0; el.undoBtn.disabled = true
+  }
+  img.onerror = () => toast('Could not decode that image.')
+  img.src = url
+}
+el.dropzone.addEventListener('click', () => el.imgFile.click())
+el.imgFile.addEventListener('change', () => { loadImageFile(el.imgFile.files[0]); el.imgFile.value = '' })
+;['dragenter', 'dragover'].forEach((t) => el.dropzone.addEventListener(t, (e) => { e.preventDefault(); el.dropzone.classList.add('over') }))
+;['dragleave', 'drop'].forEach((t) => el.dropzone.addEventListener(t, (e) => { e.preventDefault(); el.dropzone.classList.remove('over') }))
+el.dropzone.addEventListener('drop', (e) => loadImageFile(e.dataTransfer.files?.[0]))
+// Dropping anywhere on the page also works (and never navigates away).
+document.addEventListener('dragover', (e) => e.preventDefault())
+document.addEventListener('drop', (e) => { e.preventDefault(); if (e.dataTransfer.files?.[0]) loadImageFile(e.dataTransfer.files[0]) })
+
+/* ============================== grid ============================== */
+function syncFromCellPx() {
+  if (!S.imgW) return
+  const px = Math.max(1, Math.round(Number(el.cellPx.value) || 1))
+  el.cellPx.value = px
+  el.colsIn.value = Math.max(1, Math.round(S.imgW / px))
+  el.rowsIn.value = Math.max(1, Math.round(S.imgH / px))
+  updateGridNote()
+}
+function updateGridNote() {
+  const c = Number(el.colsIn.value) || 0, r = Number(el.rowsIn.value) || 0
+  const n = c * r
+  let note = n ? `${n.toLocaleString()} cells` : ''
+  if (S.imgW && c && r) {
+    const cw = S.imgW / c, ch = S.imgH / r
+    note += ` · ${cw.toFixed(2)}×${ch.toFixed(2)} image px each`
+    if (Math.abs(cw - ch) > 0.05) note += ' (not square)'
+  }
+  if (n > 600000) note += ' · ⚠ very fine — painting may lag'
+  el.gridNote.textContent = note
+}
+el.cellPx.addEventListener('input', syncFromCellPx)
+;[el.colsIn, el.rowsIn].forEach((i) => i.addEventListener('input', () => {
+  if (S.imgW && Number(el.colsIn.value) > 0) el.cellPx.value = (S.imgW / Number(el.colsIn.value)).toFixed(2)
+  updateGridNote()
+}))
+
+// Adopt a new cols x rows, re-sampling the current painting (nearest cell) so
+// a grid change never throws work away. `cellsStr` (optional) supplies cells
+// directly, e.g. from autosave / a JSON file.
+function setGrid(cols, rows, cellsStr) {
+  cols = clamp(Math.round(cols) || 1, 1, 4096)
+  rows = clamp(Math.round(rows) || 1, 1, 4096)
+  let next
+  if (cellsStr && cellsStr.length === cols * rows) next = cellsStr.split('')
+  else if (S.cells && S.cols && S.rows) {
+    next = new Array(cols * rows)
+    const old = S.cells, oc = S.cols, or = S.rows
+    for (let y = 0; y < rows; y++) {
+      const oy = Math.min(or - 1, Math.floor(((y + 0.5) * or) / rows))
+      for (let x = 0; x < cols; x++) {
+        const ox = Math.min(oc - 1, Math.floor(((x + 0.5) * oc) / cols))
+        next[y * cols + x] = old[oy * oc + ox]
+      }
+    }
+  } else next = new Array(cols * rows).fill('.')
+  S.cols = cols; S.rows = rows; S.cells = next
+  el.colsIn.value = cols; el.rowsIn.value = rows
+  if (S.imgW) el.cellPx.value = Number.isInteger(S.imgW / cols) ? S.imgW / cols : (S.imgW / cols).toFixed(2)
+  updateGridNote()
+  undoStack.length = 0; el.undoBtn.disabled = true
+  rebuildBlocked()
+  invalidateAll()
+  autosaveSoon()
+}
+el.applyGrid.addEventListener('click', () => {
+  const c = Number(el.colsIn.value), r = Number(el.rowsIn.value)
+  if (!(c >= 1 && r >= 1)) { toast('Enter a grid size first.'); return }
+  if (c * r > 2_000_000 && !window.confirm(`${(c * r).toLocaleString()} cells is a lot — painting will be slow. Continue?`)) return
+  setGrid(c, r, null)
+  toast(`Grid set to ${S.cols} × ${S.rows}.`)
+})
+
+el.widthRange.addEventListener('input', () => {
+  const w = Number(el.widthRange.value)
+  el.widthVal.textContent = `${w}px`
+  el.mapWrap.style.maxWidth = `${w}px`
+})
+el.widthRange.dispatchEvent(new Event('input'))
+el.pixelated.addEventListener('change', () => {
+  S.pixelated = el.pixelated.checked
+  el.stage.classList.toggle('pixelated', S.pixelated)
+})
+
+/* ============================== unpaintable colour ============================== */
+function updateBlockUI() {
+  if (S.blockRGB) {
+    const [r, g, b] = S.blockRGB
+    const hex = '#' + [r, g, b].map((v) => v.toString(16).padStart(2, '0')).join('')
+    el.blockSwatch.style.background = hex
+    el.blockHex.textContent = hex
+  } else {
+    el.blockSwatch.style.background = 'transparent'
+    el.blockHex.textContent = 'none'
+  }
+}
+function pickColourAt(e) {
+  picking = false
+  document.body.classList.remove('picking')
+  el.pickBtn.classList.remove('primary')
+  if (!S.pixelData) { toast('Pixel data unavailable for this image.'); return }
+  const r = el.stage.getBoundingClientRect()
+  const px = clamp(Math.floor(((e.clientX - r.left) / r.width) * S.imgW), 0, S.imgW - 1)
+  const py = clamp(Math.floor(((e.clientY - r.top) / r.height) * S.imgH), 0, S.imgH - 1)
+  const i = (py * S.imgW + px) * 4
+  const d = S.pixelData.data
+  S.blockRGB = [d[i], d[i + 1], d[i + 2]]
+  S.blockOn = true
+  el.blockOn.checked = true
+  updateBlockUI()
+  rebuildBlocked()
+  autosaveSoon()
+}
+el.pickBtn.addEventListener('click', () => {
+  if (!S.img) return
+  picking = !picking
+  document.body.classList.toggle('picking', picking)
+  el.pickBtn.classList.toggle('primary', picking)
+  if (picking) toast('Click the colour on the map that should be unpaintable.')
+})
+el.blockOn.addEventListener('change', () => { S.blockOn = el.blockOn.checked; rebuildBlocked(); autosaveSoon() })
+el.blockTol.addEventListener('change', () => { S.blockTol = clamp(Number(el.blockTol.value) || 0, 0, 255); el.blockTol.value = S.blockTol; rebuildBlocked(); autosaveSoon() })
+
+// Majority-sampled per-cell mask (lib/oceanMask.js getOceanMask) plus a
+// native-resolution dark overlay of the matching pixels (getOceanOverlayUrl).
+function rebuildBlocked() {
+  if (!S.blockOn || !S.blockRGB || !S.pixelData || !S.cols) {
+    S.blocked = null
+    el.overlay.hidden = true
+    el.blockInfo.textContent = ''
+    return
+  }
+  const { width, height, data } = S.pixelData
+  const [R, G, B] = S.blockRGB
+  const tol = S.blockTol
+  const { cols, rows } = S
+  const hits = new Uint32Array(cols * rows)
+  const totals = new Uint32Array(cols * rows)
+  const ov = new Uint8ClampedArray(width * height * 4)
+  const xCell = new Uint16Array(width)
+  for (let x = 0; x < width; x++) xCell[x] = Math.min(cols - 1, Math.floor((x * cols) / width))
+  for (let y = 0; y < height; y++) {
+    const cy = Math.min(rows - 1, Math.floor((y * rows) / height)) * cols
+    for (let x = 0; x < width; x++) {
+      const i = (y * width + x) * 4
+      const ci = cy + xCell[x]
+      totals[ci]++
+      if (Math.abs(data[i] - R) <= tol && Math.abs(data[i + 1] - G) <= tol && Math.abs(data[i + 2] - B) <= tol) {
+        hits[ci]++
+        ov[i] = 3; ov[i + 1] = 7; ov[i + 2] = 14; ov[i + 3] = 150
+      }
+    }
+  }
+  const mask = new Uint8Array(cols * rows)
+  let n = 0
+  for (let i = 0; i < mask.length; i++) if (totals[i] > 0 && hits[i] / totals[i] >= 0.5) { mask[i] = 1; n++ }
+  S.blocked = mask
+  const c = document.createElement('canvas')
+  c.width = width; c.height = height
+  c.getContext('2d').putImageData(new ImageData(ov, width, height), 0, 0)
+  el.overlay.src = c.toDataURL('image/png')
+  el.overlay.hidden = false
+  el.blockInfo.textContent = `${n.toLocaleString()} of ${mask.length.toLocaleString()} cells blocked`
+}
+
+/* ============================== persistence ============================== */
+const storeKey = () => `atf-map-painter:${S.imgName}:${S.imgW}x${S.imgH}`
+let saveTimer = null
+function autosaveSoon() { clearTimeout(saveTimer); saveTimer = setTimeout(autosave, 700) }
+function autosave() {
+  if (!S.cells || !S.imgName) return
+  try {
+    localStorage.setItem(storeKey(), JSON.stringify({
+      cols: S.cols, rows: S.rows, cells: S.cells.join(''), showRHQ: S.showRHQ,
+      block: { rgb: S.blockRGB, tol: S.blockTol, on: S.blockOn },
+    }))
+  } catch { /* quota or private mode — the JSON download still works */ }
+}
+function loadAutosave() {
+  try {
+    const raw = localStorage.getItem(storeKey())
+    if (!raw) return null
+    const s = JSON.parse(raw)
+    if (!s || !s.cols || !s.rows || typeof s.cells !== 'string' || s.cells.length !== s.cols * s.rows) return null
+    return s
+  } catch { return null }
+}
+
+function download(blob, name) {
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob)
+  a.download = name
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000)
+}
+el.saveJsonBtn.addEventListener('click', () => {
+  if (!S.cells) return
+  const out = {
+    version: 1, tool: '1atf-map-painter',
+    image: { name: S.imgName, width: S.imgW, height: S.imgH },
+    cols: S.cols, rows: S.rows, cells: S.cells.join(''), showRHQ: S.showRHQ,
+    block: { rgb: S.blockRGB, tol: S.blockTol, on: S.blockOn },
+    savedAt: new Date().toISOString(),
+  }
+  const base = (S.imgName || 'map').replace(/\.[^.]+$/, '')
+  download(new Blob([JSON.stringify(out)], { type: 'application/json' }), `${base}-territory.json`)
+})
+el.loadJsonBtn.addEventListener('click', () => el.jsonFile.click())
+el.jsonFile.addEventListener('change', async () => {
+  const f = el.jsonFile.files[0]
+  el.jsonFile.value = ''
+  if (!f) return
+  try {
+    const s = JSON.parse(await f.text())
+    if (!s || !s.cols || !s.rows || typeof s.cells !== 'string' || s.cells.length !== s.cols * s.rows) throw new Error('bad')
+    if (!S.img) { toast('Load the map image first, then this JSON.'); return }
+    if (s.image && (s.image.width !== S.imgW || s.image.height !== S.imgH)) {
+      if (!window.confirm(`This file was painted over a ${s.image.width}×${s.image.height} image; the current one is ${S.imgW}×${S.imgH}. Load it anyway?`)) return
+    }
+    if (s.showRHQ != null) { S.showRHQ = !!s.showRHQ; el.showRHQ.checked = S.showRHQ; renderSwatches(); renderLegend() }
+    if (s.block) { S.blockRGB = s.block.rgb || null; S.blockTol = s.block.tol ?? 18; S.blockOn = !!s.block.on; el.blockTol.value = S.blockTol; el.blockOn.checked = S.blockOn; updateBlockUI() }
+    setGrid(s.cols, s.rows, s.cells)
+    toast(`Loaded ${s.cols} × ${s.rows} painting.`)
+  } catch { toast('That file is not a painting saved by this tool.') }
+})
+
+// Composite export at the image's native resolution (longest side capped at
+// 4096), no filter — the map as loaded, with the territory layer on top.
+el.exportPngBtn.addEventListener('click', () => {
+  if (!S.img || !S.cells) return
+  const cap = 4096
+  const k = Math.min(1, cap / Math.max(S.imgW, S.imgH))
+  const W = Math.round(S.imgW * k), H = Math.round(S.imgH * k)
+  const c = document.createElement('canvas')
+  c.width = W; c.height = H
+  const cx = c.getContext('2d')
+  cx.imageSmoothingEnabled = !S.pixelated
+  cx.drawImage(S.img, 0, 0, W, H)
+  renderTerritoryLayer(cx, { cells: S.cells, cols: S.cols, rows: S.rows, showRHQ: S.showRHQ, w: W, h: H })
+  hatchCache.clear(); scratch = null // don't keep full-resolution patterns around
+  const base = (S.imgName || 'map').replace(/\.[^.]+$/, '')
+  c.toBlob((blob) => {
+    if (!blob) { toast('Export failed.'); return }
+    download(blob, `${base}-territory.png`)
+    toast('PNG exported.')
+  }, 'image/png')
+})
+
+/* ============================== boot ============================== */
+renderSwatches()
+renderBrushSizes()
+renderLegend()
+applyView()
+updateGridNote()
+})()
+</script>
+</body>
+</html>

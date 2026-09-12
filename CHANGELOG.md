@@ -17,6 +17,38 @@ keep entries short and focused on what a new collaborator needs to know.
 
 ---
 
+## 2026-09-12 — New: standalone map painter (`tools/map-painter.html`)
+A single self-contained HTML file that reproduces the Ops Centre **Map:
+Territory** editor over any map image loaded from disk — for painting
+territory on a different, much larger map (e.g. 2048×2048) outside the site.
+No build, no Firebase, no server: open it in a browser, drop an image in, paint.
+- **Code lifted, not re-imagined**: the hatch fill + neutral boundary renderer
+  (`renderTerritoryLayer`, `hatchFor`, region-scratch masking), the map-key
+  swatches (`renderHatchSwatch`), the brush stamp (`brushOver`), Bresenham
+  stroke interpolation with coalesced pointer events, the +/- zoom buttons,
+  middle/right-mouse pan, and the theme CSS are all copied across from
+  `lib/terrainRender.js`, `PixelMap.jsx`, `MapEditor.jsx` and `index.css`,
+  so it looks and paints the same. One adaptation: cell width and height are
+  computed separately, since the user can type any cols × rows.
+- **Differs from the site on purpose**: the image is shown at its own aspect
+  ratio with **no filter** (a "Pixel-art rendering" tick restores the
+  nearest-neighbour look); the **grid is adjustable** (cell size in image px,
+  or cols × rows — re-grids resample the painting rather than discarding it);
+  brush presets go up to 20 plus a free size field; zoom cap is 8× not 4×;
+  a two-finger touch pan is actually implemented. One extra colour:
+  **Occupied** (code `O`, white; its Contested variant is a pale grey since
+  white can't be lightened).
+- **Ocean blocking is opt-in**: the site hard-codes `OCEAN_COLOR`; here a
+  "Pick colour from map" eyedropper + tolerance builds the same majority-
+  sampled per-cell mask and dark overlay (`lib/oceanMask.js` logic).
+- Persistence is local: autosave to localStorage per image name/size, Save /
+  Load JSON (`{ cols, rows, cells, showRHQ, block }` — same one-char-per-cell
+  string as `territory.cells`), Export PNG at native resolution (capped at
+  4096), Undo (Ctrl+Z, 40 strokes).
+- Nothing in the app changed; the tool is not part of the Vite build or the
+  deployed site. Verified headlessly with Playwright against a synthetic
+  2048×2048 image (paint, blocked ocean, zoom/pan, re-grid, export, restore).
+
 ## 2026-09-08 — Fixed: manually-dragged company label positions bled into every campaign replay frame
 Reported: fixing a company name's on-map position (MapEditor's "Arrange
 company labels manually", stored in `territory.labelOverrides`) was meant to
