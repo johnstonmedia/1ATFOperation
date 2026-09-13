@@ -54,11 +54,15 @@ export const MAPS = [
     name: 'Singleton Military Area',
     sub: 'AREAS 8 & 9 // AUSPEC0196',
     blurb: 'The training area itself — Areas 8 and 9, RHQ at the Ex Admin Area.',
-    image: asset('singleton.png'),
-    pixelWidth: 648,
-    pixelHeight: 459,
+    image: asset('singleton.webp'),
+    pixelWidth: 1080,
+    pixelHeight: 765,
     cols: 216,
     rows: 153,
+    // Photographic art, so it opts out of the pixel-art filter: see
+    // imageFilterFor() in lib/terrainRender.js. Enough contrast and tint to
+    // sit inside the portal's palette, well short of what the flat tiles take.
+    imageFilter: 'contrast(112%) sepia(20%) brightness(104%) saturate(86%)',
     // Landlocked: every cell on the sheet is ground somebody can hold.
     blockFill: null,
     blockLabel: null,
@@ -79,25 +83,15 @@ export const MAPS = [
       originE: 324739,          // easting  at cell x = 0
       originN: 6378195,         // northing at cell y = 0 (north edge; y runs south)
     },
-    // What the art's colours mean, shown as a terrain key under the map.
-    // These mirror the palette in tools/map/derive-singleton-map.py, which is
-    // the source of truth — change them together or the key starts lying.
-    // The wording is the sheet's own legend wording.
-    terrainKey: [
-      { color: '#c0bb74', label: 'Cleared' },
-      { color: '#a4b86e', label: 'Grass' },
-      { color: '#89ab68', label: 'Scrub / scattered trees' },
-      { color: '#6d9a5e', label: 'Woodland' },
-      { color: '#5c8a55', label: 'Woodland, dense' },
-      { color: '#c4ae8c', label: 'Cultivated land' },
-      { color: '#ad8a63', label: 'Steep / broken ground' },
-      { color: '#e48a34', label: 'Road, hard surface' },
-      { color: '#d8a860', label: 'Road, loose surface' },
-      { color: '#967c55', label: 'Track / trail' },
-      { color: '#7d8a9e', label: 'Railway' },
-      { color: '#4d87ad', label: 'Watercourse / dam' },
-      { color: '#9c95c6', label: 'Sector boundary' },
-      { color: '#c284a4', label: 'Defence area boundary' },
+    // What is drawn ON the imagery, shown as a key under the map. The art is
+    // a photograph, so there is no palette to explain — only the two
+    // administrative lines, which is exactly what a photograph can't show.
+    // These mirror LAYERS in tools/map/build-singleton-map.py, which is the
+    // source of truth — change them together or the key starts lying.
+    artKeyLabel: 'BOUNDARIES',
+    artKey: [
+      { color: '#ffd23c', label: 'Commonwealth land boundary (Areas 8 & 9)' },
+      { color: '#46e878', label: 'Sector boundary — 8 west, 9 east' },
     ],
   },
 ]

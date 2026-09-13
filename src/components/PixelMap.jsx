@@ -1,7 +1,7 @@
 import { useRef, useEffect, useState, useCallback, useMemo } from 'react'
 import { beaconStateFor } from '../lib/territory'
 import { mapFor, mapAspect, gridRefOf } from '../lib/maps'
-import { renderTerritoryLayer, IMAGE_FILTER } from '../lib/terrainRender'
+import { renderTerritoryLayer, imageFilterFor } from '../lib/terrainRender'
 import { companyLabelPoints } from '../lib/companyLabels'
 import Beacon from './Beacon'
 import { useUnpaintableOverlayUrl } from '../lib/unpaintableMask'
@@ -327,7 +327,7 @@ export default function PixelMap({
           }}
         >
           <img src={map.image} alt={`${map.name} operational map`} draggable={false}
-            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', imageRendering: 'pixelated', userSelect: 'none', filter: IMAGE_FILTER }} />
+            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', imageRendering: 'pixelated', userSelect: 'none', filter: imageFilterFor(map) }} />
           {edit && blockedOverlayUrl && (
             <img src={blockedOverlayUrl} alt="" draggable={false}
               style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', imageRendering: 'pixelated', userSelect: 'none', pointerEvents: 'none' }} />

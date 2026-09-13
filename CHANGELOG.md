@@ -17,6 +17,76 @@ keep entries short and focused on what a new collaborator needs to know.
 
 ---
 
+## 2026-09-13 — Singleton map becomes real satellite imagery + traced boundaries
+Asked for satellite imagery as the map itself, unaltered, with the Areas 8 & 9
+border and the Sector 8/9 divide taken off the PDF and drawn onto it. Both
+done. **This replaces the flat pixel-art tile** derived from the topo sheet on
+2026-09-12 — that art is superseded, not just re-rendered.
+
+**The base is photography, not a stylisation.** `public/map/singleton.webp` is
+Copernicus **Sentinel-2** L2A true colour (10 m) of the actual ground, cut to
+the sheet's MGA Zone 56 bounds and given exactly one display stretch — the
+imagery is never recoloured or classified.
+[tools/map/build-singleton-map.py](tools/map/build-singleton-map.py) builds it,
+pulling the scene from the AWS Open Data registry. That bucket is the **one**
+imagery source this environment's egress proxy allows; Google, OSM, Mapbox,
+NSW SIX, GA, NASA GIBS and Element84 are all blocked (and Google's imagery
+isn't licensed for tracing into a committed asset anyway). Attribute as
+"Contains modified Copernicus Sentinel data".
+
+**Two lines are drawn on it, and nothing else** — yellow Commonwealth land
+boundary, green Sector 8/9 boundary. The imagery already shows the highway, the
+rail corridor and every paddock track; what it can't show is which ground is
+Defence land and where the sectors divide.
+- Traced by [tools/map/trace-singleton-boundaries.py](tools/map/trace-singleton-boundaries.py)
+  into `tools/map/singleton-boundaries.json` as vertices **in grid cells**, so
+  they inherit the map's georeference. A coarse seed list read off the sheet is
+  snapped to boundary ink and consecutive seeds joined by a **least-cost path**
+  through a two-tier ink mask, so the line follows the printed one exactly and
+  only straight-lines where the sheet's ink actually stops. Seeds only have to
+  be within a cell or two; the routing supplies the accuracy.
+- The two-tier mask matters: with the strict tier alone the router cut the
+  corner at the south-west turn (cell ~92,124), where the ink thins for ~15
+  cells. The loose tier at cost 3 fixed it.
+- The vertices are committed, so rebuilding the art needs no PDF.
+- ⚠️ **Rejected: drawing the sheet's extracted ROAD NETWORK over the imagery.**
+  Tried it; the extraction fragments wherever contours crowd, which was
+  invisible on equally-coarse pixel art and reads as dirt on the lens over 10 m
+  satellite. Don't reinstate it.
+
+**Per-map image filter.** The app-wide `IMAGE_FILTER`
+(`contrast(140%) sepia(60%) brightness(75%)`) exists to punch up flat pixel
+art, and it destroys photography — shadowed timber to solid black, the whole
+frame stained one colour. Maps may now declare their own `imageFilter`;
+`imageFilterFor(map)` in [src/lib/terrainRender.js](src/lib/terrainRender.js)
+is the single accessor, used by both `PixelMap` and the exporters so the page
+and the exported video can't drift apart. NSW is unchanged.
+
+**Smaller changes**
+- `terrainKey` → **`artKey`** + `artKeyLabel` on the map record. It no longer
+  describes terrain colours (there is no palette in a photograph) but what is
+  drawn *on* the art, so the toggle now reads `+ BOUNDARIES` on Singleton and
+  the field name stops lying. NSW still has none, so still shows no toggle.
+- Art ships as **WebP**: the same frame is 1.4 MB as PNG and 340 KB at quality
+  92, and it's the first thing the home page loads on this map. Quality 92 was
+  checked against the boundary lines specifically — the one detail a lossy
+  codec could plausibly hurt.
+- The map record's `pixelWidth`/`pixelHeight` are now 1080×765 (5 art px per
+  cell, still an exact whole-block division of the 216×153 grid).
+- `derive-singleton-map.py` **no longer builds this map**. Kept, and its
+  docstring says so: it documents how the sheet's legend ink colours separate,
+  which is what the tracer's thresholds rest on, and the tracer imports its
+  sheet loader.
+
+**Not done** — the reference screenshot's named points (AA Oscar/Foxtrot/…, the
+ropes courses, NAVEX, Quarry, Point of Entry, the Calf Pen track start) are not
+added: no coordinates for them exist in anything available here, and inventing
+positions on a map cadets will navigate by would be worse than leaving them
+off. They are ordinary territory places — RHQ can drop each one in from
+Ops Centre → Map: Territory, and the grid reference shown beside it is exact.
+
+---
+
 ## 2026-09-12 (third) — Singleton map georeferenced; grid references on every point
 Asked to rebuild the map from Google satellite/road data. **Could not**: this
 environment's egress proxy blocks `maps.app.goo.gl`, `maps.googleapis.com`

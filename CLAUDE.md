@@ -262,21 +262,44 @@ assuming a page exists).
 
 ## Maps (`src/lib/maps.js`) — there is more than one (2026-09-12)
 - **`MAPS` in [src/lib/maps.js](src/lib/maps.js) is the single description of
-  what a map is**: art file, native pixel size, territory grid, and an optional
-  `blockFill` (a flat colour in the art that can never be painted). Two ship:
+  what a map is**: art file, native pixel size, territory grid, an optional
+  `blockFill` (a flat colour in the art that can never be painted) and an
+  optional `imageFilter` (see below). Two ship:
   - **`nsw`** — NSW Campaign, `public/map/nsw-terrain.png`, 648×336, 216×112
     grid, ocean `#3c82b4` unpaintable. The **primary** map (`PRIMARY_MAP_ID`).
   - **`singleton`** — Singleton Military Area (Areas 8 & 9, AUSPEC0196),
-    `public/map/singleton.png`, 648×459, 216×153 grid, nothing unpaintable.
-    Derived from the Defence topo sheet by
-    [tools/map/derive-singleton-map.py](tools/map/derive-singleton-map.py) —
-    read that script before regenerating it; the source PDF is not in the repo.
-    It keys off the sheet's OWN LEGEND ink colours (roads print pink, contours
-    brown — `G-B` separates them cleanly; "warmth" does not) and carries
-    hard/loose-surface roads, tracks, railway, drainage, the sector and
-    defence-area boundaries, cultivated land and the vegetation density bands.
+    `public/map/singleton.webp`, 1080×765, 216×153 grid (5 art px per cell),
+    nothing unpaintable. **Real Sentinel-2 satellite imagery** of the ground,
+    not a stylisation, built by
+    [tools/map/build-singleton-map.py](tools/map/build-singleton-map.py): the
+    scene is pulled from the AWS Open Data registry (attribute as "Contains
+    modified Copernicus Sentinel data"), cut to the sheet's MGA Zone 56 bounds
+    and given ONE display stretch — the imagery itself is never recoloured or
+    classified. **WebP, not PNG** (1.4 MB → 340 KB for the same frame; it's the
+    first thing the home page loads on this map).
     `Ex Admin Area` is the RHQ location, and this is the one map seeded with
     `showRHQ: true`.
+  - **Two lines are drawn onto that imagery** and nothing else: the
+    Commonwealth land boundary (yellow) and the Sector 8/9 boundary (green).
+    Imagery already shows the highway, the rail corridor and every paddock
+    track; what it cannot show is which ground is Defence land and where the
+    sectors divide. Both are traced off the AUSPEC0196 sheet by
+    [tools/map/trace-singleton-boundaries.py](tools/map/trace-singleton-boundaries.py)
+    into `tools/map/singleton-boundaries.json` (vertices in grid cells, so they
+    are georeferenced like anything else on the grid) — a coarse seed list is
+    snapped to boundary ink and joined by a LEAST-COST PATH, so the line
+    follows the printed one exactly and only straight-lines across the gaps.
+    The traced vertices are committed, so a rebuild needs no PDF.
+    ⚠️ An earlier attempt drew the sheet's whole EXTRACTED ROAD NETWORK over
+    the imagery instead. Don't reinstate it: the extraction breaks up wherever
+    contours crowd, which blended into flat pixel art but reads as dirt on the
+    lens over 10m satellite.
+    [tools/map/derive-singleton-map.py](tools/map/derive-singleton-map.py) —
+    the old path that redrew the whole sheet as flat pixel art — no longer
+    builds this map, but is kept: it documents how the sheet's legend ink
+    colours separate (roads print pink, contours brown — `G-B` separates them
+    cleanly; "warmth" does not), which is what the tracer's thresholds rest on,
+    and the tracer imports its sheet loader.
   - **Singleton is georeferenced** (`geo` on its map record): the sheet prints
     a 1000m MGA Zone 56 grid, fitted at 195.25 source px/km = **20.5928 grid
     cells per km**, origin E324739 / N6378195 at cell (0,0). Confirmed against
@@ -286,13 +309,25 @@ assuming a page exists).
     tooltips, the ops place list and the Staff Centre. Deliberately linear
     easting/northing only: a grid reference is all this map needs, and lat/lon
     would mean shipping a projection library. Maps without `geo` (NSW) return
-    null. ⚠️ The same constants appear as `GRID_PX`/`GRID_X0`/`GRID_Y0` in the
-    derivation script, where they also mask the graticule — keep them in step.
-  - A map may declare a **`terrainKey`**: what its own art's colours mean,
-    rendered by [MapLegend.jsx](src/components/MapLegend.jsx) behind a
-    `+ TERRAIN` toggle next to the company key. Singleton has one; NSW doesn't,
-    and so shows no toggle. ⚠️ Its colours mirror the derivation script's
-    palette — change both together or the key starts lying.
+    null. ⚠️ The same constants appear as `GRID_PX`/`GRID_X0`/`GRID_Y0` in
+    `derive-singleton-map.py` (where they also mask the graticule) and as
+    `E_MIN`/`E_MAX`/`N_MIN`/`N_MAX` in `build-singleton-map.py` (where they cut
+    the satellite scene) — keep all three in step, or the imagery, the traced
+    boundaries and the grid references stop agreeing.
+  - A map may declare an **`artKey`** (+ `artKeyLabel`): what its own art
+    carries under the territory hatch, rendered by
+    [MapLegend.jsx](src/components/MapLegend.jsx) behind a `+ <artKeyLabel>`
+    toggle next to the company key. Singleton's is the two boundary lines,
+    labelled `BOUNDARIES`; NSW has none, and so shows no toggle. ⚠️ Its colours
+    mirror `LAYERS` in the build script — change both together or the key
+    starts lying.
+  - **`imageFilter`**: the page draws every map through `IMAGE_FILTER`
+    (`contrast(140%) sepia(60%) …` in `terrainRender.js`), which was written
+    for flat pixel art and would crush satellite imagery to black and stain it
+    one colour. A map whose art is photographic declares its own, gentler
+    filter; `imageFilterFor(map)` in
+    [terrainRender.js](src/lib/terrainRender.js) is the single accessor, used
+    by both PixelMap and the exporters so page and video can't diverge.
 - **Maps are code, not content.** New art has to be committed and its grid
   sized to it, so adding a map is a repo change: art in `public/map`, a record
   in `MAPS`, optionally a seed territory in `seed.js`. No rules change.
@@ -308,11 +343,12 @@ assuming a page exists).
   for visitors until "Show this map on the portal". Editing state (painting,
   staged frame edits) is local to the map being edited and is discarded on
   switch, behind a confirm.
-- **Palette constraint for any new art**: the page draws every map through
-  `IMAGE_FILTER` (`contrast(140%) sepia(60%) …` in `terrainRender.js`), which
-  crushes anything below mid-grey to black and blows out anything much
-  lighter. Both tiles sit inside a narrow mid-tone band on purpose; art that
-  looks right at full size can block up solid in the app. See
+- **Palette constraint for any new PIXEL-ART map**: the default
+  `IMAGE_FILTER` crushes anything below mid-grey to black and blows out
+  anything much lighter, so a stylised tile has to sit inside a narrow mid-tone
+  band; art that looks right at full size can block up solid in the app.
+  Photographic art escapes that by declaring its own `imageFilter` (above), but
+  then has to be judged THROUGH that filter, not at full strength. See
   [public/map/README.md](public/map/README.md).
 
 ## Territory / map system (`src/lib/territory.js`, `src/components/PixelMap.jsx`)

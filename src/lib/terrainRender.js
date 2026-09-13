@@ -7,6 +7,15 @@ import { colorOf, isRHQCode, coyLabelOf } from './territory'
 
 export const IMAGE_FILTER = 'contrast(140%) sepia(60%) brightness(75%) saturate(92%)'
 
+// Per-map override. IMAGE_FILTER was written for the flat pixel-art tiles: it
+// pushes them hard (140% contrast, 60% sepia) because there is nothing in them
+// to lose. Real satellite imagery has everything to lose — that filter crushes
+// shadowed timber to black and stains the whole frame one colour — so a map
+// whose art is photographic declares its own, gentler treatment via
+// `imageFilter` in the map registry. One accessor, used by both the on-screen
+// map and the exporters, so the page and the exported video can't diverge.
+export const imageFilterFor = (map) => map?.imageFilter || IMAGE_FILTER
+
 // Territory fill: diagonal hatch per owner colour (not a flat wash) — a flat
 // tint sat over the terrain and washed out detail underneath it, worst under
 // Meridian red on a large holding. Hatch keeps the terrain visible through

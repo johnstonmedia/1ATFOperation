@@ -15,11 +15,13 @@ import { renderHatchSwatch } from '../lib/terrainRender'
 // an entry with nothing on the board. (RHQ is the sole conditional row, since
 // `showRHQ: false` means it isn't drawn on the map at all.)
 //
-// A map may also carry a TERRAIN KEY (`terrainKey` in lib/maps.js) naming what
-// its own art's colours mean — the roads, tracks, drainage and boundaries the
-// source sheet's legend defines. That is a longer list than the company key
-// and it is reference material rather than live state, so it sits behind a
-// toggle instead of permanently doubling the height of the key.
+// A map may also carry an ART KEY (`artKey` in lib/maps.js) naming what its own
+// art carries underneath the territory hatch — the boundaries drawn onto the
+// Singleton imagery, the classes a stylised tile paints its ground in. That is
+// reference material rather than live state, and on some maps a long list, so
+// it sits behind a toggle instead of permanently doubling the height of the
+// key. `artKeyLabel` names the toggle, since what the entries describe differs
+// from map to map.
 
 const SWATCH_W = 26
 const SWATCH_H = 14
@@ -45,8 +47,9 @@ function Swatch({ code }) {
 
 export default function MapLegend({ showRHQ = true, map }) {
   const codes = legendCodes({ showRHQ })
-  const terrain = map?.terrainKey || []
-  const [openTerrain, setOpenTerrain] = useState(false)
+  const artKey = map?.artKey || []
+  const artKeyLabel = map?.artKeyLabel || 'MAP DETAIL'
+  const [openArt, setOpenArt] = useState(false)
   return (
     <div className="col" style={{ gap: 8 }}>
       <div className="row wrap center" style={{ gap: 14, rowGap: 8 }}>
@@ -58,21 +61,21 @@ export default function MapLegend({ showRHQ = true, map }) {
             <span className="mono" style={{ fontSize: 11, letterSpacing: 1 }}>{coyLabelOf(code)}</span>
           </span>
         ))}
-        {terrain.length > 0 && (
+        {artKey.length > 0 && (
           <button
             className="ghost"
-            onClick={() => setOpenTerrain((v) => !v)}
-            aria-expanded={openTerrain}
+            onClick={() => setOpenArt((v) => !v)}
+            aria-expanded={openArt}
             style={{ padding: '2px 10px', fontSize: 10, flex: '0 0 auto' }}
-            title="What the colours of the map itself mean"
+            title="What the map itself shows, under the territory overlay"
           >
-            {openTerrain ? '− TERRAIN' : '+ TERRAIN'}
+            {(openArt ? '− ' : '+ ') + artKeyLabel}
           </button>
         )}
       </div>
-      {openTerrain && terrain.length > 0 && (
+      {openArt && artKey.length > 0 && (
         <div className="row wrap center" style={{ gap: 12, rowGap: 6 }}>
-          {terrain.map((t) => (
+          {artKey.map((t) => (
             <span key={t.label} className="row center" style={{ gap: 5, flex: '0 0 auto' }}>
               <span aria-hidden="true" style={{
                 width: 16, height: 10, borderRadius: 2, background: t.color,

@@ -1,6 +1,6 @@
 import { beaconStateFor } from './territory'
 import { mapFor } from './maps'
-import { renderTerritoryLayer, renderWaveLayer, drawCompanyLabels, drawLegend, IMAGE_FILTER } from './terrainRender'
+import { renderTerritoryLayer, renderWaveLayer, drawCompanyLabels, drawLegend, imageFilterFor } from './terrainRender'
 import { frameCells, frameCaptions, sortFrames, transitionPlan, transitionDuration } from './campaign'
 import { companyLabelPoints, mergedGainLabels, legendCodes } from './companyLabels'
 
@@ -75,7 +75,7 @@ function renderBaseMap(img, map, W, H) {
   native.height = map.pixelHeight
   const nctx = native.getContext('2d')
   nctx.imageSmoothingEnabled = false
-  try { nctx.filter = IMAGE_FILTER } catch { /* keep default */ }
+  try { nctx.filter = imageFilterFor(map) } catch { /* keep default */ }
   nctx.drawImage(img, 0, 0)
   nctx.filter = 'none'
 

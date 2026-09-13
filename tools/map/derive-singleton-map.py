@@ -1,6 +1,13 @@
-"""Derive public/map/singleton.png from the AUSPEC0196 Singleton Range sheet.
+"""Redraw the AUSPEC0196 Singleton Range sheet as flat pixel art.
 
-The portal's maps are flat pixel art, not scans: a 1:25,000 topographic sheet
+NO LONGER BUILDS THE LIVE MAP. public/map/singleton.webp is now Sentinel-2
+satellite imagery with the sheet's boundaries drawn over it - see
+build-singleton-map.py and trace-singleton-boundaries.py. This script is kept
+for two reasons: it documents how the sheet's legend colours separate into
+features, which is what the tracer's ink thresholds rest on, and the tracer
+imports `load_sheet` from it. Run it if you want the old stylised tile back.
+
+The portal's other maps are flat pixel art, not scans: a 1:25,000 topographic sheet
 has far too much line work to read at 648px wide, and none of it survives the
 territory hatch drawn over the top. So this reads the sheet and rebuilds it as
 the classes ITS OWN LEGEND defines, then reduces each ~3.16x3.16 block of
@@ -38,7 +45,7 @@ TWO CONSTRAINTS that are easy to get wrong by eye at full size:
 
 Usage:
     pip install pillow numpy scipy pymupdf
-    python3 tools/map/derive-singleton-map.py Areas_8__9.pdf public/map/singleton.png
+    python3 tools/map/derive-singleton-map.py Areas_8__9.pdf singleton-pixelart.png
 """
 import io
 import sys
@@ -95,7 +102,9 @@ def keep_lines(mask, min_length, max_fill, gap=5):
     return out & mask
 
 
-def derive(im):
+def feature_cover(im, out_w=OUT_W, out_h=OUT_H):
+    """Per-output-pixel coverage of every feature the sheet's legend defines."""
+    OUT_W, OUT_H = out_w, out_h
     H, W, _ = im.shape
     R, G, B = im[:, :, 0], im[:, :, 1], im[:, :, 2]
     mx, mn = im.max(2), im.min(2)
@@ -231,6 +240,18 @@ def derive(im):
     rlo, rhd = line_cover(road_loose), line_cover(road_hard)
     sc, dbd = cover(sector), line_cover(defence_bdy, 3)
 
+    return dict(vg=vg, pk=pk, relief=relief, water=wt, track=tk, railway=rl,
+                road_loose=rlo, road_hard=rhd, sector=sc, defence=dbd)
+
+
+def derive(im, out_w=OUT_W, out_h=OUT_H):
+    """The flat-palette rendering of the sheet, kept for reference and reuse."""
+    OUT_W, OUT_H = out_w, out_h
+    f = feature_cover(im, OUT_W, OUT_H)
+    vg, pk, relief = f['vg'], f['pk'], f['relief']
+    wt, tk, rl = f['water'], f['track'], f['railway']
+    rlo, rhd, sc, dbd = f['road_loose'], f['road_hard'], f['sector'], f['defence']
+
     # ---------------------------------------------------------- palette ---
     P = {k: np.array(v, np.float32) for k, v in {
         # Ground cover, in the legend's own density bands.
@@ -285,6 +306,6 @@ def derive(im):
 
 if __name__ == '__main__':
     src = sys.argv[1] if len(sys.argv) > 1 else 'Areas_8__9.pdf'
-    dst = sys.argv[2] if len(sys.argv) > 2 else 'singleton.png'
+    dst = sys.argv[2] if len(sys.argv) > 2 else 'singleton-pixelart.png'
     Image.fromarray(derive(load_sheet(src))).save(dst)
     print(f'wrote {dst} ({OUT_W}x{OUT_H})')
