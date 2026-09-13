@@ -17,6 +17,47 @@ keep entries short and focused on what a new collaborator needs to know.
 
 ---
 
+## 2026-09-13 (fifth) — Camp zones from the BIV26 Earth project
+The unit's Google Earth project is now on the map: **28 zones** — 15 activity
+areas (the AAs, High Ropes, NAVEX, the Quarry), 6 night locations and 7 HQ
+areas — as polygons in grid cells, with RHQ show/hide in Ops Centre →
+Map: Territory.
+
+- **[tools/map/kml-to-zones.py](tools/map/kml-to-zones.py)** converts the KML.
+  Committed rather than pasted once, because next year's camp plan is authored
+  in Earth and re-running this is the whole update path.
+- Polygons pair with their label points **by containment, not name** — Earth's
+  two names frequently differ ("Regimental Headquarters" polygon vs "RHQ"
+  point; "NightLoc Ropes" vs "NL Ropes"), so name matching alone would have
+  mislabelled several zones.
+- Skipped on purpose: the project's `Archive` and `2021 NLs` folders (both
+  superseded), and its `Borders` folder — the portal's boundaries are traced
+  off the survey sheet and are better. **They agree closely, which validates
+  both**: the project's Sector Boundary spans cells x 125.6–129.3 against the
+  traced 123.1–129.3, and its RHQ polygon centres on (104.8, 93) against the
+  surveyed (104, 96).
+- ⚠️ **Some camp ground is smaller than one grid cell.** The eating areas and
+  field kitchen are ~20 m across against a 59 m cell and came out of
+  simplification as one or two points. They are stored outline-less and render
+  as a dot plus a name that only appears past 2.5x zoom — at 1x those four
+  names landed on top of each other and on RHQ's. This is a real limit of the
+  grid, not a bug to fix.
+- **Geometry is code, visibility is content.** Outlines are committed; what is
+  shown lives in a per-map `zoneVisibility` slice (no Firestore rules change —
+  it goes through `mapSlices()`). A missing slice shows everything, so zones
+  work the moment they are committed and RHQ only touches the panel to remove
+  something.
+- Verified: 28/28 shown → hide one → hide a kind → master off, each reflected
+  on the map and persisted; NSW shows no zones and no panel; no page errors.
+  One bug caught by testing the ops path rather than assuming — a missed import
+  edit left `zoneVisibilitySlice` undefined and crashed the editor.
+
+**Still to come, waiting on the camp Excel**: which companies are scheduled for
+which zone, the unit-vs-company view modes, and the per-day pre-authored
+progress frames.
+
+---
+
 ## 2026-09-13 (fourth) — Blank camp start state; poster prompt
 Groundwork for running the portal live at camp.
 

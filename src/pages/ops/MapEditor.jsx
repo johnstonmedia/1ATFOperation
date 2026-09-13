@@ -10,7 +10,8 @@ import PixelMap from '../../components/PixelMap'
 import MapLegend from '../../components/MapLegend'
 import { PAINT, RHQ_PAINT, colorOf, coyLabelOf } from '../../lib/territory'
 import { useUnpaintableMask } from '../../lib/unpaintableMask'
-import { MAPS, mapById, mapFor, gridRefOf, territorySlice, campaignStartSlice, framesForMap, withMapFrames } from '../../lib/maps'
+import { MAPS, mapById, mapFor, gridRefOf, territorySlice, campaignStartSlice, framesForMap, withMapFrames, zoneVisibilitySlice } from '../../lib/maps'
+import { visibleZones, zonesByKind, zoneCount } from '../../lib/mapZones'
 import { sortFrames, framesValid, renumberFrames } from '../../lib/campaign'
 import { exportCampaignReplay, exportProgressImage, exportSupported, downloadBlob, defaultProgressTitle } from '../../lib/replayExport'
 
@@ -42,6 +43,10 @@ export default function MapEditor() {
   const map = mapById(mapId)
   const terrSlice = territorySlice(mapId)
   const startSlice = campaignStartSlice(mapId)
+  const zoneSlice = zoneVisibilitySlice(mapId)
+  // The editor shows exactly what visitors would see, so hiding a zone here is
+  // previewed immediately rather than guessed at.
+  const editorZones = visibleZones(mapId, state[zoneSlice])
   const savedTerr = state[terrSlice]
   const [terr, setTerr] = useState(() => loadTerr(savedTerr))
   const [brush, setBrush] = useState('M')
@@ -275,8 +280,16 @@ export default function MapEditor() {
         key={`canvas-${mapId}`}
         territory={{ ...terr, cells: canvasCells }}
         edit brush={brush} brushSize={size} onPaint={paint} onMovePlace={movePlace}
+        zones={editorZones}
         showCompanyLabels={arrangeLabels}
         onMoveCompanyLabel={arrangeLabels ? moveCompanyLabel : undefined}
+      />
+
+      <ZonesPanel
+        key={`zones-${mapId}`}
+        mapId={mapId}
+        slice={state[zoneSlice]}
+        onChange={(next) => { updateSlice(zoneSlice, next); audit('Changed zones shown', map.name) }}
       />
 
       <CampaignPanel
@@ -775,6 +788,94 @@ function FrameRow({ f, index, isFirst, isLast, isEditing, isDefaultStart, hasDra
         </button>
         <button className="danger ghost" style={{ padding: '3px 8px' }} onClick={onDelete}>Delete</button>
       </div>
+    </div>
+  )
+}
+
+
+// Show / hide the map's camp zones (activity areas, night locations, HQ).
+//
+// The OUTLINES are committed code — they come from the BIV26 Earth project via
+// tools/map/kml-to-zones.py — so there is nothing to edit here, only what is
+// on display. That split is deliberate: the ground doesn't move during a camp,
+// but what RHQ wants shown at any moment does.
+//
+// A missing slice means everything shows. So committing a map's zones is
+// enough to get them on the map; RHQ only touches this to take something off.
+function ZonesPanel({ mapId, slice, onChange }) {
+  const groups = zonesByKind(mapId)
+  const total = zoneCount(mapId)
+  if (!total) return null
+  const show = slice?.show !== false
+  const hidden = new Set(slice?.hidden || [])
+  const shownCount = show ? total - hidden.size : 0
+
+  const setHidden = (next) => onChange({ show, hidden: [...next] })
+  const toggleZone = (id) => {
+    const next = new Set(hidden)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    setHidden(next)
+  }
+  const toggleKind = (zones) => {
+    const next = new Set(hidden)
+    const anyShown = zones.some((z) => !next.has(z.id))
+    zones.forEach((z) => (anyShown ? next.add(z.id) : next.delete(z.id)))
+    setHidden(next)
+  }
+
+  return (
+    <div className="panel panel-pad col" style={{ gap: 10, marginTop: 14 }}>
+      <div className="row between center wrap" style={{ gap: 8 }}>
+        <span className="tag">ZONES</span>
+        <span className="mono dim" style={{ fontSize: 11 }}>
+          {shownCount} of {total} shown — outlines come from the camp Earth project; this controls what is on display
+        </span>
+        <button
+          className={show ? 'ghost' : 'primary'}
+          onClick={() => onChange({ show: !show, hidden: [...hidden] })}
+          style={{ flex: '0 0 auto' }}
+        >
+          {show ? 'Hide all zones' : 'Show zones'}
+        </button>
+      </div>
+      {show && groups.map(({ kind, style, zones }) => (
+        <div key={kind} className="col" style={{ gap: 6 }}>
+          <div className="row center" style={{ gap: 8 }}>
+            <span aria-hidden="true" style={{
+              width: 12, height: 12, borderRadius: 2, background: style.color,
+              opacity: 0.5, border: `1px solid ${style.color}`, flex: '0 0 auto',
+            }} />
+            <span className="mono" style={{ fontSize: 11, letterSpacing: 1 }}>{style.label.toUpperCase()}</span>
+            <button className="ghost" onClick={() => toggleKind(zones)}
+              style={{ padding: '1px 8px', fontSize: 10, flex: '0 0 auto' }}>
+              {zones.some((z) => !hidden.has(z.id)) ? 'hide all' : 'show all'}
+            </button>
+          </div>
+          <div className="row wrap" style={{ gap: 6 }}>
+            {zones.map((z) => {
+              const on = !hidden.has(z.id)
+              return (
+                <button
+                  key={z.id}
+                  onClick={() => toggleZone(z.id)}
+                  title={on ? `Hide ${z.name}` : `Show ${z.name}`}
+                  className="ghost"
+                  style={{
+                    padding: '2px 9px', fontSize: 11, flex: '0 0 auto',
+                    opacity: on ? 1 : 0.4,
+                    borderColor: on ? style.color : 'var(--line)',
+                    color: on ? style.color : 'var(--text-dim)',
+                    textDecoration: on ? 'none' : 'line-through',
+                  }}
+                >
+                  {z.name}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      ))}
     </div>
   )
 }

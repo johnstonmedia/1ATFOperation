@@ -25,7 +25,7 @@
 // replacing first — an undo of the undo is always available.
 
 import { FIREBASE_ENABLED, db } from '../firebase/config'
-import { MAPS, territorySlice, campaignStartSlice } from './maps'
+import { MAPS, territorySlice, campaignStartSlice, zoneVisibilitySlice } from './maps'
 
 // Versions kept per slice. Older ones are pruned as new ones arrive. Painting
 // the map produces the biggest documents (~24 KB of cells each), so this is a
@@ -45,6 +45,7 @@ const LS_KEY = '1atf-backups'
 const MAP_SLICE_LABELS = MAPS.reduce((acc, m) => {
   acc[territorySlice(m.id)] = `Map: Territory — ${m.name}`
   acc[campaignStartSlice(m.id)] = `Replay Start Frame — ${m.name}`
+  acc[zoneVisibilitySlice(m.id)] = `Zones shown — ${m.name}`
   return acc
 }, {})
 

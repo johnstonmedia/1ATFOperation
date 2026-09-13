@@ -6,7 +6,8 @@ import { useCompany } from '../context/CompanyContext'
 import { useUnseen, useUnseenIntel, hasIntelBaseline, markIntelSeen } from '../hooks/useUnseen'
 import { decryptProgress } from '../lib/intelProgress'
 import { COMPANIES, PHONETIC, smeacOf, movementsOf } from '../firebase/seed'
-import { mapById, territorySlice, campaignStartSlice, framesForMap, otherMaps } from '../lib/maps'
+import { mapById, territorySlice, campaignStartSlice, framesForMap, otherMaps, zoneVisibilitySlice } from '../lib/maps'
+import { visibleZones } from '../lib/mapZones'
 import useViewedMap from '../hooks/useViewedMap'
 
 const RECRUITS = ['Alpha', 'Bravo', 'Charlie', 'Delta']
@@ -62,6 +63,10 @@ export default function Home() {
   const live = mapById(viewedId)
   const territory = state[territorySlice(live.id)]
   const frames = useMemo(() => framesForMap(state.campaignFrames, live.id), [state.campaignFrames, live.id])
+  const zones = useMemo(
+    () => visibleZones(live.id, state[zoneVisibilitySlice(live.id)]),
+    [live.id, state],
+  )
 
   // First visit (or straight after switching company): record the current
   // intel as the baseline so the alert only ever fires on a real change.
@@ -104,7 +109,7 @@ export default function Home() {
 
       {/* Animated campaign-history replay; plain static map when no campaign
           start state has been recorded yet. */}
-      <CampaignReplayMap territory={territory} frames={frames} defaultStartId={state[campaignStartSlice(live.id)]} />
+      <CampaignReplayMap territory={territory} frames={frames} zones={zones} defaultStartId={state[campaignStartSlice(live.id)]} />
       <MapSwitch live={live} defaultId={defaultMap.id} isOverride={isOverride} onView={viewMap} />
 
       <div className="row wrap" style={{ marginTop: 20, gap: 16, alignItems: 'flex-start' }}>

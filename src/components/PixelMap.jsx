@@ -6,6 +6,7 @@ import { companyLabelPoints } from '../lib/companyLabels'
 import Beacon from './Beacon'
 import TileBase from './TileBase'
 import MapLines from './MapLines'
+import MapZones from './MapZones'
 import { useUnpaintableOverlayUrl } from '../lib/unpaintableMask'
 
 const CELL = 8 // fallback canvas pixels per grid cell, used only for the very
@@ -59,6 +60,8 @@ export default function PixelMap({
   showCompanyLabels = false, // derived "A-COY" names on each holding. Off by
            // default, and deliberately left off in the ops map editor — a
            // label sitting over cells you're trying to paint is in the way.
+  zones, // camp zones to outline under the territory hatch (see MapZones).
+         // The caller resolves visibility, so the map draws what it is given.
 }) {
   const { cols, rows, cells, showRHQ } = territory
   const map = mapFor(territory)
@@ -351,6 +354,7 @@ export default function PixelMap({
             <TileBase map={map} view={view} containerRef={containerRef} />
           </div>
           <MapLines map={map} />
+          <MapZones map={map} zones={zones} zoom={scale} />
           {edit && blockedOverlayUrl && (
             <img src={blockedOverlayUrl} alt="" draggable={false}
               style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', imageRendering: 'pixelated', userSelect: 'none', pointerEvents: 'none' }} />

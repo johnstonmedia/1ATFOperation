@@ -355,6 +355,35 @@ assuming a page exists).
     its sheet loader.
     `Ex Admin Area` is the RHQ location, and this is the one map seeded with
     `showRHQ: true`.
+  - **Camp ZONES are a third vector layer** ([mapZones.js](src/lib/mapZones.js)
+    + [MapZones.jsx](src/components/MapZones.jsx)), under the territory hatch
+    and distinct from both territory (ground held) and map lines
+    (administrative boundaries). A zone is the unit of PROGRESS — "Alpha has
+    been through the ropes course" is a fact about a zone, not about a cell.
+    Singleton carries 28: 15 activity areas, 6 night locations, 7 HQ.
+    - **Geometry is code, visibility is content.** Outlines are converted from
+      the unit's BIV26 Google Earth project by
+      [kml-to-zones.py](tools/map/kml-to-zones.py) into
+      `src/data/singleton-zones.json` and committed — the camp plan changes
+      once a year, which is a repo change. What is SHOWN is RHQ's call during a
+      camp, so it lives in a per-map `zoneVisibility` slice
+      (`zoneVisibilitySlice()` in maps.js, folded into `SINGLE_SLICES` by
+      `mapSlices()`, so no rules change). **A missing slice shows everything** —
+      committing zones is enough to get them on the map; RHQ only touches the
+      panel to take something off. Controlled in Ops Centre → Map: Territory →
+      ZONES (per zone, per kind, or a master toggle).
+    - The importer pairs each zone's polygon with its label point **by
+      containment, not by name**, because Earth's two names often differ
+      ("Regimental Headquarters" polygon vs "RHQ" point; "NightLoc Ropes" vs
+      "NL Ropes"). It deliberately skips the project's `Archive` and
+      `2021 NLs` folders, and its `Borders` folder — the traced survey-sheet
+      boundaries are better, though the two agree closely, which is a useful
+      cross-check on both.
+    - ⚠️ **Some camp ground is smaller than one grid cell.** The eating areas
+      and field kitchen are ~20 m across against a 59 m cell, so they are
+      stored with no outline and render as a dot plus a name that only appears
+      past `DETAIL_LABEL_ZOOM`. Don't "fix" them into polygons; the grid cannot
+      express them, and at 1x their names land on top of each other and RHQ's.
   - A map may declare an **`artKey`** (+ `artKeyLabel`): what its own art
     carries under the territory hatch, rendered by
     [MapLegend.jsx](src/components/MapLegend.jsx) behind a `+ <artKeyLabel>`

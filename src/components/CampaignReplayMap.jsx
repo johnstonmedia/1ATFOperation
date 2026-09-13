@@ -53,7 +53,7 @@ const playBtnStyle = {
   gap: 7,
 }
 
-export default function CampaignReplayMap({ territory, frames: campaignFrames, defaultStartId, maxWidth }) {
+export default function CampaignReplayMap({ territory, frames: campaignFrames, zones, defaultStartId, maxWidth }) {
   const { cols, rows } = territory
 
   // Frames: one per recorded frame, sorted by order — ONLY real, saved
@@ -105,7 +105,7 @@ export default function CampaignReplayMap({ territory, frames: campaignFrames, d
   if (!frames) {
     return (
       <div className="col" style={{ gap: 10 }}>
-        <PixelMap territory={territory} maxWidth={maxWidth} showCompanyLabels />
+        <PixelMap territory={territory} maxWidth={maxWidth} zones={zones} showCompanyLabels />
         <MapLegend showRHQ={territory.showRHQ} map={mapFor(territory)} />
       </div>
     )
@@ -113,6 +113,7 @@ export default function CampaignReplayMap({ territory, frames: campaignFrames, d
   return (
     <Replay
       territory={territory}
+      zones={zones}
       frames={frames}
       captions={captions}
       frameMeta={frameMeta}
@@ -123,7 +124,7 @@ export default function CampaignReplayMap({ territory, frames: campaignFrames, d
   )
 }
 
-function Replay({ territory, frames, captions, frameMeta, labelFlags, startIdx, maxWidth }) {
+function Replay({ territory, zones, frames, captions, frameMeta, labelFlags, startIdx, maxWidth }) {
   const { cols, rows } = territory
   const transitions = frames.length - 1
   const perMs = useMemo(() => transitionDuration(transitions), [transitions])
@@ -314,6 +315,7 @@ function Replay({ territory, frames, captions, frameMeta, labelFlags, startIdx, 
         territory={{ ...territory, cells: frames[committedIdx], labelOverrides: activeLabelOverrides }}
         maxWidth={maxWidth}
         overlay={overlay}
+        zones={zones}
         showCompanyLabels
       />
 
