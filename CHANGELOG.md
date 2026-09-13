@@ -17,6 +17,33 @@ keep entries short and focused on what a new collaborator needs to know.
 
 ---
 
+## 2026-09-13 (fourth) — Blank camp start state; poster prompt
+Groundwork for running the portal live at camp.
+
+- **The Regional map now starts blank.** Its seed painted Meridian at Yellow
+  Billys Cave, Broken Back Range and the DFSW2 range as demo content; for a
+  live camp that is wrong — the whole point is watching an empty board fill in.
+  The only seeded ground is RHQ at the Ex Admin Area. The sector and
+  Commonwealth-land boundaries still show because they are vectors drawn over
+  the art, not painted cells, so a blank board is not an empty picture.
+  NSW is untouched and keeps its three Meridian blobs.
+  ⚠️ The seed only applies where no Firestore document exists yet. If the
+  Regional territory has already been saved live, blank it with **Clear all**
+  in Map: Territory and repaint RHQ.
+- **[docs/progress-poster-prompt.md](docs/progress-poster-prompt.md)** — the
+  Claude Design prompt for the daily camp posters, with every colour and font
+  copied from `index.css`, `seed.js` and `mapLines.js` rather than described
+  from memory. Committed rather than pasted once so it can be kept in step when
+  the brand values move. Covers both the UNIT variant (a zone's percentage is
+  the share of its scheduled companies that have been through) and the per
+  COMPANY variant, plus the Day 0 empty state.
+- **Still blocked on files**: the BIV26 Earth project (the Drive "Google Earth"
+  folder exists but is empty — Earth Web keeps project data where the Drive API
+  can't read it, so it needs a KML export) and the camp Excel. The zone layer,
+  the show/hide control and the per-day progress all wait on those.
+
+---
+
 ## 2026-09-13 (third) — Both maps are public; RHQ picks the default
 Renamed the two maps and opened both to visitors.
 

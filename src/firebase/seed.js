@@ -270,12 +270,21 @@ function buildSingletonCells() {
       if (x >= 0 && x < S_COLS && y >= 0 && y < S_ROWS) g[y * S_COLS + x] = code
     }
   }
+  // A BLANK SHEET, deliberately. Camp starts with nothing taken: the only
+  // thing on the ground is RHQ at the Ex Admin Area, and the only other marks
+  // on the map are the sector and Commonwealth-land boundaries — which are
+  // vectors drawn over the art (lib/mapLines.js), not painted cells, so they
+  // are always there without occupying any ground.
+  //
+  // Everything else fills in as companies actually take it. Earlier versions
+  // of this seed pre-painted Meridian at Yellow Billys Cave, Broken Back Range
+  // and the DFSW2 range as demo content; that was fine for a demo and is wrong
+  // for a live camp, where the whole point is watching the map develop from
+  // empty. Don't re-add starting territory here.
+  //
   // Wider than the Ex Admin Area itself so the derived "RHQ" company label
   // has somewhere to sit clear of that place's own beacon.
   blob(92, 90, 24, 12, 'R')  // Ex Admin Area — RHQ
-  blob(133, 78, 15, 10, 'M') // Yellow Billys Cave, Sector 9
-  blob(170, 124, 17, 11, 'M') // Broken Back Range
-  blob(128, 18, 14, 9, 'm')  // DFSW2 firing range / Sentry Post No5, loosely held
   return g.join('')
 }
 export const DEFAULT_SINGLETON_TERRITORY = {
