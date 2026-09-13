@@ -4,6 +4,8 @@ import { mapFor, mapAspect, gridRefOf } from '../lib/maps'
 import { renderTerritoryLayer, imageFilterFor } from '../lib/terrainRender'
 import { companyLabelPoints } from '../lib/companyLabels'
 import Beacon from './Beacon'
+import TileBase from './TileBase'
+import MapLines from './MapLines'
 import { useUnpaintableOverlayUrl } from '../lib/unpaintableMask'
 
 const CELL = 8 // fallback canvas pixels per grid cell, used only for the very
@@ -13,8 +15,17 @@ const CELL = 8 // fallback canvas pixels per grid cell, used only for the very
                 // without that, the fixed buffer gets rescaled by the browser
                 // at a non-integer ratio, which aliases the hatch lines into
                 // a denser, uneven wash than the values below actually ask for)
-const MAX_SCALE = 4 // zoom-button ceiling
+const MAX_SCALE = 8 // zoom-button ceiling. Raised from 4 once maps could carry
+                // a live tile basemap: on a 10m static image the extra steps
+                // only magnified pixels, but against SIX Maps tiles each step
+                // pulls a deeper zoom level, so it is real detail.
 const ZOOM_STEP = 1.6 // multiplier per +/- button press
+// How far the territory canvas follows the zoom. Without this the hatch is
+// rasterised once at container resolution and then magnified with everything
+// else, which was tolerable at 4x and is not at 8x. Capped because the buffer
+// is square in this factor and browsers refuse oversized canvases outright.
+const CANVAS_DETAIL_MAX = 3
+const MAX_CANVAS_PX = 8192
 
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v))
 
@@ -98,7 +109,8 @@ export default function PixelMap({
       const rect = container.getBoundingClientRect()
       if (!rect.width) return
       const dpr = window.devicePixelRatio || 1
-      const cell = (rect.width * dpr) / cols
+      const detail = clamp(viewRef.current.scale, 1, CANVAS_DETAIL_MAX)
+      const cell = Math.min(rect.width * dpr * detail, MAX_CANVAS_PX) / cols
       const w = Math.max(1, Math.round(cols * cell))
       const h = Math.max(1, Math.round(rows * cell))
 
@@ -154,7 +166,7 @@ export default function PixelMap({
     })
     ro.observe(container)
     return () => { cancelAnimationFrame(raf); clearTimeout(resizeTimer); ro.disconnect() }
-  }, [cells, cols, rows, showRHQ])
+  }, [cells, cols, rows, showRHQ, scale])
 
   const clampPan = useCallback((p, s) => {
     const el = containerRef.current
@@ -326,8 +338,19 @@ export default function PixelMap({
             transform: `scale(${scale}) translate(${view.x}px, ${view.y}px)`,
           }}
         >
-          <img src={map.image} alt={`${map.name} operational map`} draggable={false}
-            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', imageRendering: 'pixelated', userSelect: 'none', filter: imageFilterFor(map) }} />
+          {/* Base art, then the live tile layer over it, then the vector
+              boundaries. The static image is deliberately the BOTTOM layer,
+              not an either/or with tiles: it is what shows while tiles load
+              and all that shows if they never arrive, so a map with no signal
+              behind it degrades to exactly what it looked like before. One
+              filter wraps both so tiles and fallback share the portal's
+              palette instead of jumping when the tiles land. */}
+          <div style={{ position: 'absolute', inset: 0, filter: imageFilterFor(map) }}>
+            <img src={map.image} alt={`${map.name} operational map`} draggable={false}
+              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', imageRendering: 'pixelated', userSelect: 'none' }} />
+            <TileBase map={map} view={view} containerRef={containerRef} />
+          </div>
+          <MapLines map={map} />
           {edit && blockedOverlayUrl && (
             <img src={blockedOverlayUrl} alt="" draggable={false}
               style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', imageRendering: 'pixelated', userSelect: 'none', pointerEvents: 'none' }} />
@@ -344,6 +367,10 @@ export default function PixelMap({
             <div key={l.code} className="company-label"
               style={{
                 left: `${(l.x / cols) * 100}%`, top: `${(l.y / rows) * 100}%`, color: l.color,
+                // Counter-scale, as Beacon does: a company name marks a
+                // holding's centre, so it should hold its size as the map
+                // zooms rather than grow into a banner.
+                transform: `translate(-50%, -50%) scale(${1 / scale})`,
                 ...(onMoveCompanyLabel ? { pointerEvents: 'auto', cursor: 'grab' } : null),
               }}
               onPointerDown={onMoveCompanyLabel ? (e) => { e.stopPropagation(); dragging.current = { label: l.code } } : undefined}>
@@ -358,6 +385,7 @@ export default function PixelMap({
             const b = beaconStateFor(territory, p, { showRHQ })
             return (
               <Beacon
+                zoom={scale}
                 key={p.id}
                 x={p.x} y={p.y} cols={cols} rows={rows}
                 color={b.color}
@@ -374,6 +402,13 @@ export default function PixelMap({
         </div>
 
         <ZoomControls scale={scale} onZoomIn={zoomIn} onZoomOut={zoomOut} />
+        {map.tiles?.attribution && (
+          <div className="mono" style={{
+            position: 'absolute', left: 6, bottom: 4, fontSize: 9, letterSpacing: 0.3,
+            color: 'rgba(220,232,244,0.62)', background: 'rgba(8,12,20,0.45)',
+            padding: '1px 6px', borderRadius: 3, pointerEvents: 'none', maxWidth: '70%',
+          }}>{map.tiles.attribution}</div>
+        )}
       </div>
     </div>
   )

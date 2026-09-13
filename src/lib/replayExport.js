@@ -1,6 +1,7 @@
 import { beaconStateFor } from './territory'
 import { mapFor } from './maps'
 import { renderTerritoryLayer, renderWaveLayer, drawCompanyLabels, drawLegend, imageFilterFor } from './terrainRender'
+import { drawMapLines } from './mapLines'
 import { frameCells, frameCaptions, sortFrames, transitionPlan, transitionDuration } from './campaign'
 import { companyLabelPoints, mergedGainLabels, legendCodes } from './companyLabels'
 
@@ -86,6 +87,10 @@ function renderBaseMap(img, map, W, H) {
   bctx.fillStyle = '#0a0f1a'
   bctx.fillRect(0, 0, W, H)
   bctx.drawImage(native, 0, 0, map.pixelWidth, map.pixelHeight, 0, 0, W, H)
+  // The map's vector boundaries. They live over the art rather than inside it
+  // (see lib/mapLines.js), so without this an exported still or video would be
+  // the one place they went missing.
+  drawMapLines(bctx, map, W, H)
   return base
 }
 

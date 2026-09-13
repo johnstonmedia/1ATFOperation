@@ -27,6 +27,13 @@
 //   draggable    when true, the marker accepts pointer-down (for the map
 //                editor's drag-to-move) and shows a move cursor.
 //   onPointerDown  handler wired up only when draggable is true.
+//   zoom         the map's current zoom factor. The marker counter-scales by
+//                1/zoom so the dot and its name stay the SAME SIZE on screen
+//                however far in the map is zoomed — the position is the
+//                information here, not the size. Without it a name became a
+//                banner across half the map at the deeper zoom levels the
+//                tile basemap made worthwhile. Anchoring at 0 0 is what keeps
+//                the dot on its point while the contents shrink.
 //
 // The name flows RIGHT of the dot, except near the right-hand edge where it
 // would run off the map — there it flows left instead. Without that, a marker
@@ -46,6 +53,7 @@ export default function Beacon({
   gridRef,
   draggable = false,
   onPointerDown,
+  zoom = 1,
 }) {
   const dot = color || '#dfe6f2'
   const tagCol = tagColor || dot
@@ -60,6 +68,8 @@ export default function Beacon({
         position: 'absolute',
         left: `${(x / cols) * 100}%`,
         top: `${(y / rows) * 100}%`,
+        transform: zoom === 1 ? undefined : `scale(${1 / zoom})`,
+        transformOrigin: '0 0',
         pointerEvents: draggable ? 'auto' : 'none',
         cursor: draggable ? 'move' : 'default',
       }}

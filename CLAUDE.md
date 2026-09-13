@@ -268,59 +268,93 @@ assuming a page exists).
   - **`nsw`** — NSW Campaign, `public/map/nsw-terrain.png`, 648×336, 216×112
     grid, ocean `#3c82b4` unpaintable. The **primary** map (`PRIMARY_MAP_ID`).
   - **`singleton`** — Singleton Military Area (Areas 8 & 9, AUSPEC0196),
-    `public/map/singleton.webp`, 1080×765, 216×153 grid (5 art px per cell),
-    nothing unpaintable. **Real Sentinel-2 satellite imagery** of the ground,
-    not a stylisation, built by
-    [tools/map/build-singleton-map.py](tools/map/build-singleton-map.py): the
-    scene is pulled from the AWS Open Data registry (attribute as "Contains
-    modified Copernicus Sentinel data"), cut to the sheet's MGA Zone 56 bounds
-    and given ONE display stretch — the imagery itself is never recoloured or
-    classified. **WebP, not PNG** (1.4 MB → 340 KB for the same frame; it's the
-    first thing the home page loads on this map).
+    216×153 grid. **A live satellite map**: it pulls NSW SIX Maps tiles at
+    whatever zoom level the user is actually looking at, so zooming in reveals
+    real detail instead of magnifying pixels.
+  - **The frame is WEB MERCATOR** (`geo.merc`), and that is load-bearing. It
+    used to be the paper sheet's own MGA Zone 56 rectangle — survey-correct,
+    and the obvious choice while the art was derived from the sheet. MGA Zone
+    56 is rotated **0.99° from the Web Mercator grid** every XYZ tile service
+    publishes on: 180 m, about 3.7 grid cells, of skew corner to corner. Tiles
+    dropped into the old frame sat visibly crooked under the boundaries. In a
+    Mercator frame a tile lands with a pure linear transform and no warping,
+    which is why there is no reprojection code in the browser.
+    ⚠️ Anything that re-derives map geometry has to agree with `geo.merc`:
+    `MERC_*` in `build-singleton-map.py` and in
+    `trace-singleton-boundaries.py`. Change one and you must change all three.
+  - **Grid references come from an affine**, not a projection
+    (`geo.affine`, used by `eastingNorthingOf`/`gridRefOf`). Converting
+    Mercator to MGA properly needs a Transverse Mercator series; over a 10 km
+    frame a fitted affine is accurate to **2.1 m worst case, 0.46 m RMS**,
+    against the 100 m digit a six-figure reference actually quotes — so no
+    projection library ships to the browser. Verified against the surveyed
+    Ex Admin Area point (−32.763022, 151.182969 → cell 104.01, 95.79 →
+    `GR 297 735`, 0.29 m from a true pyproj conversion). Maps without `geo`
+    (NSW) return null from both helpers.
+  - **Tiles** ([TileBase.jsx](src/components/TileBase.jsx)) are `<img>`
+    elements positioned as PERCENTAGES of the frame, inside PixelMap's existing
+    zoom/pan transform — so the browser scales them with everything else, there
+    is no redraw on pan, and there is no second coordinate system to keep in
+    sync with the cell grid. Tile maths (`mercFrame`/`tileZoomFor`/`tilesFor`)
+    lives in `lib/maps.js`. Deeper zoom ⇒ deeper tile zoom; the visible region
+    is culled so a pan asks for ~35–80 tiles, not the ~350 a whole frame would
+    need at z16.
+    **Not Leaflet, deliberately** — Leaflet brings its own pan/zoom,
+    coordinate space and DOM, and the whole territory system (hatch canvas,
+    beacons, derived company labels, replay animation, both exporters) is built
+    on one flat cell grid over one rectangle. Adopting Leaflet means rewriting
+    every one of those. What it would actually contribute here is "fetch XYZ
+    tiles and place them", which is ~60 lines given a Mercator frame.
+  - ⚠️ **`map.image` is the FLOOR, not an alternative.** The committed
+    `singleton.webp` (Sentinel-2, 10 m) renders *underneath* the tiles: it is
+    what shows before they load and all that shows if they never do — no signal
+    on camp, or the service moves. A wrong or dead tile URL therefore degrades
+    to the old static map, never to a blank one. `TileBase` also gives up after
+    8 consecutive failures with nothing successful, and hides a failed tile
+    inline (a broken `<img>` otherwise paints a placeholder box over the
+    fallback). **The SIX Maps endpoint has never been reached from a dev
+    sandbox** — egress blocks it — so it is verified only by construction plus
+    a local tile pyramid; if imagery never appears live, suspect the URL first.
+  - **Boundaries are VECTORS, not baked into the art**
+    ([mapLines.js](src/lib/mapLines.js) + [MapLines.jsx](src/components/MapLines.jsx)):
+    the Commonwealth land boundary (yellow) and the Sector 8/9 boundary
+    (green), traced off the AUSPEC0196 sheet into
+    `src/data/singleton-boundaries.json` as grid-cell vertices. They moved out
+    of the image for two reasons — tiles render *over* the image and would bury
+    them, and as vectors they stay hairline at any zoom instead of becoming a
+    40px smear. `mapLines.js` is the single source for **three** renderers: the
+    SVG overlay, `drawMapLines()` in the exporters, and `LINE_KEY` (consumed as
+    the map's `artKey`), so the key cannot describe a colour nothing draws.
+    Tracing is [trace-singleton-boundaries.py](tools/map/trace-singleton-boundaries.py):
+    a coarse seed list read off the sheet is snapped to boundary ink and joined
+    by a LEAST-COST PATH, so the line follows the printed one exactly and only
+    straight-lines across gaps; it traces in the sheet's MGA frame and
+    reprojects to the map frame as its last step. Vertices are committed, so a
+    rebuild needs no PDF.
+    ⚠️ An earlier attempt drew the sheet's whole EXTRACTED ROAD NETWORK over
+    the imagery. Don't reinstate it: it breaks up wherever contours crowd,
+    which blended into flat pixel art but reads as dirt on the lens over
+    satellite — and the imagery shows the roads anyway.
+  - The base imagery is built by
+    [tools/map/build-singleton-map.py](tools/map/build-singleton-map.py) from
+    Copernicus **Sentinel-2** on the AWS Open Data registry (attribute as
+    "Contains modified Copernicus Sentinel data"), reprojected onto the
+    Mercator frame and given ONE display stretch. **WebP, not PNG** (1.4 MB →
+    340 KB). [derive-singleton-map.py](tools/map/derive-singleton-map.py) — the
+    old path that redrew the sheet as flat pixel art — no longer builds this
+    map but is kept: it documents how the sheet's legend ink colours separate
+    (roads print pink, contours brown — `G-B` separates them; "warmth" does
+    not), which is what the tracer's thresholds rest on, and the tracer imports
+    its sheet loader.
     `Ex Admin Area` is the RHQ location, and this is the one map seeded with
     `showRHQ: true`.
-  - **Two lines are drawn onto that imagery** and nothing else: the
-    Commonwealth land boundary (yellow) and the Sector 8/9 boundary (green).
-    Imagery already shows the highway, the rail corridor and every paddock
-    track; what it cannot show is which ground is Defence land and where the
-    sectors divide. Both are traced off the AUSPEC0196 sheet by
-    [tools/map/trace-singleton-boundaries.py](tools/map/trace-singleton-boundaries.py)
-    into `tools/map/singleton-boundaries.json` (vertices in grid cells, so they
-    are georeferenced like anything else on the grid) — a coarse seed list is
-    snapped to boundary ink and joined by a LEAST-COST PATH, so the line
-    follows the printed one exactly and only straight-lines across the gaps.
-    The traced vertices are committed, so a rebuild needs no PDF.
-    ⚠️ An earlier attempt drew the sheet's whole EXTRACTED ROAD NETWORK over
-    the imagery instead. Don't reinstate it: the extraction breaks up wherever
-    contours crowd, which blended into flat pixel art but reads as dirt on the
-    lens over 10m satellite.
-    [tools/map/derive-singleton-map.py](tools/map/derive-singleton-map.py) —
-    the old path that redrew the whole sheet as flat pixel art — no longer
-    builds this map, but is kept: it documents how the sheet's legend ink
-    colours separate (roads print pink, contours brown — `G-B` separates them
-    cleanly; "warmth" does not), which is what the tracer's thresholds rest on,
-    and the tracer imports its sheet loader.
-  - **Singleton is georeferenced** (`geo` on its map record): the sheet prints
-    a 1000m MGA Zone 56 grid, fitted at 195.25 source px/km = **20.5928 grid
-    cells per km**, origin E324739 / N6378195 at cell (0,0). Confirmed against
-    a surveyed Ex Admin Area coordinate (−32.762633, 151.182543 → cell
-    103.31, 95.32) and the New England Highway alignment. `gridRefOf(map, x, y)`
-    gives the six-figure grid reference for any cell — shown on marker
-    tooltips, the ops place list and the Staff Centre. Deliberately linear
-    easting/northing only: a grid reference is all this map needs, and lat/lon
-    would mean shipping a projection library. Maps without `geo` (NSW) return
-    null. ⚠️ The same constants appear as `GRID_PX`/`GRID_X0`/`GRID_Y0` in
-    `derive-singleton-map.py` (where they also mask the graticule) and as
-    `E_MIN`/`E_MAX`/`N_MIN`/`N_MAX` in `build-singleton-map.py` (where they cut
-    the satellite scene) — keep all three in step, or the imagery, the traced
-    boundaries and the grid references stop agreeing.
   - A map may declare an **`artKey`** (+ `artKeyLabel`): what its own art
     carries under the territory hatch, rendered by
     [MapLegend.jsx](src/components/MapLegend.jsx) behind a `+ <artKeyLabel>`
     toggle next to the company key. Singleton's is the two boundary lines,
-    labelled `BOUNDARIES`; NSW has none, and so shows no toggle. ⚠️ Its colours
-    mirror `LAYERS` in the build script — change both together or the key
-    starts lying.
+    labelled `BOUNDARIES`; NSW has none, and so shows no toggle. It is not
+    hand-written: Singleton sets `artKey: LINE_KEY` from `lib/mapLines.js`, the
+    same module that draws the lines, so the key can't drift from them.
   - **`imageFilter`**: the page draws every map through `IMAGE_FILTER`
     (`contrast(140%) sepia(60%) …` in `terrainRender.js`), which was written
     for flat pixel art and would crush satellite imagery to black and stain it
@@ -381,7 +415,14 @@ assuming a page exists).
   pixel-art look. **Zoom is an explicit +/- button pair** (bottom-right,
   turquoise-on-translucent-grey, `ZoomControls` in PixelMap.jsx) — no wheel
   or pinch zoom (removed 2026-08-04; used to fight with page scroll and
-  painting). Panning is still gesture-driven: one-finger/mouse drag pans in
+  painting). `MAX_SCALE` is **8**, raised from 4 once a map could carry a live
+  tile basemap: on a 10 m static image the extra steps only magnified pixels,
+  but against tiles each step pulls a deeper zoom level. Two things follow from
+  that ceiling and should not be undone — the territory canvas buffer follows
+  the zoom (`CANVAS_DETAIL_MAX`, capped so it can't approach the browser's
+  texture limit) so the hatch stays crisp, and **place beacons and company
+  labels counter-scale by 1/zoom** so they hold their on-screen size instead of
+  growing into banners across the map. Panning is still gesture-driven: one-finger/mouse drag pans in
   read-only mode once zoomed in; edit mode reserves one-finger/click for
   painting and uses two-finger touch or middle/right-mouse drag to pan
   instead, so painting and navigating never fight over the same gesture.

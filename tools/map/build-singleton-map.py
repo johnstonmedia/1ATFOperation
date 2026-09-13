@@ -7,32 +7,29 @@ Sentinel-2 true-colour of the actual ground and leaves it alone apart from one
 display stretch (see STRETCH below). Nothing is recoloured, redrawn or
 classified.
 
-WHY THIS LINES UP. The sheet prints a 1000m MGA Zone 56 grid, which georeferences
-it exactly (see `geo` in src/lib/maps.js): E 324739-335223, N 6370773-6378195.
-The Sentinel scene is cut to those same bounds and resampled onto the same
-frame, so the imagery and the sheet-derived overlay register to each other and
-to the territory grid with no further alignment.
+WHY THIS LINES UP. The frame is a Web Mercator rectangle (see MERC_* below)
+covering the AUSPEC0196 sheet, and the Sentinel scene is reprojected onto
+exactly that rectangle. The same frame is what the SIX Maps tile layer and the
+traced boundary overlay are drawn into, so imagery, tiles, boundaries and the
+territory grid all register with no further alignment.
 
-WHAT IS DRAWN, AND WHAT IS NOT. Imagery shows the ground: the highway, the
-rail corridor, the paddock tracks and the cleared road lines are all legible in
-the base, so none of them are drawn on. What imagery cannot show is the
-ADMINISTRATIVE detail - which ground is Defence land, and where Sector 8 ends
-and Sector 9 begins. That is what the overlay carries, and only that:
+NOTHING IS DRAWN ON THE IMAGERY. This produces bare pixels, and everything
+else is a runtime layer over the top:
 
-    yellow   Commonwealth land boundary - the perimeter of Areas 8 & 9
-    green    Sector boundary - Sector 8 west of it, Sector 9 east
+    boundaries   MapLines.jsx, from tools/map/singleton-boundaries.json
+    named ground territory places in src/firebase/seed.js
+    territory    the hatch canvas in terrainRender.js
 
-Both come from tools/map/singleton-boundaries.json, traced off the sheet by
-trace-singleton-boundaries.py; read that script before regenerating them. An
-earlier version instead drew the sheet's whole extracted road network over the
-imagery. It was dropped: the extraction breaks up wherever contours crowd, and
-that fragmentation blended into flat pixel art but reads as dirt on the lens
-over 10m satellite. Two clean lines say "this is the training area"; a
-stippled mask of every track does not.
+The boundaries used to be burned in here. They moved out when the live basemap
+became SIX Maps tiles, for a simple reason: tiles render OVER this image, so
+anything baked into it disappears the moment they load. As vectors they also
+stay hairline-crisp at any zoom instead of turning into 40px yellow mush.
 
-Named ground (Ex Admin Area, the AAs, the ropes courses) is NOT drawn here
-either - it is territory places in src/firebase/seed.js, so RHQ can move and
-rename it without regenerating the art.
+Note this image is now the FALLBACK, not the normal view - it is what shows
+before tiles load, and all that shows if they never do. An earlier version
+drew the sheet's whole extracted road network on it; dropped, because the
+extraction breaks up wherever contours crowd, which blended into flat pixel
+art but reads as dirt on the lens over 10m satellite.
 
 DATA + LICENCE
   Imagery    : Copernicus Sentinel-2 L2A true colour (band TCI), 10 m, from the
@@ -57,9 +54,18 @@ os.environ.setdefault('CPL_VSIL_CURL_ALLOWED_EXTENSIONS', '.tif')
 import numpy as np
 from PIL import Image, ImageDraw
 
-# The sheet's extent in MGA94 zone 56 (EPSG:28356), from its printed grid.
-E_MIN, E_MAX = 324739.0, 335223.0
-N_MIN, N_MAX = 6370773.0, 6378195.0
+# The map frame, in WEB MERCATOR (EPSG:3857).
+#
+# It used to be the paper sheet's own MGA Zone 56 rectangle, which is the
+# survey-correct frame but is rotated 0.99 degrees from the Web Mercator grid
+# that every XYZ tile service uses - 180 m, about 3.7 grid cells, of skew
+# corner to corner. Since the live basemap is now NSW SIX Maps tiles, the
+# frame moved to Mercator so tiles drop in with a pure linear transform and
+# no warping. These bounds are the Mercator bounding box of the old sheet
+# rectangle, grown to exactly the 216:153 cell aspect.
+# Keep in step with `geo` in src/lib/maps.js - see tools/map/reframe notes.
+MERC_X0, MERC_Y0 = 16823443.92, -3858211.43   # west edge, north edge
+MERC_W, MERC_H = 12807.80, 9072.19
 
 # 216 x 153 territory cells at 5px each. 1080px across 10.48km is 9.7 m/px,
 # which is as close to Sentinel's native 10m as the cell grid allows - so the
@@ -97,13 +103,14 @@ def satellite_base():
     from rasterio.warp import reproject, Resampling
 
     with rasterio.open(SCENE) as src:
-        transform = rasterio.transform.from_bounds(E_MIN, N_MIN, E_MAX, N_MAX, OUT_W, OUT_H)
+        transform = rasterio.transform.from_bounds(
+            MERC_X0, MERC_Y0 - MERC_H, MERC_X0 + MERC_W, MERC_Y0, OUT_W, OUT_H)
         bands = np.zeros((3, OUT_H, OUT_W), np.uint8)
         for b in (1, 2, 3):
             reproject(
                 source=rasterio.band(src, b), destination=bands[b - 1],
                 src_transform=src.transform, src_crs=src.crs,
-                dst_transform=transform, dst_crs=CRS.from_epsg(28356),
+                dst_transform=transform, dst_crs=CRS.from_epsg(3857),
                 resampling=Resampling.bilinear,
             )
     rgb = np.transpose(bands, (1, 2, 0)).astype(np.float32)
@@ -112,50 +119,12 @@ def satellite_base():
     return np.clip((rgb - lo) / max(hi - lo, 1e-6), 0, 1) ** STRETCH_GAMMA * 255.0
 
 
-BOUNDARIES = HERE / 'singleton-boundaries.json'
-
-# 216 x 153 territory cells across OUT_W/OUT_H, so one cell is 5 output px.
-CELL = OUT_W / 216.0
-
-# Overlay style. Drawn on a 3x canvas and reduced, so the lines are smooth
-# rather than stair-stepped like the imagery under them - a boundary that
-# aliases reads as part of the terrain instead of as an annotation.
-SUPERSAMPLE = 3
-# Each line is a dark casing with a bright core, because it has to stay legible
-# over both sunlit paddock and shadowed timber. Width is in output pixels.
-LAYERS = [
-    ('defence_n', (0x12, 0x0e, 0x04), 5.0), ('defence_s', (0x12, 0x0e, 0x04), 5.0),
-    ('sector',    (0x05, 0x14, 0x0a), 4.2),
-    ('defence_n', (0xff, 0xd2, 0x3c), 2.6), ('defence_s', (0xff, 0xd2, 0x3c), 2.6),
-    ('sector',    (0x46, 0xe8, 0x78), 2.0),
-]
-
-
-def draw_boundaries(img):
-    """Draw the traced Areas 8 & 9 boundaries over the imagery."""
-    lines = json.loads(BOUNDARIES.read_text())['lines']
-    z = SUPERSAMPLE
-    over = Image.new('RGBA', (OUT_W * z, OUT_H * z), (0, 0, 0, 0))
-    dr = ImageDraw.Draw(over)
-    for key, colour, width in LAYERS:
-        pts = [(x * CELL * z, y * CELL * z) for x, y in lines[key]]
-        dr.line(pts, fill=colour + (255,), width=max(1, int(round(width * z))), joint='curve')
-    over = over.resize((OUT_W, OUT_H), Image.LANCZOS)
-
-    base = Image.fromarray(img.round().clip(0, 255).astype(np.uint8)).convert('RGBA')
-    return np.array(Image.alpha_composite(base, over).convert('RGB'), np.float32)
-
-
 def main():
     args = [a for a in sys.argv[1:] if not a.startswith('--')]
     dst = args[0] if args else 'singleton.webp'
 
     img = satellite_base()
     print(f'satellite base {OUT_W}x{OUT_H} from {SCENE.rsplit("/", 2)[1]}')
-
-    if '--no-boundaries' not in sys.argv:
-        img = draw_boundaries(img)
-        print(f'drew boundaries from {BOUNDARIES.name}')
 
     out = Image.fromarray(img.round().clip(0, 255).astype(np.uint8))
     if str(dst).lower().endswith('.webp'):

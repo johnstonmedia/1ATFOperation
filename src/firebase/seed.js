@@ -272,7 +272,7 @@ function buildSingletonCells() {
   }
   // Wider than the Ex Admin Area itself so the derived "RHQ" company label
   // has somewhere to sit clear of that place's own beacon.
-  blob(88, 88, 24, 12, 'R')  // Ex Admin Area — RHQ
+  blob(92, 90, 24, 12, 'R')  // Ex Admin Area — RHQ
   blob(133, 78, 15, 10, 'M') // Yellow Billys Cave, Sector 9
   blob(170, 124, 17, 11, 'M') // Broken Back Range
   blob(128, 18, 14, 9, 'm')  // DFSW2 firing range / Sentry Post No5, loosely held
@@ -287,19 +287,21 @@ export const DEFAULT_SINGLETON_TERRITORY = {
   showRHQ: true,
   cells: buildSingletonCells(),
   places: [
-    { id: 'sg-rhq', name: 'Ex Admin Area Bravo', x: 103, y: 95 },
-    { id: 'sg-war', name: 'Warringah', x: 99, y: 99 },
-    { id: 'sg-s7', name: 'Sector 7', x: 75, y: 11 },
+    // Surveyed: −32.763022, 151.182969. Everything else on this map is
+    // read off the sheet, so this one is the anchor the rest is checked against.
+    { id: 'sg-rhq', name: 'Ex Admin Area Bravo', x: 104, y: 96 },
+    { id: 'sg-war', name: 'Warringah', x: 99, y: 98 },
+    { id: 'sg-s7', name: 'Sector 7', x: 77, y: 12 },
     { id: 'sg-s8', name: 'Sector 8', x: 97, y: 75 },
-    { id: 'sg-s9', name: 'Sector 9', x: 160, y: 64 },
-    { id: 'sg-sp5', name: 'Sentry Post No5', x: 124, y: 26 },
-    { id: 'sg-sp4', name: 'Sentry Post No4', x: 149, y: 30 },
-    { id: 'sg-sp10', name: 'Sentry Post No10', x: 198, y: 21 },
-    { id: 'sg-dfsw', name: 'DFSW2 Firing Range', x: 135, y: 22 },
-    { id: 'sg-cave', name: 'Yellow Billys Cave', x: 141, y: 84, hostile: true },
-    { id: 'sg-calf', name: 'Calf Pen', x: 146, y: 77 },
-    { id: 'sg-retrans', name: 'Retrans Peak', x: 25, y: 12 },
-    { id: 'sg-bbr', name: 'Broken Back Range', x: 182, y: 131, hostile: true },
+    { id: 'sg-s9', name: 'Sector 9', x: 159, y: 65 },
+    { id: 'sg-sp5', name: 'Sentry Post No5', x: 124, y: 27 },
+    { id: 'sg-sp4', name: 'Sentry Post No4', x: 149, y: 32 },
+    { id: 'sg-sp10', name: 'Sentry Post No10', x: 196, y: 24 },
+    { id: 'sg-dfsw', name: 'DFSW2 Firing Range', x: 135, y: 24 },
+    { id: 'sg-cave', name: 'Yellow Billys Cave', x: 140, y: 84, hostile: true },
+    { id: 'sg-calf', name: 'Calf Pen', x: 145, y: 78 },
+    { id: 'sg-retrans', name: 'Retrans Peak', x: 28, y: 12 },
+    { id: 'sg-bbr', name: 'Broken Back Range', x: 179, y: 131, hostile: true },
   ],
 }
 

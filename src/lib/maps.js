@@ -31,6 +31,8 @@
 // Grid sizing rule, for anyone adding a map: cols/rows must divide the art's
 // pixel size exactly (here, one cell per 3x3 block of source pixels), so the
 // paintable grid stays aligned to the pixel art instead of straddling it.
+import { LINE_KEY } from './mapLines'
+
 const asset = (file) => import.meta.env.BASE_URL + 'map/' + file
 
 export const MAPS = [
@@ -66,33 +68,47 @@ export const MAPS = [
     // Landlocked: every cell on the sheet is ground somebody can hold.
     blockFill: null,
     blockLabel: null,
-    // GEOREFERENCE. The sheet prints a 1000m MGA Zone 56 grid, and fitting a
-    // comb to those lines pins the art to real ground: 195.25 source px per
-    // kilometre, which is 20.5928 grid cells per km at this resolution. Two
-    // independent checks: the north edge lands on the New England Highway
-    // alignment, and a surveyed point supplied for the Ex Admin Area
-    // (-32.762633, 151.182543) falls on cell (103.31, 95.32) — the cell it was
-    // already seeded at.
+    // GEOREFERENCE — a Web Mercator (EPSG:3857) rectangle.
     //
-    // Only the linear easting/northing is kept here, because a grid reference
-    // is all this map needs; converting to lat/lon would mean carrying a
-    // projection library for no operational gain.
+    // The frame USED to be the paper sheet's own MGA Zone 56 rectangle, which
+    // is the survey-correct frame and was the obvious choice while the art was
+    // derived from the sheet. It stopped being the right one when the basemap
+    // became live XYZ tiles: MGA Zone 56 is rotated 0.99° from the Web
+    // Mercator grid every tile service publishes on — 180 m, about 3.7 grid
+    // cells, of skew corner to corner — so tiles dropped into it would sit
+    // visibly crooked under the boundaries. In a Mercator frame a tile maps in
+    // with a pure linear transform and no warping at all.
+    //
+    // `merc` is that rectangle. `affine` converts a grid cell straight to MGA
+    // easting/northing for grid references, fitted over the frame: max error
+    // 2.1 m, RMS 0.46 m, against a six-figure reference's 100 m digit — so a
+    // grid ref is exact and no projection library ships to the browser.
+    // Checked against the surveyed Ex Admin Area point (−32.763022,
+    // 151.182969), which lands on cell (104.01, 95.79).
+    // ⚠️ Keep MERC_* in tools/map/build-singleton-map.py in step with `merc`.
     geo: {
-      crs: 'MGA94 / Zone 56',   // EPSG:28356
-      cellsPerKm: 20.5928,
-      originE: 324739,          // easting  at cell x = 0
-      originN: 6378195,         // northing at cell y = 0 (north edge; y runs south)
+      crs: 'MGA94 / Zone 56',   // what grid references are quoted in
+      merc: { x0: 16823443.92, y0: -3858211.43, w: 12807.80, h: 9072.19 },
+      affine: { ex: 49.906673, ey: 0.851530, e0: 324524.0163,
+                nx: 0.855589, ny: -49.669915, n0: 6378191.5913 },
     },
-    // What is drawn ON the imagery, shown as a key under the map. The art is
-    // a photograph, so there is no palette to explain — only the two
-    // administrative lines, which is exactly what a photograph can't show.
-    // These mirror LAYERS in tools/map/build-singleton-map.py, which is the
-    // source of truth — change them together or the key starts lying.
+    // Live basemap. NSW Spatial Services' public imagery of an NSW training
+    // area — sub-metre where Sentinel-2 is 10 m, which is the whole point of
+    // being able to zoom in. `image` above stays the floor: it renders under
+    // the tiles, so it is what shows before they load and all that shows if
+    // they never do (no network on camp, or the service moves). A wrong or
+    // dead tile URL therefore degrades to exactly the old static map rather
+    // than to a blank one.
+    tiles: {
+      url: 'https://maps.six.nsw.gov.au/arcgis/rest/services/public/NSW_Imagery/MapServer/tile/{z}/{y}/{x}',
+      minZoom: 12,
+      maxZoom: 19,
+      attribution: 'Imagery © NSW Spatial Services (Department of Customer Service)',
+    },
+    // The key comes from the same module that draws the lines, so a colour
+    // change can't leave the legend describing something nothing renders.
     artKeyLabel: 'BOUNDARIES',
-    artKey: [
-      { color: '#ffd23c', label: 'Commonwealth land boundary (Areas 8 & 9)' },
-      { color: '#46e878', label: 'Sector boundary — 8 west, 9 east' },
-    ],
+    artKey: LINE_KEY,
   },
 ]
 
@@ -133,13 +149,15 @@ export const mapSlices = () => MAPS.flatMap((m) => [territorySlice(m.id), campai
 
 // Real-world easting/northing of a grid cell, for a map that declares `geo`.
 // null for one that doesn't (the NSW art is a stylised continent, not a survey).
+//
+// One affine, fitted over the frame, rather than a projection: converting
+// Mercator to MGA properly means a Transverse Mercator series, and over 10 km
+// the affine is accurate to 2.1 m worst case — two orders of magnitude inside
+// the 100 m digit a six-figure grid reference actually quotes.
 export function eastingNorthingOf(map, x, y) {
-  const g = map?.geo
-  if (!g) return null
-  return {
-    e: g.originE + (x / g.cellsPerKm) * 1000,
-    n: g.originN - (y / g.cellsPerKm) * 1000,
-  }
+  const a = map?.geo?.affine
+  if (!a) return null
+  return { e: a.ex * x + a.ey * y + a.e0, n: a.nx * x + a.ny * y + a.n0 }
 }
 
 // Standard six-figure grid reference, e.g. "297 735" — the 100m digits of the
@@ -149,6 +167,68 @@ export function gridRefOf(map, x, y) {
   if (!en) return null
   const part = (v) => String(Math.floor((((v % 100000) + 100000) % 100000) / 100)).padStart(3, '0')
   return `${part(en.e)} ${part(en.n)}`
+}
+
+/* ------------------------------- web mercator ----------------------------- */
+
+// Circumference of the Web Mercator world square, in its own metres. Every XYZ
+// tile scheme is this square halved z times, so it is the only constant needed
+// to place a tile.
+export const MERC_WORLD = 2 * Math.PI * 6378137
+
+// Where a map's frame sits in the Mercator world, as fractions of that square
+// measured from its top-left. Tiles are addressed the same way, so placing one
+// is then pure arithmetic — no projection, no warp.
+export function mercFrame(map) {
+  const m = map?.geo?.merc
+  if (!m) return null
+  const half = MERC_WORLD / 2
+  return { left: (m.x0 + half) / MERC_WORLD, top: (half - m.y0) / MERC_WORLD,
+           width: m.w / MERC_WORLD, height: m.h / MERC_WORLD }
+}
+
+// The tile zoom whose pixels are closest to (and no coarser than) the
+// resolution the map is actually being displayed at. `displayWidth` is the
+// frame's on-screen width in CSS pixels, so this rises as the user zooms in —
+// which is the entire point: a new zoom level is new detail, not the same
+// pixels enlarged.
+export function tileZoomFor(map, displayWidth) {
+  const f = mercFrame(map)
+  const t = map?.tiles
+  if (!f || !t) return null
+  const z = Math.ceil(Math.log2(displayWidth / (f.width * 256)))
+  return Math.max(t.minZoom ?? 0, Math.min(t.maxZoom ?? 19, z))
+}
+
+// Every tile covering `region` (a sub-rectangle of the frame, in 0..1 frame
+// fractions) at zoom `z`, each with its position as a percentage of the frame
+// so the browser scales it with everything else under the map's zoom/pan
+// transform. Returns [] for a map with no tile source.
+export function tilesFor(map, z, region = { x0: 0, y0: 0, x1: 1, y1: 1 }) {
+  const f = mercFrame(map)
+  if (!f || !map?.tiles) return []
+  const n = 2 ** z
+  const span = 1 / n                       // one tile, as a world fraction
+  const wx0 = f.left + region.x0 * f.width
+  const wx1 = f.left + region.x1 * f.width
+  const wy0 = f.top + region.y0 * f.height
+  const wy1 = f.top + region.y1 * f.height
+  const lo = (v) => Math.max(0, Math.floor(v * n))
+  const hi = (v) => Math.min(n - 1, Math.ceil(v * n) - 1)
+  const out = []
+  for (let ty = lo(wy0); ty <= hi(wy1); ty++) {
+    for (let tx = lo(wx0); tx <= hi(wx1); tx++) {
+      out.push({
+        key: `${z}/${tx}/${ty}`,
+        url: map.tiles.url.replace('{z}', z).replace('{x}', tx).replace('{y}', ty),
+        left: ((tx * span - f.left) / f.width) * 100,
+        top: ((ty * span - f.top) / f.height) * 100,
+        width: (span / f.width) * 100,
+        height: (span / f.height) * 100,
+      })
+    }
+  }
+  return out
 }
 
 /* ---------------------------- campaign frames ---------------------------- */

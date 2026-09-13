@@ -17,6 +17,80 @@ keep entries short and focused on what a new collaborator needs to know.
 
 ---
 
+## 2026-09-13 (later) — Singleton becomes a live satellite map you can zoom into
+Asked to be able to zoom in, on real satellite imagery, "maybe use leaflet".
+Singleton now pulls **NSW SIX Maps** tiles at whatever zoom the user is
+actually at, so zooming reveals detail instead of magnifying pixels. Supersedes
+this morning's entry, where the map was a single 10 m Sentinel-2 still.
+
+**The frame had to move to Web Mercator, and that was the whole problem.**
+The map was built in the paper sheet's MGA Zone 56 rectangle — survey-correct,
+and right while the art came off the sheet. Measured it: MGA Zone 56 is rotated
+**0.99° from the Web Mercator grid** every XYZ tile service publishes on, which
+is 180 m — about 3.7 grid cells — of skew corner to corner. Tiles in the old
+frame would have sat visibly crooked under the boundaries. So `geo` is now a
+Mercator rectangle, and a tile lands in it with a pure linear transform: no
+warping code in the browser at all.
+- Everything derived from the old frame was reprojected, not re-authored: the
+  traced boundary vertices, the 13 seeded places, and the georeference.
+- **Grid references are an affine now**, not a projection — fitted over the
+  frame to **2.1 m worst case / 0.46 m RMS** against the 100 m digit a
+  six-figure reference quotes, so no projection library ships to the browser.
+  RHQ reads `GR 297 735`, 0.29 m from a true pyproj conversion.
+- RHQ moved onto the surveyed point supplied for the Ex Admin Area
+  (−32.763022, 151.182969 → cell 104.01, 95.79).
+- ⚠️ Consequence worth knowing: a cell covers slightly different ground than it
+  did this morning, so anything already painted on **Singleton** shifts by up
+  to ~3.7 cells. NSW is untouched — different documents, different frame.
+
+**Why not Leaflet**, since it was suggested. Leaflet brings its own pan/zoom,
+coordinate space and DOM, and the entire territory system — hatch canvas,
+beacons, derived company labels, replay animation, both exporters — is built on
+one flat cell grid over one rectangle. Adopting it means rewriting all of them.
+What it would actually contribute is "fetch XYZ tiles and put them in the right
+place", which is ~60 lines once the frame is Mercator. So:
+`TileBase.jsx` renders tiles as `<img>`s positioned in PERCENTAGES of the frame,
+inside PixelMap's existing transform — the browser scales them with everything
+else, nothing redraws on pan, and there is no second coordinate system.
+
+**The static image is now the floor, not an alternative.** `singleton.webp`
+renders *underneath* the tiles, so it shows before they load and is all that
+shows if they never do (no signal on camp, or the service moves). A dead tile
+URL degrades to this morning's map rather than a blank one. `TileBase` also
+stops after 8 consecutive failures with nothing successful, and hides a failed
+tile inline — a broken `<img>` otherwise paints a placeholder box, and with the
+whole grid unreachable that was a screenful of torn-image icons.
+
+**Boundaries became vectors** (`src/lib/mapLines.js`, `MapLines.jsx`, vertices
+in `src/data/singleton-boundaries.json`). Tiles render over the image, so
+anything baked into it is buried; as vectors they also stay hairline at 8×
+instead of becoming a 40px smear. One module feeds all three renderers — the
+SVG overlay, `drawMapLines()` in the exporters, and the map key via `artKey` —
+so the key can't describe a colour nothing draws.
+
+**Zoom ceiling 4 → 8**, plus the two things that ceiling forced:
+- the territory canvas buffer follows the zoom (capped well short of the
+  browser's texture limit) so the hatch doesn't go blocky;
+- **place beacons and company labels counter-scale by 1/zoom**, holding their
+  on-screen size. Previously they grew with the map — tolerable at 4×, and at
+  8× "Sector 8" was a banner across half the screen.
+
+**Verification, and its one gap.** The SIX Maps endpoint is unreachable from
+this sandbox (egress blocks every tile provider; only the Sentinel S3 bucket
+answers), so it is **unverified against the real service** — if imagery never
+appears live, suspect the URL first. Everything around it was verified: tile
+maths checked against an independent pyproj computation (placement, zoom
+selection, `z/y/x` order all matched exactly), then a Mercator tile pyramid was
+cut locally from the Sentinel scene and served for the real SIX URL via request
+interception — **219 tiles served, 0 404s**, zoom stepping 14→15→16→17 as scale
+went 1→8, no page errors. NSW re-checked: no tiles, no vector lines, no
+attribution, no key toggle.
+
+**Attribution** ("Imagery © NSW Spatial Services (Department of Customer
+Service)") renders bottom-left inside the map frame, from `tiles.attribution`.
+
+---
+
 ## 2026-09-13 — Singleton map becomes real satellite imagery + traced boundaries
 Asked for satellite imagery as the map itself, unaltered, with the Areas 8 & 9
 border and the Sector 8/9 divide taken off the PDF and drawn onto it. Both

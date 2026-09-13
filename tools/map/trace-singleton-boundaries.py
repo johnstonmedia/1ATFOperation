@@ -1,8 +1,10 @@
 """Trace the Areas 8 & 9 boundaries off the AUSPEC0196 sheet into polylines.
 
-Output is tools/map/singleton-boundaries.json: the Commonwealth-land boundary
+Output is src/data/singleton-boundaries.json: the Commonwealth-land boundary
 (in two halves, because it leaves the sheet on the east side) and the Sector
-8/9 boundary, as vertices in singleton territory-grid cells.
+8/9 boundary, as vertices in singleton territory-grid cells. The app reads that
+file directly (lib/mapLines.js) and draws the lines as a vector overlay, so the
+vertices here are what ships - there is no intermediate raster.
 
 WHY TRACE RATHER THAN MASK. derive-singleton-map.py classifies the whole sheet
 by ink colour, which is the right tool for area classes but produces a boundary
@@ -27,11 +29,14 @@ preferred over open ground but not over a solid line. Without the loose tier
 the router cut the corner at the south-west turn (cell ~92, 124), where the
 sheet's ink thins out for about 15 cells.
 
-The georeference (src/lib/maps.js `geo`) is what makes the output useful
-beyond this one image: the vertices are grid cells, so they are real ground.
+TWO FRAMES, AND WHY. The sheet is scanned in its own MGA Zone 56 rectangle, so
+the tracing happens there - that is where the ink is. But the MAP's frame is a
+Web Mercator rectangle (tiles), which is rotated 0.99 degrees from MGA. So the
+last step reprojects every vertex from the sheet frame into the map frame. Skip
+it and the boundaries sit visibly crooked on the imagery.
 
 Usage:
-    pip install pillow numpy scipy scikit-image pymupdf
+    pip install pillow numpy scipy scikit-image pyproj pymupdf
     python3 tools/map/trace-singleton-boundaries.py Areas_8__9.pdf
 """
 import importlib.util
@@ -43,11 +48,20 @@ import numpy as np
 from scipy import ndimage as ndi
 from skimage.graph import route_through_array
 
-W, H = 1080, 765          # the frame the map art is built in
+W, H = 1080, 765          # the frame the SHEET is rasterised in
 CELL = 5.0                # output px per territory cell (216 x 153 grid)
 COLS, ROWS = 216, 153
 
+# The sheet's own extent, in MGA94 zone 56 - the frame the tracing happens in.
+SHEET_E = (324739.0, 335223.0)
+SHEET_N = (6370773.0, 6378195.0)
+# The map's frame, in Web Mercator. Keep in step with `geo.merc` in
+# src/lib/maps.js and MERC_* in build-singleton-map.py.
+MERC_X0, MERC_Y0 = 16823443.92, -3858211.43
+MERC_W, MERC_H = 12807.80, 9072.19
+
 HERE = pathlib.Path(__file__).resolve().parent
+DEFAULT_OUT = HERE.parent.parent / 'src' / 'data' / 'singleton-boundaries.json' 
 
 # Seeds, in grid cells, read off the sheet. Order is the order of the line.
 # North half: the north-west corner on the New England Highway, then east
@@ -150,9 +164,24 @@ def extend_to_edge(poly, at_end, edge=float(COLS)):
     return poly + [pt] if at_end else [pt] + poly
 
 
+def to_map_frame(x, y):
+    """Sheet-frame cell -> map-frame cell (MGA zone 56 -> Web Mercator)."""
+    from pyproj import Transformer
+    global _T
+    try:
+        t = _T
+    except NameError:
+        t = _T = Transformer.from_crs(28356, 3857, always_xy=True)
+    e = SHEET_E[0] + (x / COLS) * (SHEET_E[1] - SHEET_E[0])
+    n = SHEET_N[1] - (y / ROWS) * (SHEET_N[1] - SHEET_N[0])
+    mx, my = t.transform(e, n)
+    return [round((mx - MERC_X0) / MERC_W * COLS, 2),
+            round((MERC_Y0 - my) / MERC_H * ROWS, 2)]
+
+
 def main():
     src = sys.argv[1] if len(sys.argv) > 1 else 'Areas_8__9.pdf'
-    dst = pathlib.Path(sys.argv[2]) if len(sys.argv) > 2 else HERE / 'singleton-boundaries.json'
+    dst = pathlib.Path(sys.argv[2]) if len(sys.argv) > 2 else DEFAULT_OUT
 
     strict, loose = ink_tiers(load_sheet(src))
     ink, faint = pool(strict), pool(loose)
@@ -180,7 +209,7 @@ def main():
             seg, _ = route_through_array(cost, a, b, fully_connected=True, geometric=True)
             path.extend(seg[1:])
         simple = rdp(smooth(np.array(path, float)), 1.2)
-        return [[round(x / CELL, 2), round(y / CELL, 2)] for y, x in simple]
+        return [to_map_frame(x / CELL, y / CELL) for y, x in simple]
 
     lines = {'defence_n': trace(DEFENCE_N), 'defence_s': trace(DEFENCE_S), 'sector': trace(SECTOR)}
     lines['defence_n'] = extend_to_edge(lines['defence_n'], True)
