@@ -261,14 +261,21 @@ assuming a page exists).
 - Defaults/seed content in [src/firebase/seed.js](src/firebase/seed.js).
 
 ## Maps (`src/lib/maps.js`) — there is more than one (2026-09-12)
+- ⚠️ **A map's `id` is baked into stored data** — its slice names
+  (`territory_<id>`) and the `map` field on every campaign frame — so only the
+  DISPLAY NAME (`name`/`short`/`sub`/`blurb`) is ever safe to change. The two
+  maps were renamed on 2026-09-13 (`nsw` → "1ATF Full Progress Map",
+  `singleton` → "1ATF Regional Progress Map") with their ids left alone for
+  exactly this reason; renaming an id orphans its documents.
 - **`MAPS` in [src/lib/maps.js](src/lib/maps.js) is the single description of
   what a map is**: art file, native pixel size, territory grid, an optional
   `blockFill` (a flat colour in the art that can never be painted) and an
   optional `imageFilter` (see below). Two ship:
-  - **`nsw`** — NSW Campaign, `public/map/nsw-terrain.png`, 648×336, 216×112
-    grid, ocean `#3c82b4` unpaintable. The **primary** map (`PRIMARY_MAP_ID`).
-  - **`singleton`** — Singleton Military Area (Areas 8 & 9, AUSPEC0196),
-    216×153 grid. **A live satellite map**: it pulls NSW SIX Maps tiles at
+  - **`nsw`** — **1ATF Full Progress Map**, `public/map/nsw-terrain.png`,
+    648×336, 216×112 grid, ocean `#3c82b4` unpaintable. The **primary** map
+    (`PRIMARY_MAP_ID`), and the seeded default.
+  - **`singleton`** — **1ATF Regional Progress Map** (Singleton Military Area,
+    Areas 8 & 9, AUSPEC0196), 216×153 grid. **A live satellite map**: it pulls NSW SIX Maps tiles at
     whatever zoom level the user is actually looking at, so zooming in reveals
     real detail instead of magnifying pixels.
   - **The frame is WEB MERCATOR** (`geo.merc`), and that is load-bearing. It
@@ -370,13 +377,31 @@ assuming a page exists).
   `mapFor(territory)` with no extra plumbing. `normalizeTerritory` in store.js
   stamps it onto pre-2026-09 data and re-seeds any territory whose cols/rows
   don't match its map.
-- **The public sees exactly one map** — the `activeMap` slice. Home and the
-  Staff Centre read it; there is deliberately no public switcher. RHQ switches
-  in Ops Centre → Map: Territory, where *which map you're editing* and *which
-  map is live* are two separate controls: switching the editor changes nothing
-  for visitors until "Show this map on the portal". Editing state (painting,
-  staged frame edits) is local to the map being edited and is discarded on
-  switch, behind a confirm.
+- **`activeMap` is the DEFAULT map, not the only public one** (2026-09-13 —
+  this REVERSES the earlier "the public sees exactly one map, there is
+  deliberately no public switcher" rule; don't reinstate it). RHQ sets the
+  default in Ops Centre → Map: Territory ("Make this the default map"), and a
+  visitor lands on it. A **map switch under the map on Home** then lets them
+  view any other map — one button per map that isn't on screen, so a third map
+  needs no new UI.
+  - That choice is **per device and per session**
+    ([useViewedMap.js](src/hooks/useViewedMap.js), `sessionStorage`): no login,
+    no write, nothing of RHQ's is touched. Session and not local storage is
+    deliberate — a permanent override would make RHQ's default meaningless on
+    that device forever, so the default has to reassert itself on the next
+    visit. Choosing the default again CLEARS the override rather than pinning
+    it, so the visitor returns to "whatever RHQ says". Every storage read is
+    guarded (private mode throws; a stored id can name a map deleted in a
+    deploy) and falls back to the default.
+  - ⚠️ **Both maps are therefore public.** Editing a non-default map is NOT
+    invisible any more — the Ops Centre copy says so, and must keep saying so.
+    Anything saved on either map can be seen by anyone.
+  - The Staff Centre still shows only `activeMap`; it is an RHQ/staff overview
+    of the live picture, not a browser.
+  - *Which map you're editing* and *which map is the default* remain two
+    separate controls in the ops editor. Editing state (painting, staged frame
+    edits) is local to the map being edited and is discarded on switch, behind
+    a confirm.
 - **Palette constraint for any new PIXEL-ART map**: the default
   `IMAGE_FILTER` crushes anything below mid-grey to black and blows out
   anything much lighter, so a stylised tile has to sit inside a narrow mid-tone

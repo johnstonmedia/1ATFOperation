@@ -26,7 +26,7 @@ const loadTerr = (t) => ({ ...t, places: t.places || [], labelOverrides: t.label
 //
 // The portal carries several maps (lib/maps.js). This editor works on ONE at a
 // time — `mapId` below — and everything it writes is that map's own slice, so
-// painting one map can never disturb another. Which map the PUBLIC sees is a
+// painting one map can never disturb another. Which map visitors LAND on is a
 // separate, deliberate choice (the `activeMap` slice, set from the switcher
 // at the top of this page): switching what you're editing does not change
 // what visitors are looking at.
@@ -152,13 +152,13 @@ export default function MapEditor() {
     if (state.activeMap === mapId) return
     const ok = await confirm({
       title: 'Change the public map',
-      message: `Show ${map.name} on the Home page instead of ${mapById(state.activeMap).name}? Every visitor sees the new map immediately; nothing painted on either map is changed.`,
+      message: `Make ${map.name} the map visitors land on, instead of ${mapById(state.activeMap).name}? They can still switch to the other one from the Home page, and nothing painted on either map is changed.`,
       confirmLabel: 'Show this map',
     })
     if (!ok) return
     updateSlice('activeMap', mapId)
-    audit('Changed the public map', map.name)
-    toast.push(`${map.name} is now the public map.`)
+    audit('Changed the default public map', map.name)
+    toast.push(`${map.name} is now the default map on the Home page.`)
   }
 
   // Load a frame into the shared canvas for repainting. Warns before
@@ -375,7 +375,7 @@ function MapSwitcher({ maps, mapId, liveId, onSwitch, onMakeLive }) {
               <div className="row center" style={{ gap: 8 }}>
                 <span style={{ fontWeight: 700 }}>{m.name}</span>
                 {m.id === liveId && (
-                  <span className="tag" style={{ fontSize: 9, color: 'var(--accent)', borderColor: 'var(--accent)' }}>PUBLIC</span>
+                  <span className="tag" style={{ fontSize: 9, color: 'var(--accent)', borderColor: 'var(--accent)' }}>DEFAULT</span>
                 )}
               </div>
               <div className="mono" style={{ fontSize: 10, opacity: 0.75, marginTop: 3 }}>{m.sub}</div>
@@ -385,13 +385,16 @@ function MapSwitcher({ maps, mapId, liveId, onSwitch, onMakeLive }) {
       </div>
       <div className="row between center wrap" style={{ gap: 10 }}>
         <span className="mono dim" style={{ fontSize: 11 }}>
+          {/* Both maps are PUBLIC — visitors can switch between them on the
+              Home page — so neither message may imply this one is hidden.
+              What "DEFAULT" buys you is only which map they land on. */}
           {isLive
-            ? 'Visitors are looking at this map. Everything you save here goes straight to the Home page.'
-            : 'You are editing a map visitors cannot see — the Home page still shows the map marked PUBLIC. Editing here changes nothing for them until you publish it.'}
+            ? 'Visitors land on this map. Everything you save here goes straight to the Home page.'
+            : 'Visitors land on the map marked DEFAULT, but they can switch to this one from the Home page — so anything you save here is public too.'}
         </span>
         {!isLive && (
           <button className="primary" onClick={onMakeLive} style={{ flex: '0 0 auto' }}>
-            Show this map on the portal
+            Make this the default map
           </button>
         )}
       </div>

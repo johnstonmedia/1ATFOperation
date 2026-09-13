@@ -6,7 +6,8 @@ import { useCompany } from '../context/CompanyContext'
 import { useUnseen, useUnseenIntel, hasIntelBaseline, markIntelSeen } from '../hooks/useUnseen'
 import { decryptProgress } from '../lib/intelProgress'
 import { COMPANIES, PHONETIC, smeacOf, movementsOf } from '../firebase/seed'
-import { mapById, territorySlice, campaignStartSlice, framesForMap } from '../lib/maps'
+import { mapById, territorySlice, campaignStartSlice, framesForMap, otherMaps } from '../lib/maps'
+import useViewedMap from '../hooks/useViewedMap'
 
 const RECRUITS = ['Alpha', 'Bravo', 'Charlie', 'Delta']
 const badge = (c) => (
@@ -51,10 +52,14 @@ export default function Home() {
   const progress = decryptProgress(state.intel, company)
   const outstanding = progress.total - progress.done
 
-  // The portal carries more than one map, but a visitor only ever sees the
-  // one RHQ has made active — there is deliberately no public switcher, and
-  // no other map's territory or replay reaches this page at all.
-  const live = mapById(state.activeMap)
+  // RHQ sets the DEFAULT map (`activeMap`); the visitor may switch to another
+  // from the control under the map. That choice is this device's, for this
+  // session only — see useViewedMap. Everything below reads the map being
+  // VIEWED, so the territory, the replay and its start frame always belong to
+  // the same map and can't be mixed between them.
+  const defaultMap = mapById(state.activeMap)
+  const [viewedId, viewMap, isOverride] = useViewedMap(defaultMap.id)
+  const live = mapById(viewedId)
   const territory = state[territorySlice(live.id)]
   const frames = useMemo(() => framesForMap(state.campaignFrames, live.id), [state.campaignFrames, live.id])
 
@@ -100,6 +105,7 @@ export default function Home() {
       {/* Animated campaign-history replay; plain static map when no campaign
           start state has been recorded yet. */}
       <CampaignReplayMap territory={territory} frames={frames} defaultStartId={state[campaignStartSlice(live.id)]} />
+      <MapSwitch live={live} defaultId={defaultMap.id} isOverride={isOverride} onView={viewMap} />
 
       <div className="row wrap" style={{ marginTop: 20, gap: 16, alignItems: 'flex-start' }}>
         <div style={{ flex: '1 1 420px' }}>
@@ -110,6 +116,47 @@ export default function Home() {
           <CompanyRoles n={n} />
           <MeridianBox m={n.meridian} />
         </div>
+      </div>
+    </div>
+  )
+}
+
+// Map switch, under the map. RHQ picks which map a visitor LANDS on; this
+// lets them look at the others without a login and without changing anything
+// published. One button per map that isn't on screen, so a third map needs no
+// new UI — with two maps that is exactly the single "view the other one"
+// button this was asked for.
+//
+// Hidden entirely when there is only one map: a switcher offering nothing is
+// just a confusing control.
+function MapSwitch({ live, defaultId, isOverride, onView }) {
+  const others = otherMaps(live.id)
+  if (!others.length) return null
+  return (
+    <div className="row between center wrap" style={{ gap: 10, marginTop: 10 }}>
+      <div className="row center wrap" style={{ gap: 8, minWidth: 0 }}>
+        <span className="mono" style={{ fontSize: 12, color: '#fff', letterSpacing: 1 }}>
+          {live.name.toUpperCase()}
+        </span>
+        {live.id === defaultId ? (
+          <span className="tag" style={{ fontSize: 9, color: 'var(--accent)', borderColor: 'var(--accent)' }}>DEFAULT</span>
+        ) : (
+          <span className="tag" style={{ fontSize: 9 }}>VIEWING</span>
+        )}
+        <span className="mono dim" style={{ fontSize: 10, letterSpacing: 0.5 }}>{live.sub}</span>
+      </div>
+      <div className="row center wrap" style={{ gap: 8, flex: '0 0 auto' }}>
+        {others.map((m) => (
+          <button
+            key={m.id}
+            className={m.id === defaultId ? 'ghost' : 'primary'}
+            onClick={() => onView(m.id)}
+            title={m.blurb}
+            style={{ flex: '0 0 auto', fontSize: 11 }}
+          >
+            {m.id === defaultId && isOverride ? `← BACK TO ${m.short.toUpperCase()}` : `VIEW ${m.short.toUpperCase()} →`}
+          </button>
+        ))}
       </div>
     </div>
   )

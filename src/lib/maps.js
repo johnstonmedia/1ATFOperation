@@ -4,6 +4,8 @@
 // data slices were all hard-coded. It now carries several, so everything that
 // used to be a constant lives here as a per-map record instead:
 //
+//   name / short                       display name, and a short form for
+//                                      the public map-switch button
 //   image / pixelWidth / pixelHeight   the pixel-art tile and its native size
 //   cols / rows                        the paintable territory grid over it
 //   blockFill                          a flat fill in the art that can never be
@@ -11,8 +13,9 @@
 //
 // Every map is DEFINED IN CODE, not authored in the Operations Centre: a map
 // needs art committed to public/map and a grid sized to it, which is a repo
-// change either way. What RHQ controls is which map each visitor sees
-// (`activeMap`) and everything painted on top of it.
+// change either way. What RHQ controls is which map a visitor LANDS ON
+// (`activeMap` — the default) and everything painted on top of it. Visitors
+// can switch to any other map from the Home page; see `otherMaps` below.
 //
 // STORAGE. Each map keeps its own territory, its own replay frames and its own
 // default start frame — nothing is shared, so painting Singleton can never
@@ -38,9 +41,13 @@ const asset = (file) => import.meta.env.BASE_URL + 'map/' + file
 export const MAPS = [
   {
     id: 'nsw',
-    name: 'NSW Campaign',
-    sub: 'NEW SOUTH WALES // NATIONAL OPERATION',
-    blurb: 'The continental operation — Meridian-held ground across New South Wales.',
+    // ⚠️ `id` is baked into stored data — slice names (`territory`) and the
+    // `map` field on every campaign frame — so the DISPLAY NAME is the only
+    // thing that ever changes here. Renaming an id orphans its documents.
+    name: '1ATF Full Progress Map',
+    short: 'Full Map',
+    sub: 'NEW SOUTH WALES // FULL OPERATIONAL PICTURE',
+    blurb: 'The whole operation — Meridian-held ground across New South Wales.',
     image: asset('nsw-terrain.png'),
     pixelWidth: 648,
     pixelHeight: 336,
@@ -53,9 +60,10 @@ export const MAPS = [
   },
   {
     id: 'singleton',
-    name: 'Singleton Military Area',
-    sub: 'AREAS 8 & 9 // AUSPEC0196',
-    blurb: 'The training area itself — Areas 8 and 9, RHQ at the Ex Admin Area.',
+    name: '1ATF Regional Progress Map',
+    short: 'Regional Map',
+    sub: 'SINGLETON MILITARY AREA // AREAS 8 & 9',
+    blurb: 'The training area itself — Singleton Areas 8 and 9, RHQ at the Ex Admin Area.',
     image: asset('singleton.webp'),
     pixelWidth: 1080,
     pixelHeight: 765,
@@ -116,6 +124,12 @@ export const MAPS = [
 export const PRIMARY_MAP_ID = 'nsw'
 
 export const mapById = (id) => MAPS.find((m) => m.id === id) || MAPS[0]
+
+// Every map except the one being viewed — what the public map switcher offers.
+// Returns a list rather than "the other one" so a third map needs no new UI.
+export const otherMaps = (id) => MAPS.filter((m) => m.id !== id)
+
+export const isKnownMap = (id) => MAPS.some((m) => m.id === id)
 
 // The map a territory object belongs to. Territory saved before this existed
 // carries no `map`, which is the primary map by definition.

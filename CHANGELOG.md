@@ -17,6 +17,44 @@ keep entries short and focused on what a new collaborator needs to know.
 
 ---
 
+## 2026-09-13 (third) — Both maps are public; RHQ picks the default
+Renamed the two maps and opened both to visitors.
+
+- **`nsw` → "1ATF Full Progress Map"**, **`singleton` → "1ATF Regional
+  Progress Map"**. Display names only: a map's **`id` is baked into stored
+  data** — its slice names (`territory_singleton`) and the `map` field on every
+  campaign frame — so renaming an id would orphan its documents. The ids are
+  untouched and a note in CLAUDE.md now says why.
+- ⚠️ **REVERSES the standing rule that "the public sees exactly one map, and
+  there is deliberately no public switcher."** `activeMap` is now the DEFAULT —
+  the map a visitor lands on — and a **map switch under the map on Home** lets
+  them view any other. Don't reinstate the old rule.
+- The switch renders **one button per map that isn't on screen**, so a third
+  map needs no new UI; with two maps that is exactly the single "view the other
+  one" button asked for. Hidden entirely if only one map exists.
+- The visitor's choice is **per device, per session**
+  (`src/hooks/useViewedMap.js`, `sessionStorage`) — no login, no write, nothing
+  of RHQ's touched. **Session, not local, storage on purpose**: a permanent
+  override would make RHQ's default meaningless on that device forever, so the
+  default reasserts itself next visit. Choosing the default again clears the
+  override rather than pinning it. Storage reads are guarded (private mode
+  throws; a stored id can name a map removed in a deploy) and fall back to the
+  default.
+- ⚠️ **A correctness fix this forced**: the Ops Centre told RHQ that editing a
+  non-default map "changes nothing for them until you publish it". That is now
+  false — both maps are public — so the copy says so, `PUBLIC` became
+  `DEFAULT`, and the button is "Make this the default map". Anything saved on
+  either map is visible to anyone.
+- The Staff Centre still shows only `activeMap`; it is an overview of the live
+  picture, not a browser.
+- Verified in the browser: lands on the default (tagged DEFAULT); switching
+  flips to the other map (tagged VIEWING) with a "back" button; the choice
+  survives navigating to /intel and back; returning to the default clears
+  `sessionStorage`; a fresh session starts on RHQ's default again. No page
+  errors, and the ops copy reads correctly in both states.
+
+---
+
 ## 2026-09-13 (later) — Singleton becomes a live satellite map you can zoom into
 Asked to be able to zoom in, on real satellite imagery, "maybe use leaflet".
 Singleton now pulls **NSW SIX Maps** tiles at whatever zoom the user is
