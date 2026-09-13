@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import CampaignReplayMap from '../components/CampaignReplayMap'
 import { useData } from '../context/DataContext'
@@ -8,6 +8,8 @@ import { decryptProgress } from '../lib/intelProgress'
 import { COMPANIES, PHONETIC, smeacOf, movementsOf } from '../firebase/seed'
 import { mapById, territorySlice, campaignStartSlice, framesForMap, otherMaps, zoneVisibilitySlice } from '../lib/maps'
 import { visibleZones } from '../lib/mapZones'
+import { zoneProgress, hasCampPlan } from '../lib/campPlan'
+import CampControls from '../components/CampControls'
 import useViewedMap from '../hooks/useViewedMap'
 
 const RECRUITS = ['Alpha', 'Bravo', 'Charlie', 'Delta']
@@ -63,10 +65,25 @@ export default function Home() {
   const live = mapById(viewedId)
   const territory = state[territorySlice(live.id)]
   const frames = useMemo(() => framesForMap(state.campaignFrames, live.id), [state.campaignFrames, live.id])
-  const zones = useMemo(
+  const allZones = useMemo(
     () => visibleZones(live.id, state[zoneVisibilitySlice(live.id)]),
     [live.id, state],
   )
+  // Camp progress: how far through, and whose. Both are this visitor's own
+  // view of committed plan data — nothing here is stored or shared.
+  const [day, setDay] = useState(0)
+  const [mode, setMode] = useState('unit')
+  const campMode = mode === 'company' && company ? 'company' : 'unit'
+  const campProgress = useMemo(
+    () => (hasCampPlan(live.id) ? zoneProgress(live.id, day, campMode === 'company' ? company : null) : null),
+    [live.id, day, campMode, company],
+  )
+  // In company view the map shows only the zones that company is sent to;
+  // the rest is not their camp. RHQ ground stays, so the board keeps its anchor.
+  const zones = useMemo(() => {
+    if (!campProgress || campMode !== 'company') return allZones
+    return allZones.filter((z) => campProgress.has(z.id) || z.kind === 'hq')
+  }, [allZones, campProgress, campMode])
 
   // First visit (or straight after switching company): record the current
   // intel as the baseline so the alert only ever fires on a real change.
@@ -109,7 +126,10 @@ export default function Home() {
 
       {/* Animated campaign-history replay; plain static map when no campaign
           start state has been recorded yet. */}
-      <CampaignReplayMap territory={territory} frames={frames} zones={zones} defaultStartId={state[campaignStartSlice(live.id)]} />
+      <CampaignReplayMap territory={territory} frames={frames} zones={zones} zoneProgress={campProgress} defaultStartId={state[campaignStartSlice(live.id)]} />
+      {hasCampPlan(live.id) && (
+        <CampControls mapId={live.id} day={day} onDay={setDay} mode={campMode} onMode={setMode} company={company} />
+      )}
       <MapSwitch live={live} defaultId={defaultMap.id} isOverride={isOverride} onView={viewMap} />
 
       <div className="row wrap" style={{ marginTop: 20, gap: 16, alignItems: 'flex-start' }}>

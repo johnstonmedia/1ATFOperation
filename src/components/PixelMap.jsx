@@ -62,6 +62,7 @@ export default function PixelMap({
            // label sitting over cells you're trying to paint is in the way.
   zones, // camp zones to outline under the territory hatch (see MapZones).
          // The caller resolves visibility, so the map draws what it is given.
+  zoneProgress, // optional per-zone camp progress (see lib/campPlan.js)
 }) {
   const { cols, rows, cells, showRHQ } = territory
   const map = mapFor(territory)
@@ -354,7 +355,7 @@ export default function PixelMap({
             <TileBase map={map} view={view} containerRef={containerRef} />
           </div>
           <MapLines map={map} />
-          <MapZones map={map} zones={zones} zoom={scale} />
+          <MapZones map={map} zones={zones} zoom={scale} progress={zoneProgress} />
           {edit && blockedOverlayUrl && (
             <img src={blockedOverlayUrl} alt="" draggable={false}
               style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', imageRendering: 'pixelated', userSelect: 'none', pointerEvents: 'none' }} />

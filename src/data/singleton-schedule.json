@@ -1,0 +1,639 @@
+{
+ "about": "Camp activity schedule from the BIV26 plan workbook. Who is at which zone in which session, keyed to zone ids in singleton-zones.json. Produced by tools/map/xlsx-to-schedule.py.",
+ "days": [
+  {
+   "n": 1,
+   "label": "Day 1",
+   "date": "SUN 20 SEP",
+   "weekday": "Sunday"
+  },
+  {
+   "n": 2,
+   "label": "Day 2",
+   "date": "MON 21 SEP",
+   "weekday": "Monday"
+  },
+  {
+   "n": 3,
+   "label": "Day 3",
+   "date": "TUE 22 SEP",
+   "weekday": "Tuesday"
+  },
+  {
+   "n": 4,
+   "label": "Day 4",
+   "date": "WED 23 SEP",
+   "weekday": "Wednesday"
+  }
+ ],
+ "sessions": [
+  {
+   "id": "d1-afternoon",
+   "day": 1,
+   "part": "Afternoon",
+   "label": "Day 1 \u00b7 Afternoon"
+  },
+  {
+   "id": "d1-night",
+   "day": 1,
+   "part": "Night",
+   "label": "Day 1 \u00b7 Night"
+  },
+  {
+   "id": "d2-morning",
+   "day": 2,
+   "part": "Morning",
+   "label": "Day 2 \u00b7 Morning"
+  },
+  {
+   "id": "d2-afternoon",
+   "day": 2,
+   "part": "Afternoon",
+   "label": "Day 2 \u00b7 Afternoon"
+  },
+  {
+   "id": "d2-night",
+   "day": 2,
+   "part": "Night",
+   "label": "Day 2 \u00b7 Night"
+  },
+  {
+   "id": "d3-morning",
+   "day": 3,
+   "part": "Morning",
+   "label": "Day 3 \u00b7 Morning"
+  },
+  {
+   "id": "d3-afternoon",
+   "day": 3,
+   "part": "Afternoon",
+   "label": "Day 3 \u00b7 Afternoon"
+  },
+  {
+   "id": "d3-night",
+   "day": 3,
+   "part": "Night",
+   "label": "Day 3 \u00b7 Night"
+  },
+  {
+   "id": "d4-morning",
+   "day": 4,
+   "part": "Morning",
+   "label": "Day 4 \u00b7 Morning"
+  },
+  {
+   "id": "d4-afternoon",
+   "day": 4,
+   "part": "Afternoon",
+   "label": "Day 4 \u00b7 Afternoon"
+  },
+  {
+   "id": "d4-night",
+   "day": 4,
+   "part": "Night",
+   "label": "Day 4 \u00b7 Night"
+  }
+ ],
+ "visits": [
+  {
+   "zone": "aa-india",
+   "session": "d1-afternoon",
+   "day": 1,
+   "company": "B"
+  },
+  {
+   "zone": "aa-lima",
+   "session": "d1-afternoon",
+   "day": 1,
+   "company": "C"
+  },
+  {
+   "zone": "aa-november",
+   "session": "d1-afternoon",
+   "day": 1,
+   "company": "S"
+  },
+  {
+   "zone": "aa-papa",
+   "session": "d1-afternoon",
+   "day": 1,
+   "company": "D"
+  },
+  {
+   "zone": "high-ropes",
+   "session": "d1-afternoon",
+   "day": 1,
+   "company": "E"
+  },
+  {
+   "zone": "navex",
+   "session": "d1-afternoon",
+   "day": 1,
+   "company": "A"
+  },
+  {
+   "zone": "aa-golf",
+   "session": "d1-night",
+   "day": 1,
+   "company": "E"
+  },
+  {
+   "zone": "aa-juliet",
+   "session": "d1-night",
+   "day": 1,
+   "company": "C"
+  },
+  {
+   "zone": "aa-kilo",
+   "session": "d1-night",
+   "day": 1,
+   "company": "B"
+  },
+  {
+   "zone": "aa-lima",
+   "session": "d1-night",
+   "day": 1,
+   "company": "D"
+  },
+  {
+   "zone": "navex",
+   "session": "d1-night",
+   "day": 1,
+   "company": "A"
+  },
+  {
+   "zone": "navex",
+   "session": "d1-night",
+   "day": 1,
+   "company": "S"
+  },
+  {
+   "zone": "nl-hilltop",
+   "session": "d1-night",
+   "day": 1,
+   "company": "A",
+   "night": true
+  },
+  {
+   "zone": "nl-mountain-view",
+   "session": "d1-night",
+   "day": 1,
+   "company": "D",
+   "night": true
+  },
+  {
+   "zone": "nl-outpost",
+   "session": "d1-night",
+   "day": 1,
+   "company": "E",
+   "night": true
+  },
+  {
+   "zone": "nl-romeo",
+   "session": "d1-night",
+   "day": 1,
+   "company": "C",
+   "night": true
+  },
+  {
+   "zone": "nl-ropes",
+   "session": "d1-night",
+   "day": 1,
+   "company": "B",
+   "night": true
+  },
+  {
+   "zone": "s-coy-nl",
+   "session": "d1-night",
+   "day": 1,
+   "company": "S",
+   "night": true
+  },
+  {
+   "zone": "aa-foxtrot",
+   "session": "d2-morning",
+   "day": 2,
+   "company": "E"
+  },
+  {
+   "zone": "aa-india",
+   "session": "d2-morning",
+   "day": 2,
+   "company": "C"
+  },
+  {
+   "zone": "aa-juliet",
+   "session": "d2-morning",
+   "day": 2,
+   "company": "C"
+  },
+  {
+   "zone": "aa-pios",
+   "session": "d2-morning",
+   "day": 2,
+   "company": "A"
+  },
+  {
+   "zone": "high-ropes",
+   "session": "d2-morning",
+   "day": 2,
+   "company": "B"
+  },
+  {
+   "zone": "navex",
+   "session": "d2-morning",
+   "day": 2,
+   "company": "D"
+  },
+  {
+   "zone": "aa-india",
+   "session": "d2-afternoon",
+   "day": 2,
+   "company": "B"
+  },
+  {
+   "zone": "aa-juliet",
+   "session": "d2-afternoon",
+   "day": 2,
+   "company": "B"
+  },
+  {
+   "zone": "aa-oscar",
+   "session": "d2-afternoon",
+   "day": 2,
+   "company": "E"
+  },
+  {
+   "zone": "aa-pios",
+   "session": "d2-afternoon",
+   "day": 2,
+   "company": "D"
+  },
+  {
+   "zone": "high-ropes",
+   "session": "d2-afternoon",
+   "day": 2,
+   "company": "C"
+  },
+  {
+   "zone": "navex",
+   "session": "d2-afternoon",
+   "day": 2,
+   "company": "A"
+  },
+  {
+   "zone": "aa-juliet",
+   "session": "d2-night",
+   "day": 2,
+   "company": "B"
+  },
+  {
+   "zone": "aa-kilo",
+   "session": "d2-night",
+   "day": 2,
+   "company": "C"
+  },
+  {
+   "zone": "aa-mike",
+   "session": "d2-night",
+   "day": 2,
+   "company": "E"
+  },
+  {
+   "zone": "aa-november",
+   "session": "d2-night",
+   "day": 2,
+   "company": "A"
+  },
+  {
+   "zone": "navex",
+   "session": "d2-night",
+   "day": 2,
+   "company": "D"
+  },
+  {
+   "zone": "navex",
+   "session": "d2-night",
+   "day": 2,
+   "company": "S"
+  },
+  {
+   "zone": "nl-hilltop",
+   "session": "d2-night",
+   "day": 2,
+   "company": "A",
+   "night": true
+  },
+  {
+   "zone": "nl-mountain-view",
+   "session": "d2-night",
+   "day": 2,
+   "company": "D",
+   "night": true
+  },
+  {
+   "zone": "nl-outpost",
+   "session": "d2-night",
+   "day": 2,
+   "company": "E",
+   "night": true
+  },
+  {
+   "zone": "nl-romeo",
+   "session": "d2-night",
+   "day": 2,
+   "company": "C",
+   "night": true
+  },
+  {
+   "zone": "nl-ropes",
+   "session": "d2-night",
+   "day": 2,
+   "company": "B",
+   "night": true
+  },
+  {
+   "zone": "s-coy-nl",
+   "session": "d2-night",
+   "day": 2,
+   "company": "S",
+   "night": true
+  },
+  {
+   "zone": "aa-india",
+   "session": "d3-morning",
+   "day": 3,
+   "company": "D"
+  },
+  {
+   "zone": "aa-kilo",
+   "session": "d3-morning",
+   "day": 3,
+   "company": "C"
+  },
+  {
+   "zone": "aa-lima",
+   "session": "d3-morning",
+   "day": 3,
+   "company": "A"
+  },
+  {
+   "zone": "high-ropes",
+   "session": "d3-morning",
+   "day": 3,
+   "company": "S"
+  },
+  {
+   "zone": "navex",
+   "session": "d3-morning",
+   "day": 3,
+   "company": "B"
+  },
+  {
+   "zone": "aa-india",
+   "session": "d3-afternoon",
+   "day": 3,
+   "company": "D"
+  },
+  {
+   "zone": "aa-juliet",
+   "session": "d3-afternoon",
+   "day": 3,
+   "company": "D"
+  },
+  {
+   "zone": "aa-pios",
+   "session": "d3-afternoon",
+   "day": 3,
+   "company": "B"
+  },
+  {
+   "zone": "high-ropes",
+   "session": "d3-afternoon",
+   "day": 3,
+   "company": "A"
+  },
+  {
+   "zone": "navex",
+   "session": "d3-afternoon",
+   "day": 3,
+   "company": "C"
+  },
+  {
+   "zone": "aa-juliet",
+   "session": "d3-night",
+   "day": 3,
+   "company": "D"
+  },
+  {
+   "zone": "aa-november",
+   "session": "d3-night",
+   "day": 3,
+   "company": "C"
+  },
+  {
+   "zone": "navex",
+   "session": "d3-night",
+   "day": 3,
+   "company": "B"
+  },
+  {
+   "zone": "nl-hilltop",
+   "session": "d3-night",
+   "day": 3,
+   "company": "B",
+   "night": true
+  },
+  {
+   "zone": "nl-mountain-view",
+   "session": "d3-night",
+   "day": 3,
+   "company": "C",
+   "night": true
+  },
+  {
+   "zone": "nl-oakley-lane",
+   "session": "d3-night",
+   "day": 3,
+   "company": "E",
+   "night": true
+  },
+  {
+   "zone": "nl-outpost",
+   "session": "d3-night",
+   "day": 3,
+   "company": "A",
+   "night": true
+  },
+  {
+   "zone": "nl-romeo",
+   "session": "d3-night",
+   "day": 3,
+   "company": "D",
+   "night": true
+  },
+  {
+   "zone": "s-coy-nl",
+   "session": "d3-night",
+   "day": 3,
+   "company": "S",
+   "night": true
+  },
+  {
+   "zone": "aa-hotel",
+   "session": "d4-morning",
+   "day": 4,
+   "company": "E"
+  },
+  {
+   "zone": "aa-india",
+   "session": "d4-morning",
+   "day": 4,
+   "company": "A"
+  },
+  {
+   "zone": "aa-juliet",
+   "session": "d4-morning",
+   "day": 4,
+   "company": "A"
+  },
+  {
+   "zone": "aa-kilo",
+   "session": "d4-morning",
+   "day": 4,
+   "company": "E"
+  },
+  {
+   "zone": "aa-papa",
+   "session": "d4-morning",
+   "day": 4,
+   "company": "B"
+  },
+  {
+   "zone": "aa-pios",
+   "session": "d4-morning",
+   "day": 4,
+   "company": "C"
+  },
+  {
+   "zone": "high-ropes",
+   "session": "d4-morning",
+   "day": 4,
+   "company": "D"
+  },
+  {
+   "zone": "navex",
+   "session": "d4-morning",
+   "day": 4,
+   "company": "S"
+  },
+  {
+   "zone": "aa-foxtrot",
+   "session": "d4-afternoon",
+   "day": 4,
+   "company": "D"
+  },
+  {
+   "zone": "aa-golf",
+   "session": "d4-afternoon",
+   "day": 4,
+   "company": "D"
+  },
+  {
+   "zone": "aa-hotel",
+   "session": "d4-afternoon",
+   "day": 4,
+   "company": "E"
+  },
+  {
+   "zone": "aa-india",
+   "session": "d4-afternoon",
+   "day": 4,
+   "company": "A"
+  },
+  {
+   "zone": "aa-kilo",
+   "session": "d4-afternoon",
+   "day": 4,
+   "company": "E"
+  },
+  {
+   "zone": "aa-november",
+   "session": "d4-afternoon",
+   "day": 4,
+   "company": "S"
+  },
+  {
+   "zone": "aa-papa",
+   "session": "d4-afternoon",
+   "day": 4,
+   "company": "C"
+  },
+  {
+   "zone": "navex",
+   "session": "d4-afternoon",
+   "day": 4,
+   "company": "B"
+  },
+  {
+   "zone": "aa-juliet",
+   "session": "d4-night",
+   "day": 4,
+   "company": "A"
+  },
+  {
+   "zone": "navex",
+   "session": "d4-night",
+   "day": 4,
+   "company": "S"
+  },
+  {
+   "zone": "nl-hilltop",
+   "session": "d4-night",
+   "day": 4,
+   "company": "B",
+   "night": true
+  },
+  {
+   "zone": "nl-mountain-view",
+   "session": "d4-night",
+   "day": 4,
+   "company": "C",
+   "night": true
+  },
+  {
+   "zone": "nl-oakley-lane",
+   "session": "d4-night",
+   "day": 4,
+   "company": "E",
+   "night": true
+  },
+  {
+   "zone": "nl-outpost",
+   "session": "d4-night",
+   "day": 4,
+   "company": "A",
+   "night": true
+  },
+  {
+   "zone": "nl-romeo",
+   "session": "d4-night",
+   "day": 4,
+   "company": "D",
+   "night": true
+  },
+  {
+   "zone": "quarry",
+   "session": "d4-night",
+   "day": 4,
+   "company": "E"
+  },
+  {
+   "zone": "s-coy-nl",
+   "session": "d4-night",
+   "day": 4,
+   "company": "S",
+   "night": true
+  }
+ ]
+}

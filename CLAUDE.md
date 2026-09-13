@@ -384,6 +384,29 @@ assuming a page exists).
       stored with no outline and render as a dot plus a name that only appears
       past `DETAIL_LABEL_ZOOM`. Don't "fix" them into polygons; the grid cannot
       express them, and at 1x their names land on top of each other and RHQ's.
+  - **The CAMP PLAN drives zone progress** ([campPlan.js](src/lib/campPlan.js),
+    data in `src/data/singleton-schedule.json`, converted from the unit's plan
+    workbook by [xlsx-to-schedule.py](tools/map/xlsx-to-schedule.py)). 86 visits
+    across 22 zones, 11 sessions, 4 camp days (Day 1 SUN 20SEP – Day 4 WED
+    23SEP; Days −1/0 are advance party).
+    - **Progress is DERIVED, never recorded.** The whole plan is settled before
+      camp, so the map needs one number — how far through we are — and computes
+      everything else. `zoneProgress(mapId, throughDay, company?)` gives each
+      zone its scheduled companies, who has been as at that day, and a
+      percentage. There is deliberately no live ticking workflow.
+    - **Two views, one dataset.** UNIT: a zone shared by three companies reads
+      33% when one has been through, with the visited companies' letters in
+      their own colours. COMPANY: only the visitor's own company and only the
+      zones they are sent to, so a zone is simply done or not. The company
+      comes from the boot gate already answered for intel scoping — no second
+      picker; a visitor who skipped the gate gets unit view and is told why.
+    - ⚠️ The converter **refuses to guess**: a cell that is not a recognisable
+      company is reported by name and skipped, never silently dropped, and the
+      run always prints what it ignored. The sheet legitimately contains
+      "Off Limits" and "RECSPECS". It also carries the sheet's own typos
+      ("Ssupport") and name mismatches ("Juliett" → `aa-juliet`; the sheet's
+      "Ropes" ACTIVITY is `high-ropes`, a different place from its `nl-ropes`
+      night location) as an explicit mapping rather than fuzzy matching.
   - A map may declare an **`artKey`** (+ `artKeyLabel`): what its own art
     carries under the territory hatch, rendered by
     [MapLegend.jsx](src/components/MapLegend.jsx) behind a `+ <artKeyLabel>`

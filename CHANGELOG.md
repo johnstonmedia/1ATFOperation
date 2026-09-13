@@ -17,6 +17,46 @@ keep entries short and focused on what a new collaborator needs to know.
 
 ---
 
+## 2026-09-13 (sixth) — The camp plan drives zone progress
+The BIV26 plan workbook is now the map's schedule: **86 visits across 22 zones,
+11 sessions, 4 camp days**, with UNIT and per-COMPANY progress views and a
+day selector on Home.
+
+- **[tools/map/xlsx-to-schedule.py](tools/map/xlsx-to-schedule.py)** reads the
+  "AA+NL Timetable" sheet — two grids, activity areas by session and night
+  locations by day. The day header row is sparse (a day name sits over its
+  first session only), so sessions are read from the second header row and
+  attributed to the most recent day named above them.
+- ⚠️ **The converter refuses to guess.** Any cell that is not a recognisable
+  company is reported by name and skipped, never silently dropped — that is how
+  an allocation goes missing unnoticed. This run ignored exactly two, both
+  correctly: "Off Limits" and "RECSPECS". Sheet typos ("Ssupport") and name
+  mismatches are an explicit mapping, not fuzzy matching: "Juliett" →
+  `aa-juliet`, and the sheet's **"Ropes" activity is `high-ropes`, a different
+  place from its `nl-ropes` night location**, which fuzzy matching would have
+  merged.
+- **Progress is derived, not recorded.** The plan is settled before camp, so
+  `zoneProgress(mapId, throughDay, company?)` computes everything from one
+  number. No live ticking, no approval workflow — matching the decision that
+  the conquering is all pre-planned.
+- **Two views, one dataset.** UNIT gives the asked-for behaviour exactly: a
+  zone shared by several companies shows the share who have been, with their
+  letters in their own colours. COMPANY shows only that company's zones.
+  The company comes from the boot gate already answered for intel scoping.
+- Zones now fill as their companies pass through, so "how far along is camp" is
+  readable off the map without reading a number.
+- Verified against an independent calculation from the sheet: High Ropes runs
+  0 → 17%E → 50%BCE → 83%ABCES → 100%ABCDES across days 1–4, and Bravo-only
+  drops the map to 12 zones and 15 activities with High Ropes flipping to 100%
+  on day 2. Unit headline 0/21/49/71/100%. No page errors.
+- All 22 scheduled zone ids were cross-checked against the zones file — none
+  dangling. The six unscheduled zones are RHQ and its sub-areas, correctly.
+
+**Next**: generate the per-day campaign frames (painted territory) from this
+same plan, so the replay animates camp day by day.
+
+---
+
 ## 2026-09-13 (fifth) — Camp zones from the BIV26 Earth project
 The unit's Google Earth project is now on the map: **28 zones** — 15 activity
 areas (the AAs, High Ropes, NAVEX, the Quarry), 6 night locations and 7 HQ

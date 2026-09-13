@@ -1,4 +1,7 @@
 import { ZONE_STYLE } from '../lib/mapZones'
+import { COMPANIES } from '../firebase/seed'
+
+const COMPANY_COLOR = COMPANIES.reduce((a, c) => ({ ...a, [c.letter]: c.accent }), {})
 
 // Zone overlay: outlines + names, between the map art and the territory hatch.
 //
@@ -18,7 +21,13 @@ import { ZONE_STYLE } from '../lib/mapZones'
 // room for it. RHQ can also hide them outright from Map: Territory.
 const DETAIL_LABEL_ZOOM = 2.5
 
-export default function MapZones({ map, zones, zoom = 1 }) {
+// `progress` (optional) is the Map from lib/campPlan.js zoneProgress(). When
+// present a zone shows how far through its plan it is: the outline fills as
+// companies pass through, and the name carries the percentage and the letters
+// of whoever has been. Without it zones are plain outlines, which is what the
+// map looked like before there was a camp plan and what any map without one
+// still gets.
+export default function MapZones({ map, zones, zoom = 1, progress = null }) {
   if (!map || !zones?.length) return null
   const fontSize = 2.4 / Math.max(zoom, 1)
   return (
@@ -30,14 +39,20 @@ export default function MapZones({ map, zones, zoom = 1 }) {
     >
       {zones.filter((z) => z.cells?.length >= 3).map((z) => {
         const s = ZONE_STYLE[z.kind] || ZONE_STYLE.activity
+        const p = progress?.get(z.id)
+        // Untouched ground stays at the base wash; a zone fills as its
+        // companies pass through, so "how far along is camp" is readable from
+        // the map itself without reading a single number.
+        const fill = p ? s.fill + (p.pct / 100) * 0.34 : s.fill
         return (
           <polygon
             key={z.id}
             points={z.cells.map(([x, y]) => `${x},${y}`).join(' ')}
             fill={s.color}
-            fillOpacity={s.fill}
+            fillOpacity={fill}
             stroke={s.color}
-            strokeWidth={1.4}
+            strokeWidth={p?.done ? 2.4 : 1.4}
+            strokeOpacity={p && p.pct === 0 ? 0.55 : 1}
             strokeLinejoin="round"
             vectorEffect="non-scaling-stroke"
           />
@@ -65,6 +80,28 @@ export default function MapZones({ map, zones, zoom = 1 }) {
             >
               {z.name.toUpperCase()}
             </text>
+            )}
+            {/* Second line: the percentage, then a letter per company that has
+                actually been through, in that company's own colour — so the
+                map answers "who" as well as "how much" without a legend. */}
+            {progress?.get(z.id) && (!tiny || zoom >= DETAIL_LABEL_ZOOM) && (
+              <text
+                x={z.label[0]}
+                y={z.label[1] + fontSize * 0.75}
+                textAnchor="middle"
+                fontSize={fontSize * 0.88}
+                stroke="rgba(4,8,16,0.85)"
+                strokeWidth={fontSize * 0.2}
+                paintOrder="stroke"
+                style={{ fontFamily: 'JetBrains Mono, monospace', fontWeight: 700 }}
+              >
+                <tspan fill={progress.get(z.id).done ? s.color : '#d7e2f4'}>
+                  {progress.get(z.id).pct}%
+                </tspan>
+                {progress.get(z.id).visited.map((c) => (
+                  <tspan key={c} fill={COMPANY_COLOR[c] || '#d7e2f4'} dx={fontSize * 0.3}>{c}</tspan>
+                ))}
+              </text>
             )}
           </g>
         )
