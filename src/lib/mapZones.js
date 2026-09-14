@@ -14,7 +14,31 @@
 import { ASSURE_BLUE as TASKFORCE_COLOR, SCU_LABEL } from './territory'
 import singleton from '../data/singleton-zones.json'
 
-const ZONES = { singleton: singleton.zones }
+// ⚠️ Zone vertices are CELL COORDINATES, so they only mean anything against
+// the grid they were authored in. The JSON records that grid and `zonesFor`
+// scales to whatever the map declares now — which is what let the territory
+// grid be refined without re-running the KML importer.
+const ZONE_DATA = { singleton: { zones: singleton.zones, grid: singleton.grid } }
+
+const scaleCache = new Map()
+
+function scaledZones(mapId, cols, rows) {
+  const entry = ZONE_DATA[mapId]
+  if (!entry) return []
+  const sx = cols / entry.grid.cols
+  const sy = rows / entry.grid.rows
+  if (sx === 1 && sy === 1) return entry.zones
+  const key = `${mapId}:${cols}x${rows}`
+  const hit = scaleCache.get(key)
+  if (hit) return hit
+  const out = entry.zones.map((z) => ({
+    ...z,
+    cells: (z.cells || []).map(([x, y]) => [x * sx, y * sy]),
+    label: z.label ? [z.label[0] * sx, z.label[1] * sy] : z.label,
+  }))
+  scaleCache.set(key, out)
+  return out
+}
 
 // One style per kind. Deliberately outside the company palette: a zone is a
 // place, not an owner, and must never be mistaken for held ground. Company
@@ -31,13 +55,18 @@ export const ZONE_STYLE = {
 
 export const KIND_ORDER = ['hq', 'activity', 'nl']
 
-export const zonesFor = (mapId) => ZONES[mapId] || []
+// `map` may be a map record (scaled to its grid) or a bare id (as authored).
+export function zonesFor(map) {
+  const id = typeof map === 'string' ? map : map?.id
+  if (typeof map === 'object' && map?.cols) return scaledZones(id, map.cols, map.rows)
+  return ZONE_DATA[id]?.zones || []
+}
 
 // A map's zones as RHQ has them configured. `slice` is the stored
 // `{ show, hidden }`; a missing slice means everything shows, so a map works
 // the moment its zones are committed without RHQ having to opt in.
-export function visibleZones(mapId, slice) {
-  const all = zonesFor(mapId)
+export function visibleZones(map, slice) {
+  const all = zonesFor(map)
   if (!all.length) return []
   if (slice && slice.show === false) return []
   const hidden = new Set((slice && slice.hidden) || [])
@@ -123,7 +152,8 @@ export function drawMapZones(ctx, zones, { cols, rows, w, h, scale = 1, progress
   }
   ctx.globalAlpha = 1
   // Names last, so no polygon drawn after one buries it.
-  const size = 2.4 * sx
+  // Frame-relative, not cell-relative — see the same note in MapZones.jsx.
+  const size = (w / cols) * (cols / 90)
   ctx.textAlign = 'center'
   ctx.textBaseline = 'alphabetic'
   ctx.lineJoin = 'round'

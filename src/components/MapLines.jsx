@@ -11,7 +11,7 @@ import { mapLines } from '../lib/mapLines'
 // GRID, so the polylines are in the same cell coordinates as everything else
 // on the map and stretch with it exactly.
 export default function MapLines({ map }) {
-  const lines = mapLines(map?.id)
+  const lines = mapLines(map)
   if (!lines.length) return null
   return (
     <svg

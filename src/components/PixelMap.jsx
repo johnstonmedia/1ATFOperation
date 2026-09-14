@@ -368,7 +368,7 @@ export default function PixelMap({
           <div style={{ position: 'absolute', inset: 0, filter: imageFilterFor(map) }}>
             <img src={map.image} alt={`${map.name} operational map`} draggable={false}
               style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', imageRendering: 'pixelated', userSelect: 'none' }} />
-            <TileBase map={map} view={view} containerRef={containerRef} />
+            <TileBase map={map} />
           </div>
           <MapLines map={map} />
           <MapZones map={map} zones={zones} zoom={scale} progress={zoneProgress} />

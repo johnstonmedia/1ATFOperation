@@ -245,10 +245,20 @@ function Replay({ territory, zones, zoneProgress, onFrame, frames, captions, fra
       if (!e.plan) {
         e.plan = transitionPlan(frames[e.k], frames[e.k + 1], cols, rows)
         if (e.committedIdx !== e.k) commitFrame(e.k)
-        const flashes = e.plan.clusters
-          .filter((c) => c.label && c.size >= 6) // skip tiny touch-up strokes
-          .map((c, i) => ({ id: `${e.k}-${i}`, x: c.cx, y: c.cy, text: c.label, color: c.color }))
-        setLabels(flashes)
+        // ONE FLASH PER OWNER, not per cluster. A frame now takes ground in
+        // a dozen separate activity areas at once and all of it belongs to
+        // 1ATF, so labelling every cluster printed the same name a dozen times
+        // across the map — the identical failure the weekly still image hit
+        // and fixed (see mergedGainLabels). The biggest cluster carries the
+        // name; the rest of that owner's gains animate unlabelled.
+        const best = new Map()
+        for (const c of e.plan.clusters) {
+          if (!c.label || c.size < 6) continue // skip tiny touch-up strokes
+          const prev = best.get(c.label)
+          if (!prev || c.size > prev.size) best.set(c.label, c)
+        }
+        setLabels([...best.values()].map((c, i) => (
+          { id: `${e.k}-${i}`, x: c.cx, y: c.cy, text: c.label, color: c.color })))
         setMoveIdx(e.k)
         setActiveIdx(e.k)
       }

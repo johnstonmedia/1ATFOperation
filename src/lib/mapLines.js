@@ -17,9 +17,14 @@
 // file, so the key cannot end up describing a colour nothing draws.
 import singleton from '../data/singleton-boundaries.json'
 
-// Grid-cell polylines per map id. Traced off the AUSPEC0196 sheet — see
-// tools/map/trace-singleton-boundaries.py.
-const LINES = { singleton: singleton.lines }
+// Grid-cell polylines per map id, with the grid they were TRACED IN. Traced
+// off the AUSPEC0196 sheet — see tools/map/trace-singleton-boundaries.py.
+//
+// ⚠️ Vertices are cell coordinates, so they are only meaningful against the
+// grid they were authored in. The JSON records it, and everything below scales
+// to whatever grid the map declares now — which is what let the territory grid
+// be refined without re-tracing a single boundary.
+const LINES = { singleton: { lines: singleton.lines, grid: singleton.grid } }
 
 // Draw order is casing-then-core: every line gets a dark casing underneath so
 // it stays readable over both sunlit paddock and black shadowed timber, which
@@ -44,17 +49,94 @@ export const LINE_STYLE = {
 // boundary, so both halves share one key and one legend row.
 const LINE_KIND = { defence_n: 'defence', defence_s: 'defence', sector: 'sector' }
 
-export const linesFor = (mapId) => LINES[mapId] || null
+export const linesFor = (mapId) => LINES[mapId]?.lines || null
 
-// Each polyline as { points, kind, style }, in draw order. Empty for a map
-// that declares none, which is every map but Singleton.
-export function mapLines(mapId) {
-  const set = linesFor(mapId)
-  if (!set) return []
-  return Object.entries(set).map(([key, points]) => {
+// X of the sector line at a given Y, clamped to its endpoints outside the span
+// it was traced over. The sector line is the area's eastern edge, so this is
+// "how far east does Sector 8 reach at this latitude".
+function sectorXAt(sector, y) {
+  if (!sector?.length) return Infinity
+  if (y <= sector[0][1]) return sector[0][0]
+  if (y >= sector[sector.length - 1][1]) return sector[sector.length - 1][0]
+  for (let i = 1; i < sector.length; i++) {
+    const [x0, y0] = sector[i - 1]
+    const [x1, y1] = sector[i]
+    if (y >= y0 && y <= y1) {
+      const t = y1 === y0 ? 0 : (y - y0) / (y1 - y0)
+      return x0 + (x1 - x0) * t
+    }
+  }
+  return sector[sector.length - 1][0]
+}
+
+/**
+ * Keep only the part of a boundary that bounds SECTOR 8.
+ *
+ * The traced Commonwealth boundary wraps the whole sheet — Sector 8 and Sector
+ * 9 together — because that is what the survey sheet draws. The map is Sector
+ * 8's, so the eastern two-thirds of that line is the boundary of ground this
+ * map is not about, and drawing it put a big empty enclosure next to the one
+ * that matters. Each run that strays east of the sector line is dropped, and
+ * the cut is interpolated ONTO the sector line so the remaining boundary meets
+ * it exactly rather than stopping short — Sector 8 stays a closed shape.
+ */
+function clipToSector(points, sector) {
+  const out = []
+  let run = []
+  const inside = (p) => p[0] <= sectorXAt(sector, p[1])
+  const crossing = (a, b) => {
+    // Bisect for the point where the polyline segment meets the sector line;
+    // the sector line is itself a polyline, so there is no closed form and a
+    // dozen halvings is well inside a tenth of a cell.
+    let lo = 0, hi = 1
+    for (let i = 0; i < 12; i++) {
+      const m = (lo + hi) / 2
+      const p = [a[0] + (b[0] - a[0]) * m, a[1] + (b[1] - a[1]) * m]
+      if (inside(p)) lo = m
+      else hi = m
+    }
+    return [a[0] + (b[0] - a[0]) * lo, a[1] + (b[1] - a[1]) * lo]
+  }
+  for (let i = 0; i < points.length; i++) {
+    const p = points[i]
+    if (inside(p)) {
+      if (!run.length && i > 0) run.push(crossing(p, points[i - 1]))
+      run.push(p)
+    } else {
+      if (run.length) { run.push(crossing(run[run.length - 1], p)); out.push(run); run = [] }
+    }
+  }
+  if (run.length) out.push(run)
+  return out.filter((r) => r.length >= 2)
+}
+
+/**
+ * Each polyline as { points, kind, style }, in draw order, in the CURRENT
+ * grid's coordinates. Empty for a map that declares none, which is every map
+ * but Singleton.
+ *
+ * `map` may be a map record or just an id; passing the record is what lets the
+ * traced vertices be scaled to a grid finer than the one they were traced in.
+ */
+export function mapLines(map) {
+  const id = typeof map === 'string' ? map : map?.id
+  const entry = LINES[id]
+  if (!entry) return []
+  const sx = typeof map === 'object' && map?.cols ? map.cols / entry.grid.cols : 1
+  const sy = typeof map === 'object' && map?.rows ? map.rows / entry.grid.rows : 1
+  const scale = (pts) => (sx === 1 && sy === 1 ? pts : pts.map(([x, y]) => [x * sx, y * sy]))
+
+  const sector = entry.lines.sector || null
+  const out = []
+  for (const [key, points] of Object.entries(entry.lines)) {
     const kind = LINE_KIND[key] || 'defence'
-    return { key, kind, points, style: LINE_STYLE[kind] }
-  })
+    // Sector 9's share of the Commonwealth boundary is not this map's border.
+    const runs = kind === 'defence' && sector ? clipToSector(points, sector) : [points]
+    runs.forEach((run, i) => out.push({
+      key: runs.length > 1 ? `${key}-${i}` : key, kind, points: scale(run), style: LINE_STYLE[kind],
+    }))
+  }
+  return out
 }
 
 // Legend rows — one per KIND, not per polyline, so the split Defence boundary
@@ -65,7 +147,7 @@ export const LINE_KEY = Object.values(LINE_STYLE).map((s) => ({ color: s.color, 
 // same boundaries the page shows. Widths are in the same units as the on-screen
 // stroke, scaled by how much bigger the export canvas is than the map art.
 export function drawMapLines(ctx, map, W, H) {
-  const lines = mapLines(map?.id)
+  const lines = mapLines(map)
   if (!lines.length) return
   const sx = W / map.cols
   const sy = H / map.rows

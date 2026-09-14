@@ -36,7 +36,12 @@ const DETAIL_LABEL_ZOOM = 2.5
 // beneath the name and thickens a completed zone's outline.
 export default function MapZones({ map, zones, zoom = 1, progress = null }) {
   if (!map || !zones?.length) return null
-  const fontSize = 2.4 / Math.max(zoom, 1)
+  // ⚠️ Sized from the FRAME, not from a cell count. The SVG viewBox is the
+  // grid, so a hard-coded size in grid units halves on screen the moment a map
+  // refines its grid — which is exactly what happened when Singleton went to
+  // 432x306. `cols / 90` reproduces the original 2.4 at 216 columns and holds
+  // its physical size at any grid.
+  const fontSize = (map.cols / 90) / Math.max(zoom, 1)
   return (
     <svg
       viewBox={`0 0 ${map.cols} ${map.rows}`}

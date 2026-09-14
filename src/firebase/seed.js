@@ -184,8 +184,20 @@ export const DEFAULT_TERRITORY = {
   ],
 }
 
-// Pixel-grid territory over the Singleton Military Area sheet (AUSPEC0196,
-// Areas 8 & 9). 216x153 = one cell per exact 3x3 block of the 648x459 art.
+// Pixel-grid territory over the Singleton Military Area sheet (AUSPEC0196),
+// Sector 8. ⚠️ **432x306 — deliberately FOUR TIMES the cells of every other
+// map's grid, and of this map's own until 2026-09-14.** Ground here is taken a
+// fraction of an activity area at a time (see lib/campFrames.js), and at the
+// old 216x153 a cell was ~59 m: an area like High Ropes was seven cells across,
+// so a part-taken fill could not follow its outline and read as a blocky
+// approximation sitting over the shape rather than inside it. At 432x306 a cell
+// is ~30 m and the fill hugs the boundary.
+//
+// Everything authored in CELL COORDINATES scales with this automatically —
+// zone outlines and traced boundaries both record the grid they were made in
+// (see zonesFor / mapLines) — so refining the grid needs no re-tracing. The
+// positions in THIS file are the exception: they are written at the map's grid
+// directly, which is why the numbers below are twice what they were.
 //
 // Positions below are read off the sheet and checked against the map's
 // georeference (`geo` in lib/maps.js), so the beacons land on the real ground:
@@ -194,8 +206,8 @@ export const DEFAULT_TERRITORY = {
 // feature by feature against the sheet. Grid references follow from the cell,
 // so moving a marker moves its GR with it. The starting paint is only a
 // starting point — RHQ repaints all of it in Map: Territory.
-const S_COLS = 216
-const S_ROWS = 153
+const S_COLS = 432
+const S_ROWS = 306
 function buildSingletonCells() {
   const g = new Array(S_COLS * S_ROWS).fill('.')
   const blob = (cx, cy, w, h, code) => {
@@ -217,7 +229,7 @@ function buildSingletonCells() {
   //
   // Wider than the Ex Admin Area itself so the derived "RHQ" company label
   // has somewhere to sit clear of that place's own beacon.
-  blob(92, 90, 24, 12, 'R')  // Ex Admin Area — RHQ
+  blob(184, 180, 48, 24, 'R')  // Ex Admin Area — RHQ
   return g.join('')
 }
 export const DEFAULT_SINGLETON_TERRITORY = {
@@ -231,19 +243,19 @@ export const DEFAULT_SINGLETON_TERRITORY = {
   places: [
     // Surveyed: −32.763022, 151.182969. Everything else on this map is
     // read off the sheet, so this one is the anchor the rest is checked against.
-    { id: 'sg-rhq', name: 'Ex Admin Area Bravo', x: 104, y: 96 },
-    { id: 'sg-war', name: 'Warringah', x: 99, y: 98 },
-    { id: 'sg-s7', name: 'Sector 7', x: 77, y: 12 },
-    { id: 'sg-s8', name: 'Sector 8', x: 97, y: 75 },
-    { id: 'sg-s9', name: 'Sector 9', x: 159, y: 65 },
-    { id: 'sg-sp5', name: 'Sentry Post No5', x: 124, y: 27 },
-    { id: 'sg-sp4', name: 'Sentry Post No4', x: 149, y: 32 },
-    { id: 'sg-sp10', name: 'Sentry Post No10', x: 196, y: 24 },
-    { id: 'sg-dfsw', name: 'DFSW2 Firing Range', x: 135, y: 24 },
-    { id: 'sg-cave', name: 'Yellow Billys Cave', x: 140, y: 84 },
-    { id: 'sg-calf', name: 'Calf Pen', x: 145, y: 78 },
-    { id: 'sg-retrans', name: 'Retrans Peak', x: 28, y: 12 },
-    { id: 'sg-bbr', name: 'Broken Back Range', x: 179, y: 131 },
+    { id: 'sg-rhq', name: 'Ex Admin Area Bravo', x: 208, y: 192 },
+    { id: 'sg-war', name: 'Warringah', x: 198, y: 196 },
+    { id: 'sg-s7', name: 'Sector 7', x: 154, y: 24 },
+    { id: 'sg-s8', name: 'Sector 8', x: 194, y: 150 },
+    { id: 'sg-s9', name: 'Sector 9', x: 318, y: 130 },
+    { id: 'sg-sp5', name: 'Sentry Post No5', x: 248, y: 54 },
+    { id: 'sg-sp4', name: 'Sentry Post No4', x: 298, y: 64 },
+    { id: 'sg-sp10', name: 'Sentry Post No10', x: 392, y: 48 },
+    { id: 'sg-dfsw', name: 'DFSW2 Firing Range', x: 270, y: 48 },
+    { id: 'sg-cave', name: 'Yellow Billys Cave', x: 280, y: 168 },
+    { id: 'sg-calf', name: 'Calf Pen', x: 290, y: 156 },
+    { id: 'sg-retrans', name: 'Retrans Peak', x: 56, y: 24 },
+    { id: 'sg-bbr', name: 'Broken Back Range', x: 358, y: 262 },
   ],
 }
 

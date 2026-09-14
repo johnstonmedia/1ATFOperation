@@ -67,7 +67,9 @@ export function buildCampFrames(mapId, territory) {
   const plan = planFor(mapId)
   if (!plan) return []
   const { cols, rows } = territory
-  const zones = new Map(zonesFor(mapId).map((z) => [z.id, z]))
+  // Scaled to THIS territory's grid — zone vertices are authored against a
+  // coarser one (see zonesFor).
+  const zones = new Map(zonesFor({ id: mapId, cols, rows }).map((z) => [z.id, z]))
   const days = campDays(mapId)
   const base = baseCells(territory)
 

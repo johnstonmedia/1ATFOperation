@@ -88,7 +88,32 @@ keep entries short and focused on what a new collaborator needs to know.
   in its own company's colour made a busy area a patchwork that read as six
   companies competing for the same ground. Companies still do the conquering;
   the plan says who is where and every visit count comes from it.
-- ⚠️ **Zooming no longer flashes the low-quality map.** `TileBase` kept only
+- ⚠️ **The map now loads ONE fixed tile level and never swaps again** — this
+  REPLACES the two-layer fix below, made hours earlier. Requesting a deeper
+  level per zoom step was itself the problem: it swapped the imagery on screen
+  every step. `fixedTiles()` chooses one level from the map alone (z16 over
+  Sector 8, 132 tiles, ~2 m/px), fetched once; zooming just scales it, exactly
+  as the static image always did. Verified identical tile set before, during and
+  after a zoom, and a pan now costs no requests at all.
+- **Only Sector 8's boundary is drawn.** The traced Commonwealth boundary wraps
+  the whole survey sheet; `clipToSector()` drops the runs east of the sector
+  line and cuts exactly onto it, so Sector 8 is one closed shape rather than the
+  area plus an empty enclosure beside it.
+- ⚠️ **Singleton's grid is 432×306 — 4× the cells.** A ~59 m cell could not
+  follow an activity area's outline, so a part-taken fill read as a blocky
+  approximation over the shape. At ~30 m it hugs the edge. Zone outlines and
+  traced boundaries both record the grid they were authored in and are scaled
+  at load, so nothing needed re-tracing — but every stored singleton frame and
+  territory is dropped and re-seeded on load (they are generated; rebuild from
+  the camp plan). NSW untouched.
+- **Conquest flashes are one per owner, not one per cluster.** With every area
+  going to 1ATF, labelling each captured cluster printed the same name a dozen
+  times across the map — the same failure the weekly still image already fixed.
+- **Zone type is sized from the frame, not the cell count**, so refining a grid
+  no longer halves it on screen.
+
+- ⚠️ **Zooming no longer flashes the low-quality map.**
+  *(Superseded the same day by the fixed-level design above.)* `TileBase` kept only
   the current zoom level mounted, so every zoom step unmounted the imagery you
   were looking at and exposed the 10 m Sentinel floor until the deeper level
   arrived — which reads as glitching, not loading. It now tracks which tile

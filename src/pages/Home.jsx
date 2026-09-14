@@ -75,7 +75,7 @@ export default function Home() {
     [state.campaignFrames, live.id],
   )
   const allZones = useMemo(
-    () => visibleZones(live.id, state[zoneVisibilitySlice(live.id)]),
+    () => visibleZones(live, state[zoneVisibilitySlice(live.id)]),
     [live.id, state],
   )
   // Camp progress: how far through, and whose. Both are this visitor's own

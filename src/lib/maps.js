@@ -74,12 +74,15 @@ export const MAPS = [
     // The traced boundaries, the zones and the imagery all still cover the
     // FULL sheet: this is where the map opens, not a crop, so a visitor can
     // still pan or zoom out to the rest.
-    focus: { x0: 29, y0: 18, x1: 135, y1: 124, label: 'SECTOR 8' },
+    focus: { x0: 58, y0: 36, x1: 270, y1: 248, label: 'SECTOR 8' },
     image: asset('singleton.webp'),
     pixelWidth: 1080,
     pixelHeight: 765,
-    cols: 216,
-    rows: 153,
+    // ⚠️ 4x the cells of the other map's grid — see DEFAULT_SINGLETON_TERRITORY
+    // in seed.js. Ground here is taken a fraction of an activity area at a
+    // time, and a ~59 m cell could not follow an area's outline.
+    cols: 432,
+    rows: 306,
     // Photographic art, so it opts out of the pixel-art filter: see
     // imageFilterFor() in lib/terrainRender.js. Enough contrast and tint to
     // sit inside the portal's palette, well short of what the flat tiles take.
@@ -314,6 +317,44 @@ export function tilesFor(map, z, region = { x0: 0, y0: 0, x1: 1, y1: 1 }) {
     }
   }
   return out
+}
+
+/**
+ * The ONE tile set a map loads — a single fixed zoom level, chosen once and
+ * never changed as the user zooms.
+ *
+ * ⚠️ THIS IS DELIBERATELY NOT A SLIPPY MAP. Re-requesting a deeper level on
+ * every zoom step is what tile maps normally do, and here it was the bug: each
+ * step swapped the imagery on screen, so zooming flickered between levels (and,
+ * before that, back through the low-res static floor). What this map actually
+ * needs is simpler — swap the 10 m static art for real imagery ONCE, then let
+ * the browser scale it with everything else under PixelMap's transform, exactly
+ * as the static image always did. One fetch, one layer, nothing to re-settle.
+ *
+ * The level is whatever the budget affords over the region that matters: a map
+ * with a `focus` box loads only that (the rest keeps the static art, which is
+ * all anyone sees out there anyway), so the budget buys detail where people
+ * look. Singleton lands on z16 over Sector 8 — ~2 m/px against the static
+ * image's ~12 m/px, about 144 tiles fetched once and then cached.
+ */
+const FIXED_MAX_TILES = 160
+
+export function fixedTiles(map) {
+  if (!map?.tiles) return null
+  const f = map.focus
+  const region = f
+    ? { x0: f.x0 / map.cols, x1: f.x1 / map.cols, y0: f.y0 / map.rows, y1: f.y1 / map.rows }
+    : undefined
+  const minZ = map.tiles.minZoom ?? 0
+  const maxZ = map.tiles.maxZoom ?? 19
+  let best = null
+  for (let z = minZ; z <= maxZ; z++) {
+    const list = tilesFor(map, z, region)
+    if (!list.length) continue
+    if (list.length > FIXED_MAX_TILES) break
+    best = { z, list }
+  }
+  return best
 }
 
 /* ---------------------------- campaign frames ---------------------------- */

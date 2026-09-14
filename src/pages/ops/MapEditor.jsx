@@ -50,7 +50,7 @@ export default function MapEditor() {
   const zoneSlice = zoneVisibilitySlice(mapId)
   // The editor shows exactly what visitors would see, so hiding a zone here is
   // previewed immediately rather than guessed at.
-  const editorZones = visibleZones(mapId, state[zoneSlice])
+  const editorZones = visibleZones(map, state[zoneSlice])
   const savedTerr = state[terrSlice]
   const [terr, setTerr] = useState(() => loadTerr(savedTerr))
   const [brush, setBrush] = useState('M')

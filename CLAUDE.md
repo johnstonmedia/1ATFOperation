@@ -285,7 +285,16 @@ assuming a page exists).
     648×336, 216×112 grid, ocean `#3c82b4` unpaintable. The **primary** map
     (`PRIMARY_MAP_ID`), and the seeded default.
   - **`singleton`** — **1ATF Regional Progress Map** (Singleton Military Area,
-    **Sector 8**, AUSPEC0196), 216×153 grid. ⚠️ **It OPENS on Sector 8**, not
+    **Sector 8**, AUSPEC0196), **432×306 grid — four times the cells of every
+    other map** (2026-09-14). Ground here is taken a fraction of an activity
+    area at a time, and at 216×153 a cell was ~59 m: High Ropes was seven cells
+    across, so a part-taken fill could not follow its outline and read as a
+    blocky approximation sitting over the shape rather than inside it. At
+    432×306 a cell is ~30 m and the fill hugs the boundary. ⚠️ Refining it
+    INVALIDATED every stored singleton frame and territory (length no longer
+    matches — `normalizeCampaignFrames`/`normalizeTerritory` drop and re-seed),
+    which is safe only because those frames are generated from the plan; NSW is
+    untouched. Rebuild with **Build N Frames from Camp Plan**. ⚠️ **It OPENS on Sector 8**, not
     the whole sheet: `focus: { x0, y0, x1, y1, label }` on the map record,
     applied once by PixelMap via `focusView()` in maps.js (never in edit mode —
     RHQ paints the whole map). Every zone the camp plan touches lies west of
@@ -346,22 +355,36 @@ assuming a page exists).
     fallback). **The SIX Maps endpoint has never been reached from a dev
     sandbox** — egress blocks it — so it is verified only by construction plus
     a local tile pyramid; if imagery never appears live, suspect the URL first.
-  - ⚠️ **The floor must never show MID-ZOOM.** Each zoom step asks for a deeper
-    tile level, and unmounting the level you were looking at the moment the new
-    one is requested flashed the 10 m static still and snapped back — which
-    reads as the map glitching, not loading. `TileBase` therefore tracks which
-    tile URLs have decoded (`loaded`) and keeps the PREVIOUS level mounted
-    underneath the incoming one until that one is `SETTLED` (92% arrived, not
-    100% — one stalled edge tile must not hold two layers up, and the layer
-    beneath is the same ground at half the resolution). Verified against a
-    stand-in tile server with a 1.5 s delay: mid-zoom the old level is still
-    visible while the new one is mounted-but-hidden, and the old one is dropped
-    only once the new one lands.
+  - ⚠️ **THIS IS NOT A SLIPPY MAP: ONE FIXED TILE LEVEL, FETCHED ONCE.**
+    `fixedTiles()` in maps.js picks a single zoom from the map alone — never
+    from the view — and `TileBase` renders that set and never re-requests. The
+    obvious design (a deeper level per zoom step) was the defect: each step
+    swapped the imagery on screen, so zooming flickered, and until the new
+    level arrived the map fell back to the 10 m static still. Two attempts to
+    smooth that over (hiding tiles until decoded, then holding the previous
+    level underneath the incoming one) each made it less bad without making it
+    right, because the swapping should not have been happening. What the map
+    needs is ONE swap — static art to real imagery — after which the browser
+    scales it under PixelMap's transform exactly as the static image always
+    did. Don't reintroduce level-switching. Verified: z16, 132 tiles, identical
+    before, during and after a zoom step, and a pan costs no requests at all.
+    The level is whatever `FIXED_MAX_TILES` (160) affords over the map's
+    `focus` region — Singleton lands on z16 over Sector 8, ~2 m/px against the
+    static image's ~12.
   - **Boundaries are VECTORS, not baked into the art**
     ([mapLines.js](src/lib/mapLines.js) + [MapLines.jsx](src/components/MapLines.jsx)):
-    the Commonwealth land boundary (yellow) and the Sector 8/9 boundary
-    (green), traced off the AUSPEC0196 sheet into
-    `src/data/singleton-boundaries.json` as grid-cell vertices. They moved out
+    the Commonwealth land boundary and the Sector 8/9 line (both yellow),
+    traced off the AUSPEC0196 sheet into
+    `src/data/singleton-boundaries.json` as grid-cell vertices.
+    ⚠️ **Only SECTOR 8's boundary is drawn.** The traced Commonwealth boundary
+    wraps the whole sheet, because that is what the survey sheet shows; this map
+    is Sector 8's, so `clipToSector()` drops every run that strays east of the
+    sector line and interpolates the cut ONTO that line, leaving one closed
+    shape instead of Sector 8's border plus a big empty enclosure beside it.
+    ⚠️ **Vertices are CELL COORDINATES and the JSON records the grid they were
+    traced in**; `mapLines(map)` scales them to whatever grid the map declares
+    now, which is what let the territory grid be refined without re-tracing.
+    Pass the map RECORD, not an id, or you get unscaled vertices. They moved out
     of the image for two reasons — tiles render *over* the image and would bury
     them, and as vectors they stay hairline at any zoom instead of becoming a
     40px smear. `mapLines.js` is the single source for **three** renderers: the
@@ -396,6 +419,10 @@ assuming a page exists).
     (administrative boundaries). A zone is the unit of PROGRESS — "Alpha has
     been through the ropes course" is a fact about a zone, not about a cell.
     Singleton carries 28: 15 activity areas, 6 night locations, 7 HQ.
+    - ⚠️ **Zone vertices are CELL COORDINATES against the grid the importer
+      wrote them in** (recorded in the JSON). `zonesFor(map)` scales them to the
+      map's current grid — pass the map RECORD, not an id, or a finer grid puts
+      every zone in the top-left quarter of the map.
     - **Geometry is code, visibility is content.** Outlines are converted from
       the unit's BIV26 Google Earth project by
       [kml-to-zones.py](tools/map/kml-to-zones.py) into
