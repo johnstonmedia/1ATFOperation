@@ -71,11 +71,22 @@ function loadImage(src) {
 // why an export looked coarse and hard to relate to the ground while the live
 // map looked sharp.
 //
-// The tiles are fetched with CORS. A tile server that doesn't send the header
-// simply fails to load here (rather than silently tainting the canvas, which
-// would make captureStream and toBlob throw at the very end of a long
-// export). Whatever doesn't load just isn't drawn, and the static art
-// underneath shows through — the same degradation the live map has.
+// ⚠️ THE TILES ARE FETCHED WITH CORS, AND THE SCREEN IS NOT. That asymmetry
+// is forced, and it is the one way an export can look worse than the page it
+// came from. Displaying a cross-origin image needs no permission; READING one
+// back out of a canvas does — `crossOrigin='anonymous'` is what asks, and a
+// tile server that does not answer with `Access-Control-Allow-Origin` fails
+// the load here while still displaying perfectly on the live map. Without the
+// attribute the tiles would draw and then TAINT the canvas, so `toBlob` throws
+// at the very end of a long render and there is no export at all.
+//
+// So when a service refuses CORS there is no client-side fix: `fetch` is
+// blocked the same way, and an opaque response has no readable bytes. The
+// export falls back to the static art — and `onStatus` below REPORTS that it
+// did, because a print that silently comes out at a third of the resolution
+// the screen shows is the kind of failure nobody catches until it is on a
+// wall. If that is what the Ops Centre reports, the fix is a tile source that
+// sends the header, not a change here.
 
 // Ceiling on how many tiles one export may fetch. Deeper zoom is finer imagery
 // but FOUR TIMES the requests per level, so the budget is what picks the zoom.
@@ -112,7 +123,7 @@ function loadTile(url) {
 // what the canvas width alone asks for: a crop drawn from a deeper level is
 // sharper than the same crop upscaled from a shallower one, and the budget
 // stops it running away.
-async function renderTileLayer(map, W, H, region = null) {
+async function renderTileLayer(map, W, H, region = null, onStatus = null) {
   if (!map?.tiles) return null
   const maxZ = map.tiles.maxZoom ?? 19
   const minZ = map.tiles.minZoom ?? 0
@@ -148,6 +159,7 @@ async function renderTileLayer(map, W, H, region = null) {
     }
   }
   await Promise.all(Array.from({ length: TILE_CONCURRENCY }, worker))
+  onStatus?.({ tiled: drawn > 0, drawn, total: tiles.length, z })
   return drawn ? cv : null
 }
 
@@ -157,9 +169,9 @@ async function renderTileLayer(map, W, H, region = null) {
  * through exactly the renderer the video and the still use, so a printed page
  * can't drift from what the screen draws.
  */
-export async function renderPrintBase(map, W, H, { region = null } = {}) {
+export async function renderPrintBase(map, W, H, { region = null, onStatus = null } = {}) {
   const img = await loadImage(map.image)
-  return renderBaseMap(img, map, W, H, region)
+  return renderBaseMap(img, map, W, H, region, onStatus)
 }
 
 /* --------------------------- shared draw helpers -------------------------- */
@@ -174,7 +186,7 @@ export async function renderPrintBase(map, W, H, { region = null } = {}) {
 // through a different internal raster path that re-enables smoothing
 // regardless of imageSmoothingEnabled — that was the source of the blurry
 // map art in exported video and images.
-async function renderBaseMap(img, map, W, H, region = null) {
+async function renderBaseMap(img, map, W, H, region = null, onStatus = null) {
   const base = document.createElement('canvas')
   base.width = W; base.height = H
   const bctx = base.getContext('2d')
@@ -182,7 +194,7 @@ async function renderBaseMap(img, map, W, H, region = null) {
   bctx.fillStyle = '#0a0f1a'
   bctx.fillRect(0, 0, W, H)
 
-  const tiles = await renderTileLayer(map, W, H, region)
+  const tiles = await renderTileLayer(map, W, H, region, onStatus)
   if (tiles) {
     // Tile maps composite art + tiles at EXPORT resolution first and filter
     // that in one pass. The rule the comment above protects still holds: the

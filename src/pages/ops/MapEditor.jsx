@@ -736,12 +736,25 @@ function CampaignPanel({
     setPdfErr('')
     setPdfBusy(true)
     try {
-      const { blob, pages } = await exportFramesPdf({
+      const { blob, pages, tiles } = await exportFramesPdf({
         territory, frames: sorted, zones, progressFor: (i) => progressAt(sorted[i]),
       })
       downloadBlob(blob, `campaign-frames-${new Date().toISOString().slice(0, 10)}.pdf`)
       audit('Exported campaign frames as PDF', `${pages} pages`)
       toast.push(`${pages}-page PDF downloaded.`)
+      // Say whether the print got the satellite imagery. A PDF that quietly
+      // came out at a third of the screen's resolution is the kind of failure
+      // nobody notices until it is printed and on a wall.
+      if (tiles && !tiles.tiled) {
+        setPdfErr('Printed from the offline base map, NOT the satellite imagery: '
+          + 'the tile service did not return the imagery with cross-origin permission, '
+          + 'which a browser requires before it will let a canvas be saved. The live map is '
+          + 'unaffected (displaying a tile needs no permission; printing one does). '
+          + 'Nothing in the portal can work around it — it needs a tile source that sends '
+          + 'the Access-Control-Allow-Origin header.')
+      } else if (tiles) {
+        toast.push(`Satellite imagery: ${tiles.drawn}/${tiles.total} tiles at zoom ${tiles.z}.`)
+      }
     } catch (e) {
       setPdfErr(e?.message || 'PDF export failed.')
     } finally {

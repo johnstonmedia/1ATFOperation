@@ -128,6 +128,14 @@ keep entries short and focused on what a new collaborator needs to know.
   and the map panel renders at 2× and draws down: z15-whole-frame before,
   z16-over-the-region after — 132 tiles, ~2.0 m/px, twice the linear resolution
   for fewer requests.
+- **The PDF map bleeds to the page edge** — no margin, no border, one header
+  line — and the export now REPORTS whether it got the satellite imagery.
+  ⚠️ The exporter needs `Access-Control-Allow-Origin` on the tiles and the live
+  map does not: displaying a cross-origin image needs no permission, reading one
+  back out of a canvas does. So a service that refuses CORS displays fine and
+  prints from the ~12 m static base, silently. There is no client-side
+  workaround, so Map: Territory now says so outright after an export that fell
+  back, naming the cause.
 - **The PDF is now an A3 wall sheet.** One header line and nothing else around
   the map; areas numbered on the map with the names, counts and company letters
   in a table beside it (labelling them on the map itself collides into an

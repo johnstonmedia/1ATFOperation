@@ -368,13 +368,15 @@ export async function exportFramesPdf({ territory, frames: campaignFrames, zones
   const cropW = Math.max(1, f.x1 - f.x0)
   const cropH = Math.max(1, f.y1 - f.y0)
 
-  // ONE header line, then map and key. The map gets every pixel its shape can
-  // use; the key column is only as wide as what is left over, because on A3
-  // the map is the document and the rest is annotation.
-  const headH = 76
-  const panelH = PAGE_H - MARGIN * 2 - headH
-  const maxMapW = PAGE_W - MARGIN * 2 - 360 - 30
-  const keyW = PAGE_W - MARGIN * 2 - Math.min(maxMapW, (panelH * cropW) / cropH) - 30
+  // ⚠️ THE MAP BLEEDS TO THE PAGE EDGE — no margin, no panel border, no gap.
+  // It is the document; everything else is annotation printed beside it. A
+  // framed map on a wall sheet wastes the millimetres that decide whether an
+  // area is legible from across a room, and a border draws the eye to the
+  // boundary of the paper instead of to the ground.
+  const headH = 68
+  const panelH = PAGE_H - headH // full bleed: left, bottom and top of the panel
+  const maxMapW = PAGE_W - 360 - 26
+  const keyW = PAGE_W - Math.min(maxMapW, (panelH * cropW) / cropH) - 26 - MARGIN
   const drawW = Math.min(maxMapW, (panelH * cropW) / cropH)
   const drawH = drawW * (cropH / cropW)
 
@@ -400,7 +402,12 @@ export async function exportFramesPdf({ territory, frames: campaignFrames, zones
   listed.forEach((z, k) => numbered.set(z.id, k + 1))
 
   const region = { x0: f.x0 / cols, x1: f.x1 / cols, y0: f.y0 / rows, y1: f.y1 / rows }
-  const base = await renderPrintBase(map, fullW, fullH, { region })
+  // Reported back to the caller so the Ops Centre can say whether the print
+  // actually got the satellite imagery — see the CORS note in replayExport.js.
+  let tileStatus = map.tiles ? { tiled: false, drawn: 0, total: 0 } : null
+  const base = await renderPrintBase(map, fullW, fullH, {
+    region, onStatus: (st) => { tileStatus = st },
+  })
 
   const jpegs = []
   for (let i = 0; i < frames.length; i++) {
@@ -436,44 +443,41 @@ export async function exportFramesPdf({ territory, frames: campaignFrames, zones
 
     // ONE header line. Unit, then what day this sheet is, then where — the
     // three things someone walking up to the wall needs before the map.
-    textLine(ctx, '1ATF', MARGIN, MARGIN + 42, { size: 46, spacing: 4 })
+    textLine(ctx, '1ATF', 26, 46, { size: 44, spacing: 4 })
     const heading = (title || fr.label || `FRAME ${i + 1}`).toUpperCase()
-    textLine(ctx, heading, MARGIN + 165, MARGIN + 40, { size: 30, spacing: 3, color: ACCENT })
-    textLine(ctx, `SHEET ${i + 1} OF ${frames.length}`, PAGE_W - MARGIN, MARGIN + 18,
-      { size: 17, spacing: 2, color: DIM, align: 'right', font: 'JetBrains Mono, monospace' })
+    textLine(ctx, heading, 190, 44, { size: 29, spacing: 3, color: ACCENT })
+    textLine(ctx, `SHEET ${i + 1} OF ${frames.length}`, PAGE_W - MARGIN, 24,
+      { size: 16, spacing: 2, color: DIM, align: 'right', font: 'JetBrains Mono, monospace' })
     if (map.focus?.label) {
-      textLine(ctx, `${map.focus.label} — AREA OF OPERATIONS`, PAGE_W - MARGIN, MARGIN + 44,
-        { size: 18, spacing: 1.8, color: GAIN, align: 'right', font: 'JetBrains Mono, monospace' })
+      textLine(ctx, `${map.focus.label} — AREA OF OPERATIONS`, PAGE_W - MARGIN, 48,
+        { size: 17, spacing: 1.8, color: GAIN, align: 'right', font: 'JetBrains Mono, monospace' })
     }
-    ctx.fillStyle = 'rgba(54,224,192,0.55)'
-    ctx.fillRect(MARGIN, MARGIN + 62, PAGE_W - MARGIN * 2, 2)
 
-    // Map panel — the focus rectangle out of the full render.
-    const px = MARGIN
-    const py = MARGIN + headH
+    // Map panel — the focus rectangle out of the full render, hard against the
+    // left and bottom edges of the sheet.
+    const px = 0
+    const py = headH
     ctx.save()
     ctx.imageSmoothingEnabled = true
     ctx.drawImage(full,
       (f.x0 / cols) * fullW, (f.y0 / rows) * fullH, (cropW / cols) * fullW, (cropH / rows) * fullH,
       px, py, drawW, drawH)
     ctx.restore()
-    ctx.strokeStyle = 'rgba(99,130,190,0.35)'
-    ctx.lineWidth = 1
-    ctx.strokeRect(px + 0.5, py + 0.5, drawW - 1, drawH - 1)
-
-    const kx = px + drawW + 30
+    const kx = px + drawW + 26
     const keyEnd = drawKey(ctx, kx, py + 22, keyW, { map, progress, showRHQ })
     const tableEnd = drawAreaTable(ctx, kx, keyEnd + 10, keyW, listed, numbered, progress, i > 0 ? progressFor?.(i - 1) : null)
     drawSummary(ctx, kx, tableEnd + 16, keyW, progress)
 
-    textLine(ctx, 'LUCET PER MINISTERIUM', MARGIN, PAGE_H - MARGIN + 18,
-      { size: 12, spacing: 2, color: DIM, font: 'JetBrains Mono, monospace' })
+    // Footer credits sit in the key column, not over the map — with the map
+    // full-bleed there is no margin left to put them in.
+    textLine(ctx, 'LUCET PER MINISTERIUM', kx, PAGE_H - 40,
+      { size: 13, spacing: 2, color: DIM, font: 'JetBrains Mono, monospace' })
     if (map.tiles?.attribution) {
-      textLine(ctx, map.tiles.attribution, PAGE_W - MARGIN, PAGE_H - MARGIN + 18,
-        { size: 11, color: DIM, weight: 500, align: 'right', font: 'Rajdhani, sans-serif' })
+      textLine(ctx, map.tiles.attribution, kx, PAGE_H - 20,
+        { size: 12, color: DIM, weight: 500, font: 'Rajdhani, sans-serif' })
     }
 
     jpegs.push(await canvasJpeg(page))
   }
-  return { blob: buildPdf(jpegs), pages: frames.length }
+  return { blob: buildPdf(jpegs), pages: frames.length, tiles: tileStatus }
 }

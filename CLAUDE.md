@@ -809,9 +809,24 @@ assuming a page exists).
   **A3-landscape** page per frame at 150 dpi, cropped to the map's `focus` box
   so print shows what the screen shows. These are WALL SHEETS read from across
   a room, which sets every decision below.
-  - **Chrome is one header line.** The map takes every pixel its shape allows;
-    a page that spends its area on framing is a page whose map is too small to
-    read standing up.
+  - **The map BLEEDS to the page edge** — no margin, no panel border, no gap —
+    with one header line above it and the key beside it. A framed map on a wall
+    sheet wastes the millimetres that decide whether an area is legible from
+    across a room, and a border draws the eye to the edge of the paper instead
+    of to the ground. The footer credits sit in the key column, since there is
+    no margin left to put them in.
+  - ⚠️ **THE EXPORT NEEDS CORS AND THE SCREEN DOES NOT** — the one way a print
+    can come out worse than the page it came from. Displaying a cross-origin
+    tile needs no permission; READING one back out of a canvas does, which is
+    what `crossOrigin='anonymous'` asks for. A tile service that doesn't answer
+    with `Access-Control-Allow-Origin` fails the load in the exporter while
+    still displaying perfectly on the live map, so the print silently drops to
+    the ~12 m static base. There is NO client-side workaround (`fetch` is
+    blocked the same way; an opaque response has no readable bytes), so instead
+    `exportFramesPdf` REPORTS what it got (`tiles: { tiled, drawn, total, z }`)
+    and Map: Territory says so outright when a print came from the offline
+    base. If that message appears, the fix is a tile source that sends the
+    header — not a change in this code.
   - ⚠️ **Areas are NUMBERED on the map, named in a table beside it.** Printing
     each area's name, count and company letters on the map itself was tried and
     is unreadable: two dozen labels at a size legible from two metres collide
