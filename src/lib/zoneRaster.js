@@ -53,3 +53,48 @@ export function zoneCells(zone, cols, rows) {
   cache.set(key, out)
   return out
 }
+
+/**
+ * A zone's cells in CONQUEST ORDER: nearest the zone's label point first,
+ * spreading outward.
+ *
+ * This is what lets a zone be partly taken. The plan says NAVEX is visited 13
+ * times; after 2 of them, 2/13 of NAVEX's cells are painted — and they have to
+ * be the SAME 2/13 every render, growing outward rather than jumping about, or
+ * the map flickers between frames and reads as noise instead of progress.
+ *
+ * Ordered by squared distance from the label point (which is where the zone's
+ * name is drawn, so ground appears under its own label first), ties broken by
+ * cell index so the order is fully determined. That produces a roughly circular
+ * spread — the same shape the replay's conquest wave makes — without needing a
+ * BFS over an irregular polygon.
+ */
+const orderCache = new Map()
+
+export function zoneCellsOrdered(zone, cols, rows) {
+  const key = `${zone.id}:${cols}x${rows}`
+  const hit = orderCache.get(key)
+  if (hit) return hit
+  const cells = zoneCells(zone, cols, rows)
+  const lx = zone.label ? zone.label[0] : 0
+  const ly = zone.label ? zone.label[1] : 0
+  const ranked = [...cells].sort((a, b) => {
+    const ax = (a % cols) + 0.5, ay = Math.floor(a / cols) + 0.5
+    const bx = (b % cols) + 0.5, by = Math.floor(b / cols) + 0.5
+    const da = (ax - lx) ** 2 + (ay - ly) ** 2
+    const db = (bx - lx) ** 2 + (by - ly) ** 2
+    return da - db || a - b
+  })
+  orderCache.set(key, ranked)
+  return ranked
+}
+
+/**
+ * Which cells belong to visit `i` of `total`, as [start, end) into the ordered
+ * list. Split so every visit gets a share and the shares tile the zone exactly
+ * — the last visit always finishes it, whatever the rounding.
+ */
+export function visitSlice(count, i, total) {
+  if (total <= 0) return [0, 0]
+  return [Math.floor((count * i) / total), Math.floor((count * (i + 1)) / total)]
+}

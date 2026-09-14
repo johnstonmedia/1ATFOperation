@@ -62,8 +62,19 @@ export const MAPS = [
     id: 'singleton',
     name: '1ATF Regional Progress Map',
     short: 'Regional Map',
-    sub: 'SINGLETON MILITARY AREA // AREAS 8 & 9',
-    blurb: 'The training area itself — Singleton Areas 8 and 9, RHQ at the Ex Admin Area.',
+    sub: 'SINGLETON MILITARY AREA // SECTOR 8 ONLY',
+    blurb: 'The training area itself — Singleton Sector 8, RHQ at the Ex Admin Area. Sector 9 carries no camp activity and is outside the area shown.',
+    // DEFAULT VIEW: Sector 8, not the whole sheet. Every zone the camp plan
+    // touches sits west of the sector line (x 122–129); Sector 9 is empty
+    // ground, and framing the map on both made the half that matters small.
+    // The box is the activity envelope plus a margin, and the sector line is
+    // its eastern edge — which is why that line is now drawn in the boundary's
+    // yellow rather than its own green (see lib/mapLines.js). Sectors 7 and 9
+    // keep their place markers as reference for what lies beyond it.
+    // The traced boundaries, the zones and the imagery all still cover the
+    // FULL sheet: this is where the map opens, not a crop, so a visitor can
+    // still pan or zoom out to the rest.
+    focus: { x0: 29, y0: 18, x1: 135, y1: 124, label: 'SECTOR 8' },
     image: asset('singleton.webp'),
     pixelWidth: 1080,
     pixelHeight: 765,
@@ -193,6 +204,31 @@ export function isMapPublic(mapId, activeMapId, state) {
 
 export const publicMaps = (activeMapId, state) =>
   MAPS.filter((m) => isMapPublic(m.id, activeMapId, state))
+
+/**
+ * Where a map with a `focus` box should OPEN: the scale that fits that box,
+ * and the pan that centres it.
+ *
+ * Pan is in PixelMap's pre-scale units — the stage transform is
+ * `scale(s) translate(x, y)` about the container centre, so a grid point lands
+ * at s * (stagePoint + pan) and centring one means pan = −stagePoint. `W`/`H`
+ * are the container's pixel size.
+ *
+ * The scale FITS (contains) the box rather than filling it, so nothing the box
+ * asks for is cut off; on a frame wider than the box that means some ground
+ * outside it stays visible, which is why the area's border is drawn rather
+ * than assumed.
+ */
+export function focusView(map, W, H) {
+  const f = map?.focus
+  if (!f || !W || !H) return null
+  const bw = Math.max(1, f.x1 - f.x0)
+  const bh = Math.max(1, f.y1 - f.y0)
+  const scale = Math.max(1, Math.min(map.cols / bw, map.rows / bh))
+  const cx = (f.x0 + f.x1) / 2
+  const cy = (f.y0 + f.y1) / 2
+  return { scale, x: -W * (cx / map.cols - 0.5), y: -H * (cy / map.rows - 0.5) }
+}
 
 /* ------------------------------ georeference ----------------------------- */
 

@@ -75,7 +75,34 @@ keep entries short and focused on what a new collaborator needs to know.
 - **Legacy `DEFAULT_ZONES` deleted** — the Leaflet-era Australia polygons
   (Northern Approach, Red Centre, Meridian Salient…) predating the KML import.
   Unused by any code; the committed BIV26 zones are the only zone data now.
+### Second pass, same day — pixels instead of the ramp, and Sector 8 only
+
+- ⚠️ **Progress is counted in VISITS, not companies.** A company is often
+  booked into the same area more than once (NAVEX 13 times, AA Juliet 8), so
+  counting distinct companies called a zone a third done after one of three had
+  been. `zoneProgress` now returns `{ visits, done, total, pct, complete, … }`
+  and a zone finishes on its LAST scheduled visit.
+- ⚠️ **Ground is taken in PIXELS — this REPLACES the OKLab ramp below, hours
+  old.** A zone visited 2 of its 13 times has 2/13 of its CELLS painted, in the
+  ordinary territory hatch, each completed visit in its own company's colour.
+  Cells are allocated outward from the zone's label (`zoneCellsOrdered`) so the
+  fill grows from the middle and is stable between frames; `visitSlice()` tiles
+  the zone exactly so the last visit always completes it, flipping the whole
+  zone to 1ATF. The map already had a language for held ground; a gradient made
+  the reader learn a second one for the same idea.
+- **The Regional map opens on SECTOR 8** (`focus` on the map record +
+  `focusView()`), because every zone the plan touches is west of the sector
+  line and Sector 9 is empty. A starting view, not a crop — the imagery,
+  boundaries and the Sector 7/9 markers still cover the whole sheet.
+- **The sector 8/9 line is now yellow**, matching the Commonwealth boundary: it
+  is the area's eastern border now, not an internal division, so it closes the
+  shape rather than reading as a different kind of line. The map also carries a
+  `◤ SECTOR 8 — AREA OF OPERATIONS` tag, since the frame shows ground beyond
+  the border and shouldn't imply otherwise.
+
 - ⚠️ **A zone's COLOUR is now its progress; the printed percentage is gone.**
+  *(Superseded the same day by the pixel conquest above — kept for the
+  reasoning about the interpolation path, which still governs any future ramp.)*
   `zoneColor()` ramps Meridian red → 1ATF blue **in OKLab**. The path was the
   real decision: a constant-chroma OKLCH sweep stays vivid but runs through
   magenta and violet — i.e. through Support's and Delta's accents — so a

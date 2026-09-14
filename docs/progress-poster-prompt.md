@@ -39,7 +39,7 @@ Accent (teal)    #36e0c0  — the primary highlight; use sparingly, it carries
                             "live", "active", headings-of-consequence
 Secondary accent #4ea8ff
 1ATF / conquered #1e9bff  — ground the whole task force holds, i.e. a zone
-                            every scheduled company has been through. Never a
+                            whose every scheduled VISIT has happened. Never a
                             company's colour, never decorative.
 Threat red       #ff3b46  — ONLY for the opposing force ("Meridian"), never
                             for a company, never decoratively
@@ -85,36 +85,37 @@ matches the map — a flat block will look like a different system.
    the CARD'S COLOUR is the percentage, on the ramp below, exactly as on the
    live map.
 
-   **The OKLab progress ramp** (Meridian red → 1ATF blue). Use these values;
-   do not re-derive them and do not substitute a straight RGB or HSL blend —
-   both of those run through magenta and violet, which are Support's and
-   Delta's colours, and a half-finished zone must never wear a company's
-   colour. Interpolated in OKLab the middle of the ramp is deliberately
-   LOW-CHROMA — contested ground, drained of allegiance:
+   **HOW A ZONE SHOWS PROGRESS — pixels, not a gradient.** A zone is taken
+   CELL BY CELL in proportion to the visits the camp plan schedules into it.
+   NAVEX is visited 13 times across camp, so after 2 of them 2/13 of NAVEX's
+   ground is painted in the 45° hatch — in the colours of the companies that
+   made those two visits — and the rest is open ground. Do NOT draw a colour
+   ramp, a gradient fill, or a smoothly-tinting bar: the progress bar on a card
+   should read as a run of discrete hatched blocks, the same texture as the
+   map, filling left to right. On the last scheduled visit the whole zone flips
+   to solid **1ATF blue `#1e9bff`**. Label the card `2/13`, not `15%`.
 
-       0%   #ff3b46      1/6  #e85d6c     1/4  #db697d     1/3  #cf728c
-       50%  #b381aa      2/3  #938cc7     3/4  #8191d5     5/6  #6b95e3
-       100% #1e9bff
-
-   Night locations take the SAME ramp at 82% lightness — one systematic
-   darkening, not a second palette:
-
-       0%   #d30020      50%  #8e5e85     100% #0074d5
-
-   ⚠️ Lightness is near-constant across the ramp, so it carries nothing in
-   greyscale. Never let colour be the only thing saying how far along a zone
-   is: the chips and the glyph must work on a mono print too.
+   Fill grows from the middle of a zone outward, so a part-taken area reads as
+   a patch spreading rather than a bar creeping in from an edge.
 
 **Telling activity areas from night locations** — colour is spoken for by
 progress, so kind uses three other channels, all of which survive greyscale
 and colour-blindness:
 
-  - **Activity area** — solid outline, ▲ before the name, full ramp lightness.
-  - **Night location** — dashed outline, ☾ before the name, 82% lightness.
-  - **Headquarters** — solid outline, ◆, and OFF the ramp entirely: it stays
-    amber `#f39c12`, because RHQ is not ground the unit has to take.
+  - **Activity area** — teal `#36e0c0`, solid outline, ▲ before the name.
+  - **Night location** — blue `#4ea8ff`, dashed outline, ☾ before the name.
+  - **Headquarters** — amber `#f39c12`, solid outline, ◆. RHQ is not ground the
+    unit has to take, so it never shows conquest fill at all.
+
+  These colours mark the OUTLINE and the name only. What is inside the outline
+  is the hatch, in the colour of whichever company took that ground — so kind
+  and ownership never compete for the same channel.
 
    The real activity areas are: AA Foxtrot, AA Golf, AA Hotel, AA India, AA Juliet, AA Kilo, AA Lima, AA Mike, AA NOVEMBER, AA Oscar, AA Papa, AA Pios, High Ropes, NAVEX, Quarry.
+   Visits scheduled per zone: NAVEX 13, AA Juliet 8, AA India 7, High Ropes 6,
+   AA Kilo 5, AA November / NL Hilltop / NL Mountain View / NL Outpost /
+   NL Romeo / S COY NL / AA Pios 4, AA Lima / AA Papa 3, AA Golf / NL Ropes /
+   AA Foxtrot / NL Oakley Lane / AA Hotel 2, AA Oscar / AA Mike / Quarry 1.
    The night locations are: NL Hilltop, NL Mountain View, NL Oakley Lane, NL Outpost, NL Romeo, NL Ropes, S COY NL.
    A poster does not need all of them on one sheet — the busiest are NAVEX
    (5 companies, 13 sessions) and High Ropes (all 6 companies), and those two
@@ -136,18 +137,19 @@ Every zone card shows COLLECTIVE progress: of the companies the plan sends to
 that zone, how many have actually been through.
 
 **The 1ATF rule — the point of the whole design.** A zone is NOT conquered
-until EVERY company scheduled there has been through it. Below 100% the zone
-belongs to whichever company got there FIRST, and the card carries that
-company's colour with the others' chips as empty outlines. At 100% the ground
-stops being any one company's: it becomes **1ATF's**, drawn in assure-blue
-`#1e9bff` and labelled `1ATF`, not with a company name. That flip — many
-colours resolving into one — is the visual argument of the series, so make it
-unmistakable: the card changes colour, the chips all fill, the label changes
-from a company to `1ATF`.
+until every scheduled VISIT to it has happened — not until every company has
+been once, because companies are booked back into the same areas repeatedly.
+Until then the ground is part-taken: each completed visit has painted its own
+share, in the colour of the company that made it, so a busy area is a patchwork
+of company colours. On the final visit the whole zone flips to **1ATF**
+assure-blue `#1e9bff` and is labelled `1ATF`, not with a company name. That
+flip — a patchwork of many colours resolving into one — is the visual argument
+of the series, so make it unmistakable.
 
-The worked example is **High Ropes**, which all six companies pass through:
-`17% → 50% → 83% → 100%` across the four days, and only on the last of those
-does it turn 1ATF blue.
+The worked example is **High Ropes**: six scheduled visits, so its ground fills
+a sixth at a time and it only turns 1ATF blue on the sixth. **NAVEX** is the
+extreme case at 13 visits — a large area that spends the whole camp visibly
+part-taken, which is exactly the point.
 
 ## Rules
 
@@ -171,17 +173,24 @@ as the placeholder content so a mock-up reads true rather than inventing data.
 
 | Sheet | Headline | Zones touched | Zones 1ATF-complete |
 |---|---|---|---|
-| CAMP START | 0% — 0 of 86 | 0 / 22 | 0 / 22 |
-| DAY 1 · SUN 20 SEP | 21% — 18 of 86 | 15 / 22 | 2 / 22 |
-| DAY 2 · MON 21 SEP | 49% — 42 of 86 | 19 / 22 | 4 / 22 |
-| DAY 3 · TUE 22 SEP | 71% — 61 of 86 | 20 / 22 | 12 / 22 |
-| DAY 4 · WED 23 SEP | 100% — 86 of 86 | 22 / 22 | 22 / 22 |
+| CAMP START | 0 of 86 visits | 0 / 22 | 0 / 22 |
+| DAY 1 · SUN 20 SEP | 18 of 86 (21%) | 15 / 22 | 0 / 22 |
+| DAY 2 · MON 21 SEP | 42 of 86 (49%) | 19 / 22 | 3 / 22 |
+| DAY 3 · TUE 22 SEP | 61 of 86 (71%) | 20 / 22 | 4 / 22 |
+| DAY 4 · WED 23 SEP | 86 of 86 (100%) | 22 / 22 | 22 / 22 |
 
-Note the shape of that last column — 2, 4, 12, 22. Almost nothing completes
-early and then it resolves in a rush. The set should feel like that: three
-sheets of many colours advancing, then a final sheet that is almost entirely
-1ATF blue. Design the Day 4 poster to land as the payoff, not as one more
-increment.
+Note the shape of that last column — 0, 3, 4, 22. Almost nothing FINISHES until
+the end, because most areas are revisited right through camp; what grows day by
+day is the painted fraction of each one. The set should feel like that: three
+sheets of many part-taken areas in company colours, then a final sheet that is
+almost entirely 1ATF blue. Design the Day 4 poster as the payoff, not as one
+more increment.
+
+**The map is SECTOR 8 only.** Sector 9 carries no camp activity, so the map
+image opens on Sector 8 and its eastern border is the sector line, drawn in the
+same yellow as the Commonwealth boundary. Keep the `◤ SECTOR 8 — AREA OF
+OPERATIONS` tag visible in the poster's map panel; ground beyond the border is
+visible but is not ours to take.
 
 Who goes where, for the cards that carry the story:
 

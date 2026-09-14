@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState, useCallback, useMemo } from 'react'
 import { beaconStateFor } from '../lib/territory'
-import { mapFor, mapAspect, gridRefOf } from '../lib/maps'
+import { mapFor, mapAspect, gridRefOf, focusView } from '../lib/maps'
 import { renderTerritoryLayer, imageFilterFor } from '../lib/terrainRender'
 import { companyLabelPoints } from '../lib/companyLabels'
 import Beacon from './Beacon'
@@ -79,6 +79,22 @@ export default function PixelMap({
   const [view, setView] = useState({ scale: 1, x: 0, y: 0 })
   const viewRef = useRef(view)
   viewRef.current = view
+  // A map may declare where it OPENS (`focus` in lib/maps.js — the Regional
+  // map opens on Sector 8, not the whole sheet). Applied once, after the
+  // container has a size to compute the pan against, and never in edit mode:
+  // RHQ paints the whole map and a forced starting view would just be in the
+  // way. `focused` makes it once-only so it can't fight the user's own panning
+  // on a later re-render.
+  const focused = useRef(false)
+  useEffect(() => {
+    if (focused.current || edit || !map?.focus) return
+    const el = containerRef.current
+    if (!el || !el.clientWidth) return
+    const v = focusView(map, el.clientWidth, el.clientHeight)
+    if (!v) return
+    focused.current = true
+    setView(v)
+  })
   const dragOrigin = useRef(null) // { pointerId, lastX, lastY } | { pointerId, painting: true }
   const dragging = useRef(null) // { place: id } | { label: code } being dragged
   const blockedOverlayUrl = useUnpaintableOverlayUrl(map, edit)
@@ -406,6 +422,18 @@ export default function PixelMap({
           })}
         </div>
 
+        {/* WHICH AREA THIS IS. The map opens on its focus box but the frame
+            is wider, so ground outside the area stays on screen — Sector 9,
+            Sector 7 and their markers are deliberately still there as
+            reference for what lies beyond the boundary. Without this the map
+            silently implies it is showing all of it. Stated, not assumed. */}
+        {map.focus?.label && (
+          <div className="mono" style={{
+            position: 'absolute', left: 8, top: 8, fontSize: 10, letterSpacing: 2,
+            color: '#ffd23c', background: 'rgba(8,12,20,0.62)', border: '1px solid rgba(255,210,60,0.5)',
+            padding: '2px 8px', borderRadius: 3, pointerEvents: 'none', fontWeight: 700,
+          }}>◤ {map.focus.label} — AREA OF OPERATIONS</div>
+        )}
         <ZoomControls scale={scale} onZoomIn={zoomIn} onZoomOut={zoomOut} />
         {map.tiles?.attribution && (
           <div className="mono" style={{

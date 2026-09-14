@@ -26,20 +26,25 @@ export const LAST_DAY = (mapId) => campDays(mapId).reduce((n, d) => Math.max(n, 
  * Per-zone progress as at the end of `throughDay`.
  *
  * Returns a Map of zoneId -> {
- *   scheduled  every company the plan sends there, ever
- *   visited    those who have been, as at throughDay
- *   pending    those still to come
- *   pct        visited / scheduled, 0..100, rounded
- *   done       pct === 100 — 1ATF has conquered it
+ *   visits     every scheduled visit, in plan order: [{ company, day, session }]
+ *   done       how many of them have happened as at throughDay
+ *   total      visits.length
+ *   pct        done / total, 0..100, rounded
+ *   complete   done === total — 1ATF has conquered it
+ *   companies  the distinct companies sent there, sorted (for labelling)
+ *   visited    the distinct companies that have been, sorted
  * }
  *
- * ⚠️ THERE IS ONE MAP AND IT IS THE UNIT'S. A zone is not conquered until
- * EVERY company the plan sends there has been through it: three companies are
- * booked onto the ropes course, so one company through reads 33%, and at 100%
- * the ground is 1ATF's rather than any one company's. A per-company cut of
- * this existed briefly and was removed — six versions of the same camp is six
- * things to keep straight, and it undercut the point that the task force takes
- * ground together.
+ * ⚠️ PROGRESS IS COUNTED IN VISITS, NOT COMPANIES. A company is often booked
+ * into the same area more than once — NAVEX takes 13 visits across camp, AA
+ * Juliet 8 — and a zone is not finished the first time its last company walks
+ * in. Counting distinct companies said the ropes course was a third done after
+ * one of three had been, which flattered the first day and stalled the last.
+ * Counting visits is simply what the plan schedules, so 2 of NAVEX's 13 done is
+ * 2/13 of the ground, and the zone only becomes 1ATF's on the final visit.
+ *
+ * ⚠️ ONE MAP AND IT IS THE UNIT'S — no per-company cut of this exists. See
+ * CHANGELOG 2026-09-14.
  */
 export function zoneProgress(mapId, throughDay) {
   const plan = planFor(mapId)
@@ -47,16 +52,18 @@ export function zoneProgress(mapId, throughDay) {
   if (!plan) return out
   for (const v of plan.visits) {
     let z = out.get(v.zone)
-    if (!z) out.set(v.zone, (z = { scheduled: new Set(), visited: new Set() }))
-    z.scheduled.add(v.company)
-    if (v.day <= throughDay) z.visited.add(v.company)
+    if (!z) out.set(v.zone, (z = { visits: [] }))
+    z.visits.push({ company: v.company, day: v.day, session: v.session })
   }
   for (const [, z] of out) {
-    z.scheduled = [...z.scheduled].sort()
-    z.visited = [...z.visited].sort()
-    z.pending = z.scheduled.filter((c) => !z.visited.includes(c))
-    z.pct = z.scheduled.length ? Math.round((z.visited.length / z.scheduled.length) * 100) : 0
-    z.done = z.pct === 100
+    // Plan order is schedule order (the converter walks the sheet in time), so
+    // the first `done` entries are exactly the visits that have happened.
+    z.total = z.visits.length
+    z.done = z.visits.filter((v) => v.day <= throughDay).length
+    z.pct = z.total ? Math.round((z.done / z.total) * 100) : 0
+    z.complete = z.total > 0 && z.done === z.total
+    z.companies = [...new Set(z.visits.map((v) => v.company))].sort()
+    z.visited = [...new Set(z.visits.filter((v) => v.day <= throughDay).map((v) => v.company))].sort()
   }
   return out
 }

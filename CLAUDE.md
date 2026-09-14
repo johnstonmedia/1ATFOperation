@@ -285,7 +285,21 @@ assuming a page exists).
     648×336, 216×112 grid, ocean `#3c82b4` unpaintable. The **primary** map
     (`PRIMARY_MAP_ID`), and the seeded default.
   - **`singleton`** — **1ATF Regional Progress Map** (Singleton Military Area,
-    Areas 8 & 9, AUSPEC0196), 216×153 grid. **A live satellite map**: it pulls NSW SIX Maps tiles at
+    **Sector 8**, AUSPEC0196), 216×153 grid. ⚠️ **It OPENS on Sector 8**, not
+    the whole sheet: `focus: { x0, y0, x1, y1, label }` on the map record,
+    applied once by PixelMap via `focusView()` in maps.js (never in edit mode —
+    RHQ paints the whole map). Every zone the camp plan touches lies west of
+    the sector line; Sector 9 is empty ground and framing both made the half
+    that matters small. It is a STARTING VIEW, not a crop — the imagery, the
+    traced boundaries and the Sector 7/9 markers all still cover the full
+    sheet, and a visitor can zoom out to them. Because the frame is wider than
+    the focus box, ground outside the area stays on screen, so the map states
+    which area it is: the `◤ SECTOR 8 — AREA OF OPERATIONS` tag in PixelMap.
+  - ⚠️ **The sector 8/9 line is YELLOW, not green** (2026-09-14). Once the map
+    became Sector 8's, that line stopped dividing two halves of one picture and
+    became the area's EASTERN BORDER — the same kind of thing the Commonwealth
+    boundary is on every other side, so it takes the same yellow and closes the
+    shape. Its narrower stroke still tells them apart up close. **A live satellite map**: it pulls NSW SIX Maps tiles at
     whatever zoom level the user is actually looking at, so zooming in reveals
     real detail instead of magnifying pixels.
   - **The frame is WEB MERCATOR** (`geo.merc`), and that is load-bearing. It
@@ -409,24 +423,31 @@ assuming a page exists).
       is no company toggle, no per-company mask and no `company` argument on
       `zoneProgress`/`overallProgress`. The boot-gate company still exists — it
       scopes INTEL, not the map.
-    - ⚠️ **A ZONE'S COLOUR IS ITS PROGRESS; the printed percentage is gone.**
-      `zoneColor(pct, kind)` in mapZones.js ramps Meridian red `#ff3b46` →
-      1ATF `#1e9bff` **interpolated in OKLab**, and the PATH is the point: a
-      constant-chroma OKLCH sweep stays vivid but runs red → magenta → violet
-      → blue, straight through Support `#c9528a` and Delta `#8e54c4`, so a
-      half-done zone would wear a company's colour. The straight OKLab lerp
-      instead dips to low chroma mid-ramp (0.230 → 0.083 → 0.179), which can't
-      be mistaken for any company accent and reads as "contested". Lightness
-      barely moves (0.657 → 0.676) so every step is equally legible over dark
-      imagery — but that also means **the ramp carries nothing in greyscale**,
-      which is why kind and completeness are ALSO carried by texture and text.
-    - **Kind is carried by three non-colour channels** (`ZONE_TEXTURE`), since
-      colour is spoken for: night locations are dashed and drawn at 82%
-      lightness of the same ramp (one systematic move, not a second palette);
-      activity areas are solid; and every name takes a glyph — ▲ activity,
-      ☾ night, ◆ headquarters — that survives greyscale and colour-blindness.
-      **Headquarters is off the ramp entirely**, keeping its amber: RHQ is not
-      ground the unit has to take.
+    - ⚠️ **PROGRESS IS COUNTED IN VISITS, NOT COMPANIES** (2026-09-14, second
+      pass). A company is often booked into the same area more than once —
+      NAVEX takes 13 visits across camp, AA Juliet 8 — so counting distinct
+      companies said a zone was a third done after one of three had been,
+      which flattered day one and stalled the last. `zoneProgress` returns
+      `{ visits, done, total, pct, complete, companies, visited }`; a zone is
+      finished on its LAST scheduled visit, not its last new company.
+    - ⚠️ **GROUND IS TAKEN IN PIXELS, NOT IN A GRADIENT** (this REPLACED an
+      OKLab red→blue colour ramp the same day; don't reinstate it). A zone
+      visited 2 of its 13 scheduled times has **2/13 of its CELLS painted**, in
+      the ordinary territory hatch — the map already has a language for held
+      ground, and a zone half taken should look half taken rather than a
+      different hue. Cells are allocated in CONQUEST ORDER
+      (`zoneCellsOrdered` in zoneRaster.js — sorted by distance out from the
+      zone's label point), so ground grows from the middle and is identical
+      every render instead of flickering between frames; `visitSlice()` gives
+      visit *i* a contiguous slice, and the slices tile the zone exactly so the
+      last visit always finishes it. Each completed visit paints in ITS OWN
+      company's colour, lowercase; on the last visit the whole zone flips to
+      solid `T` (1ATF).
+    - **The zone overlay therefore shows KIND, not progress** (`ZONE_TEXTURE`):
+      teal activity / blue night location / amber headquarters, solid outline
+      vs dashed for night locations, and a glyph on every name (▲ ☾ ◆) that
+      survives greyscale and colour-blindness. The only progress it prints is
+      the visit count (`2/13`), which is the same fact the painted cells show.
     - ⚠️ The converter **refuses to guess**: a cell that is not a recognisable
       company is reported by name and skipped, never silently dropped, and the
       run always prints what it ignored. The sheet legitimately contains

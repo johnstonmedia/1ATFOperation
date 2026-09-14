@@ -5,22 +5,28 @@
 // because the plan is settled in advance (see campPlan.js); it is generation,
 // not recording.
 //
-// WHO OWNS A ZONE, IN TWO STAGES.
+// GROUND IS TAKEN A VISIT AT A TIME, IN PIXELS.
 //
-//   PARTLY THROUGH  The FIRST company scheduled into a zone takes it and holds
-//                   it while the rest are still to come — painted LOWERCASE,
-//                   the grid's existing "newly gained / loosely held" variant.
-//                   Later companies pass through without the ground changing
-//                   hands, because a map that churns between friendly
-//                   companies reads as confusion rather than progress.
+// A zone is not an on/off thing and it is not a gradient either: it is taken
+// CELL BY CELL, in proportion to the visits the plan schedules into it. NAVEX
+// is visited 13 times across camp, so after 2 of those visits 2/13 of NAVEX's
+// cells are painted — in the colour of the company that made each of those
+// visits — and the rest is still open ground. That is the percentage made out
+// of the same pixels the rest of the map is made of, which is why it replaced
+// a colour ramp: the map already has a language for "held", and a zone half
+// taken should look half taken rather than a different hue.
 //
-//   CONQUERED       Once EVERY company the plan sends there has been through,
-//                   the zone is not that first company's any more — it is the
-//                   task force's. It goes solid 1ATF (TASKFORCE_CODE). That is
-//                   the point of the percentage: the ropes course cannot be
-//                   conquered until all three companies booked onto it have
-//                   been, and when it is, it belongs to 1ATF rather than to
-//                   whoever happened to go first.
+// Cells are allocated in CONQUEST ORDER (zoneCellsOrdered — outward from the
+// zone's label), so ground grows from the middle instead of flickering about
+// between frames, and visit i owns a contiguous slice of that order.
+//
+//   PART TAKEN   each completed visit's slice is painted in that visit's
+//                company, LOWERCASE — the grid's existing "newly gained /
+//                loosely held" variant. A company booked in twice paints twice.
+//
+//   CONQUERED    on the LAST scheduled visit the whole zone flips to solid
+//                1ATF (TASKFORCE_CODE). Not the first company in, and not
+//                the last: finished ground belongs to the task force.
 //
 // There is ONE map, and it is the unit's. A per-company cut of the board
 // existed briefly and was removed: six versions of the same camp is six things
@@ -29,7 +35,7 @@
 // training area together.
 import { zonesFor } from './mapZones'
 import { campDays, planFor, zoneProgress } from './campPlan'
-import { zoneCells } from './zoneRaster'
+import { zoneCellsOrdered, visitSlice } from './zoneRaster'
 import { TASKFORCE_CODE } from './territory'
 
 // RHQ is the one thing already on the board at the start, so the base keeps
@@ -57,26 +63,30 @@ export function buildCampFrames(mapId, territory) {
   const days = campDays(mapId)
   const base = baseCells(territory)
 
-  // The first company into each zone owns it. `plan.visits` is already in
-  // session order, so the first entry per zone is the first arrival.
-  const owner = new Map()
-  for (const v of plan.visits) if (!owner.has(v.zone)) owner.set(v.zone, v.company)
-
   return [0, ...days.map((d) => d.n)].map((day, i) => {
     const cells = base.split('')
     const progress = zoneProgress(mapId, day)
     for (const [zoneId, p] of progress) {
-      if (!p.visited.length) continue
+      if (!p.done) continue
       const zone = zones.get(zoneId)
       if (!zone) continue
-      // Conquered ground is 1ATF's; ground still being worked through belongs
-      // to whoever got there first, lightly held until the rest have been.
-      const code = owner.get(zoneId) || 'A'
-      const mark = p.done ? TASKFORCE_CODE : code.toLowerCase()
-      for (const idx of zoneCells(zone, cols, rows)) {
-        // RHQ ground is never overpainted — it is the one fixed thing on the
-        // board, and S COY NL sits right on top of it.
+      const ordered = zoneCellsOrdered(zone, cols, rows)
+      // RHQ ground is never overpainted — it is the one fixed thing on the
+      // board, and S COY NL sits right on top of it.
+      const paint = (idx, mark) => {
         if (cells[idx] !== 'R' && cells[idx] !== 'r') cells[idx] = mark
+      }
+      if (p.complete) {
+        // The last scheduled visit finishes it, and finished ground is 1ATF's.
+        for (const idx of ordered) paint(idx, TASKFORCE_CODE)
+        continue
+      }
+      // Otherwise each completed visit holds its own slice of the zone, in its
+      // own company's colour, lightly held.
+      for (let v = 0; v < p.done; v++) {
+        const [from, to] = visitSlice(ordered.length, v, p.total)
+        const mark = (p.visits[v].company || 'A').toLowerCase()
+        for (let k = from; k < to; k++) paint(ordered[k], mark)
       }
     }
     return { order: i, day, label: campFrameLabel(day, days), cells: cells.join('') }

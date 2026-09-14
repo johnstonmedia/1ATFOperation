@@ -24,11 +24,19 @@ const LINES = { singleton: singleton.lines }
 // Draw order is casing-then-core: every line gets a dark casing underneath so
 // it stays readable over both sunlit paddock and black shadowed timber, which
 // a single stroke on real imagery does not.
+// ⚠️ The sector line is YELLOW, not green, and that is not a palette tweak.
+// The map is Sector 8's; Sector 9 carries no camp activity and is off the
+// default view. So this line stopped being an internal division between two
+// halves of one picture and became the EASTERN BORDER of the area shown —
+// which is the same thing the Commonwealth boundary is on every other side.
+// A border drawn in a second colour reads as a different kind of thing, so it
+// takes the boundary's yellow and closes the shape. Its narrower width is what
+// still distinguishes it up close.
 export const LINE_STYLE = {
   defence: { color: '#ffd23c', casing: '#12100422', width: 2.0, casingWidth: 4.6,
-             label: 'Commonwealth land boundary (Areas 8 & 9)' },
-  sector:  { color: '#46e878', casing: '#05140a22', width: 1.6, casingWidth: 3.8,
-             label: 'Sector boundary — 8 west, 9 east' },
+             label: 'Area boundary — Commonwealth land' },
+  sector:  { color: '#ffd23c', casing: '#12100422', width: 1.6, casingWidth: 3.8,
+             label: 'Area boundary — Sector 8 / 9 line (east edge)' },
 }
 
 // Which style each traced line uses. The Defence boundary is two polylines

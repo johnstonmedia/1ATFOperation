@@ -22,20 +22,18 @@ const COMPANY_COLOR = COMPANIES.reduce((a, c) => ({ ...a, [c.letter]: c.accent }
 // room for it. RHQ can also hide them outright from Map: Territory.
 const DETAIL_LABEL_ZOOM = 2.5
 
-// `progress` (optional) is the Map from lib/campPlan.js zoneProgress(). When
-// present, THE ZONE'S COLOUR IS ITS PROGRESS: Meridian red when nobody has
-// been, 1ATF blue once every scheduled company has, on an OKLab ramp between
-// (see zoneColor in lib/mapZones.js). That replaced a printed percentage — a
-// colour is read from across a room and a two-digit number is not.
+// ⚠️ THIS LAYER DOES NOT SHOW PROGRESS, and deliberately so. How much of a
+// zone has been taken is drawn in the TERRITORY HATCH above it, cell by cell:
+// a zone visited 2 of its 13 scheduled times has 2/13 of its ground painted
+// (see lib/campFrames.js). A colour ramp did this job for part of a day and
+// was replaced — the map already has a language for held ground, and a zone
+// half taken should look half taken.
 //
-// Colour is therefore spoken for, so KIND is carried by the other channels:
-// night locations are dashed and 18% darker, activity areas solid, and each
-// name takes a glyph (▲ activity, ☾ night, ◆ headquarters) that survives
-// greyscale and colour-blindness. Headquarters stays amber and off the ramp —
-// RHQ is not ground the unit has to take.
-//
-// Without `progress` a zone is a plain outline in its resting kind colour,
-// which is what any map with no camp plan gets.
+// So this layer says only WHAT KIND OF PLACE each zone is, on three channels:
+// teal activity / blue night location / amber headquarters, solid outline vs
+// dashed for night, and a glyph on the name (▲ ☾ ◆) that survives greyscale
+// and colour-blindness. `progress`, when given, adds only the visit count
+// beneath the name and thickens a completed zone's outline.
 export default function MapZones({ map, zones, zoom = 1, progress = null }) {
   if (!map || !zones?.length) return null
   const fontSize = 2.4 / Math.max(zoom, 1)
@@ -50,10 +48,11 @@ export default function MapZones({ map, zones, zoom = 1, progress = null }) {
         const base = ZONE_STYLE[z.kind] || ZONE_STYLE.activity
         const tex = ZONE_TEXTURE[z.kind] || ZONE_TEXTURE.activity
         const p = progress?.get(z.id)
-        const ink = zoneInk(z, progress)
+        const ink = zoneInk(z)
         // The wash deepens as well as shifting hue, so progress is legible
         // even where two zones sit at similar points on the ramp.
-        const fill = p ? base.fill + (p.pct / 100) * 0.34 : base.fill
+        // A faint wash only; the hatch above is what says how much is held.
+        const fill = base.fill
         return (
           <polygon
             key={z.id}
@@ -61,7 +60,7 @@ export default function MapZones({ map, zones, zoom = 1, progress = null }) {
             fill={ink}
             fillOpacity={fill}
             stroke={ink}
-            strokeWidth={p?.done ? 2.4 : tex.width}
+            strokeWidth={p?.complete ? 2.4 : tex.width}
             strokeDasharray={tex.dash ? tex.dash.join(' ') : undefined}
             strokeLinejoin="round"
             vectorEffect="non-scaling-stroke"
@@ -70,7 +69,7 @@ export default function MapZones({ map, zones, zoom = 1, progress = null }) {
       })}
       {zones.map((z) => {
         const tex = ZONE_TEXTURE[z.kind] || ZONE_TEXTURE.activity
-        const ink = zoneInk(z, progress)
+        const ink = zoneInk(z)
         const tiny = !z.cells?.length
         return (
           <g key={`t-${z.id}`}>
@@ -92,11 +91,10 @@ export default function MapZones({ map, zones, zoom = 1, progress = null }) {
               {tex.glyph} {z.name.toUpperCase()}
             </text>
             )}
-            {/* Second line: WHO, not how much — the colour carries how much.
-                A letter per company that has been, in that company's own
-                colour. At 100% the zone has stopped being any one company's:
-                every company booked onto it has been through, so it reads
-                1ATF, and the outline has reached full assure-blue. */}
+            {/* Second line: visits done of visits scheduled — the same count
+                the painted cells show, for anyone close enough to read it.
+                NAVEX is 13 visits, so "2/13" and 2/13 of its ground painted
+                are one fact stated twice. 1ATF once the last visit lands. */}
             {progress?.get(z.id) && (!tiny || zoom >= DETAIL_LABEL_ZOOM) && (
               <text
                 x={z.label[0]}
@@ -108,11 +106,13 @@ export default function MapZones({ map, zones, zoom = 1, progress = null }) {
                 paintOrder="stroke"
                 style={{ fontFamily: 'JetBrains Mono, monospace', fontWeight: 700 }}
               >
-                {progress.get(z.id).done ? (
+                {progress.get(z.id).complete ? (
                   <tspan fill={ASSURE_BLUE}>{SCU_LABEL}</tspan>
-                ) : progress.get(z.id).visited.map((c, i) => (
-                  <tspan key={c} fill={COMPANY_COLOR[c] || '#d7e2f4'} dx={i ? fontSize * 0.3 : 0}>{c}</tspan>
-                ))}
+                ) : (
+                  <tspan fill="#d7e2f4">
+                    {progress.get(z.id).done}/{progress.get(z.id).total}
+                  </tspan>
+                )}
               </text>
             )}
           </g>
