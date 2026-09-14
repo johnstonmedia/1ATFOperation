@@ -88,6 +88,21 @@ keep entries short and focused on what a new collaborator needs to know.
   in its own company's colour made a busy area a patchwork that read as six
   companies competing for the same ground. Companies still do the conquering;
   the plan says who is where and every visit count comes from it.
+- ⚠️ **Zooming no longer flashes the low-quality map.** `TileBase` kept only
+  the current zoom level mounted, so every zoom step unmounted the imagery you
+  were looking at and exposed the 10 m Sentinel floor until the deeper level
+  arrived — which reads as glitching, not loading. It now tracks which tile
+  URLs have decoded and holds the previous level underneath the incoming one
+  until 92% of the new level has arrived. Verified with a stand-in tile server
+  delayed 1.5 s: mid-zoom the old level stays visible (70 tiles at z15) while
+  the new one is mounted but hidden (88 at z16), then the old one is dropped.
+- ⚠️ **The PDF prints from real imagery, not the floor.** The tile budget picks
+  the zoom level, so fetching the whole frame when the page only prints the
+  focus box cost two levels of detail where it mattered. Print tiles are now
+  fetched for the cropped region only, the zoom climbs while the budget allows,
+  and the map panel renders at 2× and draws down: z15-whole-frame before,
+  z16-over-the-region after — 132 tiles, ~2.0 m/px, twice the linear resolution
+  for fewer requests.
 - **PDF export of the whole campaign** (`framesPdf.js`): one A4-landscape page
   per frame at 150 dpi, map left, key right, progress block under it, each page
   cropped to the map's focus box. No PDF dependency — a page is one full-page

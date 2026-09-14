@@ -28,6 +28,11 @@ const PAGE_W = 1754
 const PAGE_H = 1240
 const MARGIN = 54
 const JPEG_QUALITY = 0.93
+// The map panel is rendered at this multiple of its printed size and drawn
+// down. 150 dpi is fine for text, but satellite imagery on paper wants the
+// extra sampling: at 2x the crop comes off a deeper tile level and lands on
+// the page already resolved, rather than being upscaled into it.
+const SUPERSAMPLE = 2
 
 const INK = '#d7e2f4'
 const DIM = '#8294b5'
@@ -268,9 +273,17 @@ export async function exportFramesPdf({ territory, frames: campaignFrames, zones
   // Render the whole map once at the resolution the crop needs, then take the
   // focus rectangle out of it — the renderers all work in full-grid
   // coordinates, so cropping at the end keeps every one of them unchanged.
-  const fullW = Math.round((drawW * cols) / cropW)
-  const fullH = Math.round((drawH * rows) / cropH)
-  const base = await renderPrintBase(map, fullW, fullH)
+  const fullW = Math.round((drawW * SUPERSAMPLE * cols) / cropW)
+  const fullH = Math.round((drawH * SUPERSAMPLE * rows) / cropH)
+  // ⚠️ Tiles are fetched for the FOCUS REGION ONLY. The page crops to that box,
+  // so tiles covering the rest of the frame would be downloaded and then thrown
+  // away — and, because the tile budget is what picks the zoom level, paying
+  // for them costs two levels of detail in the part that actually prints. The
+  // static art still covers the whole frame underneath, so nothing is missing
+  // if a visitor ever zooms out of a page. This is the difference between the
+  // print showing the 10 m Sentinel floor and showing real imagery.
+  const region = { x0: f.x0 / cols, x1: f.x1 / cols, y0: f.y0 / rows, y1: f.y1 / rows }
+  const base = await renderPrintBase(map, fullW, fullH, { region })
 
   const jpegs = []
   for (let i = 0; i < frames.length; i++) {

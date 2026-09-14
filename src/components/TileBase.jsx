@@ -21,6 +21,15 @@ import { tileZoomFor, tilesFor } from '../lib/maps'
 // That is the floor: it shows before tiles arrive, and it is all that shows if
 // they never do — no signal on camp, or the service moved. A dead tile URL
 // degrades to the old static map, never to a blank one.
+//
+// ⚠️ THE FLOOR MUST NOT BE VISIBLE MID-ZOOM. Each zoom step asks for a deeper
+// tile level, and the naive version unmounts the level you were looking at the
+// moment the new one is requested — so every press of + flashed the 10 m
+// Sentinel still and then snapped back to real imagery, which reads as the map
+// glitching rather than loading. So the PREVIOUS level is kept mounted
+// underneath the new one until the new one has actually arrived (see
+// `settled`). A slippy map's oldest trick, and the reason this file tracks
+// which tile URLs have loaded rather than just rendering the current set.
 
 // Enough to cover a 4:3 viewport at any zoom with margin; a guard against a
 // bad region calculation asking the browser for thousands of images.
@@ -30,10 +39,24 @@ const MAX_TILES = 192
 // host that isn't answering.
 const FAIL_LIMIT = 8
 
+// How much of a level has to be on screen before the level under it is
+// dropped. Not 100%: one stalled edge tile shouldn't hold two layers up
+// indefinitely, and the layer underneath is the same ground at half the
+// resolution — far better than the static floor, and invisible behind 92%.
+const SETTLED = 0.92
+
 export default function TileBase({ map, view, containerRef }) {
   const [box, setBox] = useState({ w: 0, h: 0 })
   const failed = useRef(new Set())
   const health = useRef({ ok: 0, bad: 0 })
+  // Every tile URL that has decoded at least once. A URL names (z, x, y)
+  // uniquely, so this doubles as "have I already got this tile" across levels
+  // and survives a pan back and forth without re-deciding.
+  const loaded = useRef(new Set())
+  const [, bump] = useState(0)
+  // The deepest level that was fully on screen; kept mounted underneath a
+  // newer level until that one settles.
+  const under = useRef(null)
 
   useEffect(() => {
     const el = containerRef.current
@@ -47,8 +70,8 @@ export default function TileBase({ map, view, containerRef }) {
 
   const tiles = useMemo(() => {
     const { w, h } = box
-    if (!map?.tiles || !w || !h) return []
-    if (health.current.bad >= FAIL_LIMIT && health.current.ok === 0) return []
+    if (!map?.tiles || !w || !h) return {}
+    if (health.current.bad >= FAIL_LIMIT && health.current.ok === 0) return {}
 
     // Visible sub-rectangle of the frame, as 0..1 fractions. The stage is
     // `scale(s) translate(tx,ty)` about its centre and fills the container, so
@@ -72,46 +95,77 @@ export default function TileBase({ map, view, containerRef }) {
       z -= 1
       out = tilesFor(map, z, region)
     }
-    return out.length > MAX_TILES ? [] : out.filter((t) => !failed.current.has(t.url))
+    if (out.length > MAX_TILES) return {}
+    return { z, list: out.filter((t) => !failed.current.has(t.url)) }
   }, [map, box, view.scale, view.x, view.y])
 
-  if (!tiles.length) return null
+  const list = tiles.list || []
+  const z = tiles.z
+
+  // Has the current level arrived? Measured against what we asked for, not
+  // against what has rendered, so a level that is mostly cached counts as
+  // settled on its first paint and never shows the layer beneath at all.
+  const have = list.reduce((n, t) => n + (loaded.current.has(t.url) ? 1 : 0), 0)
+  const settled = list.length > 0 && have / list.length >= SETTLED
+
+  // Promote on settle; keep whatever was underneath until then. Only a level
+  // at a DIFFERENT zoom is worth keeping — panning within one level already
+  // reuses its own tiles.
+  if (settled && (!under.current || under.current.z !== z)) under.current = { z, list }
+  const beneath = !settled && under.current && under.current.z !== z ? under.current.list : null
+
+  if (!list.length && !beneath) return null
+
+  const tileImg = (t, dim) => (
+    <img
+      key={`${dim ? 'u' : 'c'}-${t.key}`}
+      src={t.url}
+      alt=""
+      draggable={false}
+      onLoad={(e) => {
+        health.current.ok += 1
+        health.current.bad = 0
+        e.currentTarget.style.visibility = 'visible'
+        if (!loaded.current.has(t.url)) {
+          loaded.current.add(t.url)
+          // Re-render so `settled` can be recomputed and the layer beneath
+          // dropped once this level is up.
+          bump((n) => n + 1)
+        }
+      }}
+      onError={(e) => {
+        // Hide it right here rather than re-rendering: a browser paints a
+        // broken <img> with a visible placeholder box, and with the whole
+        // grid unreachable that is a screenful of torn-image icons over
+        // the fallback map. Remembering the URL keeps it out of the next
+        // batch too.
+        e.currentTarget.style.display = 'none'
+        failed.current.add(t.url)
+        health.current.bad += 1
+      }}
+      style={{
+        position: 'absolute',
+        left: `${t.left}%`,
+        top: `${t.top}%`,
+        width: `${t.width}%`,
+        height: `${t.height}%`,
+        userSelect: 'none',
+        // Shown only once it has actually decoded, so a slow tile never
+        // flashes a placeholder over the fallback imagery underneath.
+        visibility: loaded.current.has(t.url) ? 'visible' : 'hidden',
+      }}
+    />
+  )
+
   return (
     <div aria-hidden="true" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
-      {tiles.map((t) => (
-        <img
-          key={t.key}
-          src={t.url}
-          alt=""
-          draggable={false}
-          onLoad={(e) => {
-            health.current.ok += 1
-            health.current.bad = 0
-            e.currentTarget.style.visibility = 'visible'
-          }}
-          onError={(e) => {
-            // Hide it right here rather than re-rendering: a browser paints a
-            // broken <img> with a visible placeholder box, and with the whole
-            // grid unreachable that is a screenful of torn-image icons over
-            // the fallback map. Remembering the URL keeps it out of the next
-            // batch too.
-            e.currentTarget.style.display = 'none'
-            failed.current.add(t.url)
-            health.current.bad += 1
-          }}
-          style={{
-            position: 'absolute',
-            left: `${t.left}%`,
-            top: `${t.top}%`,
-            width: `${t.width}%`,
-            height: `${t.height}%`,
-            userSelect: 'none',
-            // Shown only once it has actually decoded, so a slow tile never
-            // flashes a placeholder over the fallback imagery underneath.
-            visibility: 'hidden',
-          }}
-        />
-      ))}
+      {/* The level you were just looking at, held under the incoming one so a
+          zoom step never exposes the static floor. Dropped the moment the new
+          level settles. */}
+      {beneath && (
+        <div style={{ position: 'absolute', inset: 0 }}>{beneath.map((t) => tileImg(t, true))}</div>
+      )}
+      <div style={{ position: 'absolute', inset: 0 }}>{list.map((t) => tileImg(t, false))}</div>
     </div>
   )
 }

@@ -77,9 +77,12 @@ function loadImage(src) {
 // export). Whatever doesn't load just isn't drawn, and the static art
 // underneath shows through — the same degradation the live map has.
 
-// Ceiling on how many tiles one export may fetch. Deeper zoom is finer
-// imagery but four times the requests; this lands around z16 on the Regional
-// frame (~2.5 m/px against the static image's ~12 m/px).
+// Ceiling on how many tiles one export may fetch. Deeper zoom is finer imagery
+// but FOUR TIMES the requests per level, so the budget is what picks the zoom.
+// Spending it on a REGION rather than the whole frame is the whole trick for
+// print: the PDF crops to the map's focus box (about a third of the frame's
+// area), so fetching the other two thirds buys nothing and costs two zoom
+// levels of detail in the part that actually gets printed.
 const MAX_EXPORT_TILES = 400
 const TILE_CONCURRENCY = 8
 
@@ -98,13 +101,34 @@ function loadTile(url) {
 
 // Returns a W x H canvas of tile imagery, or null when the map has no tile
 // source or not one tile could be fetched.
-async function renderTileLayer(map, W, H) {
+//
+// `region` (0..1 fractions of the frame) limits WHICH tiles are fetched, not
+// where they land — positions stay frame-relative, so the caller still gets a
+// full-frame canvas with only that part covered. The rest keeps the static art
+// underneath, which is exactly right when the caller is about to crop to the
+// region anyway.
+//
+// With the budget spent on a region, the zoom search is allowed to climb ABOVE
+// what the canvas width alone asks for: a crop drawn from a deeper level is
+// sharper than the same crop upscaled from a shallower one, and the budget
+// stops it running away.
+async function renderTileLayer(map, W, H, region = null) {
   if (!map?.tiles) return null
+  const maxZ = map.tiles.maxZoom ?? 19
+  const minZ = map.tiles.minZoom ?? 0
   let z = tileZoomFor(map, W)
-  let tiles = tilesFor(map, z)
-  while (tiles.length > MAX_EXPORT_TILES && z > (map.tiles.minZoom ?? 0)) {
+  let tiles = tilesFor(map, z, region || undefined)
+  // Climb while the budget allows (region renders usually can).
+  while (z < maxZ) {
+    const deeper = tilesFor(map, z + 1, region || undefined)
+    if (deeper.length > MAX_EXPORT_TILES) break
+    z += 1
+    tiles = deeper
+  }
+  // ...and fall back if even the starting level was too many.
+  while (tiles.length > MAX_EXPORT_TILES && z > minZ) {
     z -= 1
-    tiles = tilesFor(map, z)
+    tiles = tilesFor(map, z, region || undefined)
   }
   if (!tiles.length || tiles.length > MAX_EXPORT_TILES) return null
 
@@ -133,9 +157,9 @@ async function renderTileLayer(map, W, H) {
  * through exactly the renderer the video and the still use, so a printed page
  * can't drift from what the screen draws.
  */
-export async function renderPrintBase(map, W, H) {
+export async function renderPrintBase(map, W, H, { region = null } = {}) {
   const img = await loadImage(map.image)
-  return renderBaseMap(img, map, W, H)
+  return renderBaseMap(img, map, W, H, region)
 }
 
 /* --------------------------- shared draw helpers -------------------------- */
@@ -150,7 +174,7 @@ export async function renderPrintBase(map, W, H) {
 // through a different internal raster path that re-enables smoothing
 // regardless of imageSmoothingEnabled — that was the source of the blurry
 // map art in exported video and images.
-async function renderBaseMap(img, map, W, H) {
+async function renderBaseMap(img, map, W, H, region = null) {
   const base = document.createElement('canvas')
   base.width = W; base.height = H
   const bctx = base.getContext('2d')
@@ -158,7 +182,7 @@ async function renderBaseMap(img, map, W, H) {
   bctx.fillStyle = '#0a0f1a'
   bctx.fillRect(0, 0, W, H)
 
-  const tiles = await renderTileLayer(map, W, H)
+  const tiles = await renderTileLayer(map, W, H, region)
   if (tiles) {
     // Tile maps composite art + tiles at EXPORT resolution first and filter
     // that in one pass. The rule the comment above protects still holds: the

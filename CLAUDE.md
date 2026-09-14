@@ -346,6 +346,17 @@ assuming a page exists).
     fallback). **The SIX Maps endpoint has never been reached from a dev
     sandbox** — egress blocks it — so it is verified only by construction plus
     a local tile pyramid; if imagery never appears live, suspect the URL first.
+  - ⚠️ **The floor must never show MID-ZOOM.** Each zoom step asks for a deeper
+    tile level, and unmounting the level you were looking at the moment the new
+    one is requested flashed the 10 m static still and snapped back — which
+    reads as the map glitching, not loading. `TileBase` therefore tracks which
+    tile URLs have decoded (`loaded`) and keeps the PREVIOUS level mounted
+    underneath the incoming one until that one is `SETTLED` (92% arrived, not
+    100% — one stalled edge tile must not hold two layers up, and the layer
+    beneath is the same ground at half the resolution). Verified against a
+    stand-in tile server with a 1.5 s delay: mid-zoom the old level is still
+    visible while the new one is mounted-but-hidden, and the old one is dropped
+    only once the new one lands.
   - **Boundaries are VECTORS, not baked into the art**
     ([mapLines.js](src/lib/mapLines.js) + [MapLines.jsx](src/components/MapLines.jsx)):
     the Commonwealth land boundary (yellow) and the Sector 8/9 boundary
@@ -772,6 +783,17 @@ assuming a page exists).
   progress block totalled off the same per-zone counts the map is drawn from so
   the headline can't disagree with the ground. Each page is cropped to the
   map's `focus` box, so print shows what the screen shows.
+  - ⚠️ **Print tiles are fetched for the CROPPED REGION ONLY**, and that is
+    what makes the print sharp. The tile budget (`MAX_EXPORT_TILES`, 400) is
+    what picks the zoom level, so spending it on the whole frame when the page
+    only prints the focus box — about a third of the frame's area — cost two
+    levels of detail in the part that actually prints. `renderTileLayer` now
+    takes a `region` (0..1 frame fractions) and climbs zoom while the budget
+    allows. Measured against a stand-in tile server: z15 over the whole frame
+    before, **z16 over the region after — 132 tiles, ~2.0 m/px** in the printed
+    area, i.e. twice the linear resolution for fewer requests. The map panel is
+    also rendered at `SUPERSAMPLE` (2×) and drawn down, so the crop lands on the
+    page already resolved instead of being upscaled into it.
   - **No PDF dependency, deliberately.** A PDF whose every page is one
     full-page JPEG is small and well specified — catalog → pages → per page a
     content stream drawing one `DCTDecode` image XObject (the canvas's JPEG
