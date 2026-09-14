@@ -440,9 +440,15 @@ assuming a page exists).
       zone's label point), so ground grows from the middle and is identical
       every render instead of flickering between frames; `visitSlice()` gives
       visit *i* a contiguous slice, and the slices tile the zone exactly so the
-      last visit always finishes it. Each completed visit paints in ITS OWN
-      company's colour, lowercase; on the last visit the whole zone flips to
-      solid `T` (1ATF).
+      last visit always finishes it. ⚠️ **No company ever OWNS an activity
+      area**: the taken share is painted light `t` (1ATF, "newly gained") and
+      the whole zone flips to solid `T` on the final visit. Painting each visit
+      in its own company's colour (which this did briefly) made a busy area a
+      patchwork that read as six companies competing for the same ground.
+      Companies still do the conquering — the plan says who is where and the
+      visit counts come from it — but an area is a PERCENTAGE TAKEOVER by the
+      task force, not a prize one company holds. RHQ can still hand-paint
+      company ground anywhere else on the map.
     - **The zone overlay therefore shows KIND, not progress** (`ZONE_TEXTURE`):
       teal activity / blue night location / amber headquarters, solid outline
       vs dashed for night locations, and a glyph on every name (▲ ☾ ◆) that
@@ -760,6 +766,22 @@ assuming a page exists).
   collection, not a `content/*` slice — public read, RHQ write, same shape as
   the others); `campaignDefaultStart` is a normal `SINGLE_SLICES` entry so
   it's already covered by the generic `content/*` rule.
+- **PDF export** ([src/lib/framesPdf.js](src/lib/framesPdf.js), the
+  `🖨 Export N Frames as PDF` button in Map: Territory → Campaign replay): one
+  A4-landscape page per frame at 150 dpi, map left and a key right, plus a
+  progress block totalled off the same per-zone counts the map is drawn from so
+  the headline can't disagree with the ground. Each page is cropped to the
+  map's `focus` box, so print shows what the screen shows.
+  - **No PDF dependency, deliberately.** A PDF whose every page is one
+    full-page JPEG is small and well specified — catalog → pages → per page a
+    content stream drawing one `DCTDecode` image XObject (the canvas's JPEG
+    bytes verbatim). That is ~80 lines against ~300 KB of library, and it
+    renders through `renderPrintBase()` — the same base renderer the video and
+    the weekly still use — so a printed page cannot drift from the screen. The
+    trade is that page text is part of the image rather than selectable, which
+    is why everything is drawn at print resolution.
+  - Canvas has no letter-spacing in every browser this must run in, so the
+    portal's wide heading tracking is drawn glyph by glyph (`textLine`).
 - Changing grid resolution means updating `TERR_COLS`/`TERR_ROWS` **and** the
   seed's `territory.cells` string together (length must equal `cols * rows`).
 - Always reference `MAP_IMAGE` via `import.meta.env.BASE_URL` (as

@@ -17,6 +17,7 @@ import { hasCampPlan, campDays } from '../../lib/campPlan'
 import { buildCampFrames } from '../../lib/campFrames'
 import { sortFrames, framesValid, renumberFrames } from '../../lib/campaign'
 import { exportCampaignReplay, exportProgressImage, exportSupported, downloadBlob, defaultProgressTitle } from '../../lib/replayExport'
+import { exportFramesPdf, framesPdfSupported } from '../../lib/framesPdf'
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000
 
@@ -531,6 +532,8 @@ function CampaignPanel({
 
   const [imgBusy, setImgBusy] = useState(false)
   const [imgErr, setImgErr] = useState('')
+  const [pdfBusy, setPdfBusy] = useState(false)
+  const [pdfErr, setPdfErr] = useState('')
   // Headline printed across the top of the weekly image. Seeded with the
   // generated "PROGRESS UPDATE — 28 Jul TO 4 Aug" wording and editable, so a
   // week's image can be titled for what actually happened. Blank falls back to
@@ -726,6 +729,26 @@ function CampaignPanel({
     }
   }
 
+  // Every frame, one page each, with the key printed on all of them — the
+  // wall-board version of the replay. Pages are rendered at print resolution
+  // through the same canvas renderers the video uses (see lib/framesPdf.js).
+  const doExportPdf = async () => {
+    setPdfErr('')
+    setPdfBusy(true)
+    try {
+      const { blob, pages } = await exportFramesPdf({
+        territory, frames: sorted, zones, progressFor: (i) => progressAt(sorted[i]),
+      })
+      downloadBlob(blob, `campaign-frames-${new Date().toISOString().slice(0, 10)}.pdf`)
+      audit('Exported campaign frames as PDF', `${pages} pages`)
+      toast.push(`${pages}-page PDF downloaded.`)
+    } catch (e) {
+      setPdfErr(e?.message || 'PDF export failed.')
+    } finally {
+      setPdfBusy(false)
+    }
+  }
+
   const doExport = async () => {
     setExportErr('')
     setExporting(true)
@@ -811,6 +834,16 @@ function CampaignPanel({
             {imgBusy ? 'Rendering…' : '🖼 Export Weekly Update Image'}
           </button>
         )}
+        {active && (
+          <button
+            className="ghost"
+            onClick={doExportPdf}
+            disabled={count === 0 || pdfBusy || !framesPdfSupported()}
+            title={count === 0 ? 'No frames recorded yet' : 'Print every frame to a PDF, one page each, with a key'}
+          >
+            {pdfBusy ? 'Rendering…' : `🖨 Export ${count} Frame${count === 1 ? '' : 's'} as PDF`}
+          </button>
+        )}
         {active && !exporting && (
           <button
             className="ghost"
@@ -876,6 +909,7 @@ function CampaignPanel({
         </div>
       )}
       {exportErr && <div className="mono" style={{ fontSize: 11, color: 'var(--hostile)' }}>{exportErr}</div>}
+      {pdfErr && <div className="mono" style={{ fontSize: 11, color: 'var(--hostile)' }}>{pdfErr}</div>}
     </div>
   )
 }

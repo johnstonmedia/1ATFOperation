@@ -20,13 +20,21 @@
 // zone's label), so ground grows from the middle instead of flickering about
 // between frames, and visit i owns a contiguous slice of that order.
 //
-//   PART TAKEN   each completed visit's slice is painted in that visit's
-//                company, LOWERCASE — the grid's existing "newly gained /
-//                loosely held" variant. A company booked in twice paints twice.
+//   PART TAKEN   each completed visit's slice is painted in LIGHT 1ATF —
+//                the grid's existing "newly gained / loosely held" variant.
 //
-//   CONQUERED    on the LAST scheduled visit the whole zone flips to solid
-//                1ATF (TASKFORCE_CODE). Not the first company in, and not
-//                the last: finished ground belongs to the task force.
+//   TAKEN        on the LAST scheduled visit the whole zone flips to solid
+//                1ATF.
+//
+// ⚠️ NO COMPANY EVER OWNS AN ACTIVITY AREA. The ground is the task force's
+// from the first pixel: an area is a PERCENTAGE TAKEOVER, not a prize one
+// company holds until another arrives. Painting each visit in its own
+// company's colour (which this did briefly) made a busy area a patchwork that
+// read as six companies competing for the same ground, and made "who holds
+// the ropes course" a question with a misleading answer. Companies still do
+// the conquering — the plan says who is where, the visit counts come from it,
+// and RHQ can still paint company ground by hand anywhere else on the map —
+// but what the area shows is how much of it 1ATF has taken.
 //
 // There is ONE map, and it is the unit's. A per-company cut of the board
 // existed briefly and was removed: six versions of the same camp is six things
@@ -77,17 +85,16 @@ export function buildCampFrames(mapId, territory) {
         if (cells[idx] !== 'R' && cells[idx] !== 'r') cells[idx] = mark
       }
       if (p.complete) {
-        // The last scheduled visit finishes it, and finished ground is 1ATF's.
+        // The last scheduled visit finishes it: solid, fully held.
         for (const idx of ordered) paint(idx, TASKFORCE_CODE)
         continue
       }
-      // Otherwise each completed visit holds its own slice of the zone, in its
-      // own company's colour, lightly held.
-      for (let v = 0; v < p.done; v++) {
-        const [from, to] = visitSlice(ordered.length, v, p.total)
-        const mark = (p.visits[v].company || 'A').toLowerCase()
-        for (let k = from; k < to; k++) paint(ordered[k], mark)
-      }
+      // Otherwise the completed visits' share of the ground is taken but not
+      // yet consolidated — light 1ATF, the same "newly gained" variant the
+      // rest of the map uses.
+      const [, to] = visitSlice(ordered.length, p.done - 1, p.total)
+      const mark = TASKFORCE_CODE.toLowerCase()
+      for (let k = 0; k < to; k++) paint(ordered[k], mark)
     }
     return { order: i, day, label: campFrameLabel(day, days), cells: cells.join('') }
   })

@@ -82,6 +82,17 @@ keep entries short and focused on what a new collaborator needs to know.
   counting distinct companies called a zone a third done after one of three had
   been. `zoneProgress` now returns `{ visits, done, total, pct, complete, … }`
   and a zone finishes on its LAST scheduled visit.
+- ⚠️ **No company owns an activity area.** The taken share of a zone is
+  painted light 1ATF and goes solid on the final visit — a percentage takeover
+  by the task force rather than a prize one company holds. Painting each visit
+  in its own company's colour made a busy area a patchwork that read as six
+  companies competing for the same ground. Companies still do the conquering;
+  the plan says who is where and every visit count comes from it.
+- **PDF export of the whole campaign** (`framesPdf.js`): one A4-landscape page
+  per frame at 150 dpi, map left, key right, progress block under it, each page
+  cropped to the map's focus box. No PDF dependency — a page is one full-page
+  JPEG in a hand-written PDF wrapper (~80 lines), rendered through the same
+  base renderer as the video and the still, so print can't drift from screen.
 - ⚠️ **Ground is taken in PIXELS — this REPLACES the OKLab ramp below, hours
   old.** A zone visited 2 of its 13 times has 2/13 of its CELLS painted, in the
   ordinary territory hatch, each completed visit in its own company's colour.

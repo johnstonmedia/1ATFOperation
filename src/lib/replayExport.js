@@ -127,6 +127,17 @@ async function renderTileLayer(map, W, H) {
   return drawn ? cv : null
 }
 
+/**
+ * The finished base map (art + tiles + boundary lines) at an arbitrary size,
+ * for callers outside this module — the PDF export in lib/framesPdf.js prints
+ * through exactly the renderer the video and the still use, so a printed page
+ * can't drift from what the screen draws.
+ */
+export async function renderPrintBase(map, W, H) {
+  const img = await loadImage(map.image)
+  return renderBaseMap(img, map, W, H)
+}
+
 /* --------------------------- shared draw helpers -------------------------- */
 
 // Render the base map art onto a W x H canvas, filtered but crisp.
