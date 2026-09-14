@@ -75,6 +75,20 @@ keep entries short and focused on what a new collaborator needs to know.
 - **Legacy `DEFAULT_ZONES` deleted** — the Leaflet-era Australia polygons
   (Northern Approach, Red Centre, Meridian Salient…) predating the KML import.
   Unused by any code; the committed BIV26 zones are the only zone data now.
+- ⚠️ **A zone's COLOUR is now its progress; the printed percentage is gone.**
+  `zoneColor()` ramps Meridian red → 1ATF blue **in OKLab**. The path was the
+  real decision: a constant-chroma OKLCH sweep stays vivid but runs through
+  magenta and violet — i.e. through Support's and Delta's accents — so a
+  half-finished zone would wear a company's colour. The straight OKLab lerp
+  dips to low chroma at the midpoint instead (0.230 → 0.083 → 0.179), which
+  matches no company and reads as contested. Ramp: `#ff3b46` → `#db697d` →
+  `#b381aa` → `#8191d5` → `#1e9bff`. Lightness is near-constant by design
+  (equal legibility over dark imagery), so the ramp says nothing in greyscale
+  — hence the two channels below.
+- **AAs and NLs are told apart without colour**: night locations dashed and at
+  82% lightness of the same ramp, activity areas solid, and a glyph on every
+  name (▲ / ☾ / ◆). Headquarters stays amber and off the ramp — it isn't
+  ground to be taken.
 - ⚠️ **The per-company map view is REMOVED** (reverses the per-company work
   earlier the same day). There is one map and it is the unit's: no UNIT/COMPANY
   toggle, no `maskToCompany`/`companyCells`, and no `company` argument on

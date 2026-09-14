@@ -1,4 +1,4 @@
-import { ZONE_STYLE } from '../lib/mapZones'
+import { ZONE_STYLE, ZONE_TEXTURE, zoneInk } from '../lib/mapZones'
 import { ASSURE_BLUE, SCU_LABEL } from '../lib/territory'
 import { COMPANIES } from '../firebase/seed'
 
@@ -23,11 +23,19 @@ const COMPANY_COLOR = COMPANIES.reduce((a, c) => ({ ...a, [c.letter]: c.accent }
 const DETAIL_LABEL_ZOOM = 2.5
 
 // `progress` (optional) is the Map from lib/campPlan.js zoneProgress(). When
-// present a zone shows how far through its plan it is: the outline fills as
-// companies pass through, and the name carries the percentage and the letters
-// of whoever has been. Without it zones are plain outlines, which is what the
-// map looked like before there was a camp plan and what any map without one
-// still gets.
+// present, THE ZONE'S COLOUR IS ITS PROGRESS: Meridian red when nobody has
+// been, 1ATF blue once every scheduled company has, on an OKLab ramp between
+// (see zoneColor in lib/mapZones.js). That replaced a printed percentage — a
+// colour is read from across a room and a two-digit number is not.
+//
+// Colour is therefore spoken for, so KIND is carried by the other channels:
+// night locations are dashed and 18% darker, activity areas solid, and each
+// name takes a glyph (▲ activity, ☾ night, ◆ headquarters) that survives
+// greyscale and colour-blindness. Headquarters stays amber and off the ramp —
+// RHQ is not ground the unit has to take.
+//
+// Without `progress` a zone is a plain outline in its resting kind colour,
+// which is what any map with no camp plan gets.
 export default function MapZones({ map, zones, zoom = 1, progress = null }) {
   if (!map || !zones?.length) return null
   const fontSize = 2.4 / Math.max(zoom, 1)
@@ -39,56 +47,56 @@ export default function MapZones({ map, zones, zoom = 1, progress = null }) {
       style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}
     >
       {zones.filter((z) => z.cells?.length >= 3).map((z) => {
-        const s = ZONE_STYLE[z.kind] || ZONE_STYLE.activity
+        const base = ZONE_STYLE[z.kind] || ZONE_STYLE.activity
+        const tex = ZONE_TEXTURE[z.kind] || ZONE_TEXTURE.activity
         const p = progress?.get(z.id)
-        // Untouched ground stays at the base wash; a zone fills as its
-        // companies pass through, so "how far along is camp" is readable from
-        // the map itself without reading a single number.
-        const fill = p ? s.fill + (p.pct / 100) * 0.34 : s.fill
+        const ink = zoneInk(z, progress)
+        // The wash deepens as well as shifting hue, so progress is legible
+        // even where two zones sit at similar points on the ramp.
+        const fill = p ? base.fill + (p.pct / 100) * 0.34 : base.fill
         return (
           <polygon
             key={z.id}
             points={z.cells.map(([x, y]) => `${x},${y}`).join(' ')}
-            fill={s.color}
+            fill={ink}
             fillOpacity={fill}
-            stroke={p?.done ? ASSURE_BLUE : s.color}
-            strokeWidth={p?.done ? 2.4 : 1.4}
-            strokeOpacity={p && p.pct === 0 ? 0.55 : 1}
+            stroke={ink}
+            strokeWidth={p?.done ? 2.4 : tex.width}
+            strokeDasharray={tex.dash ? tex.dash.join(' ') : undefined}
             strokeLinejoin="round"
             vectorEffect="non-scaling-stroke"
           />
         )
       })}
       {zones.map((z) => {
-        const s = ZONE_STYLE[z.kind] || ZONE_STYLE.activity
+        const tex = ZONE_TEXTURE[z.kind] || ZONE_TEXTURE.activity
+        const ink = zoneInk(z, progress)
         const tiny = !z.cells?.length
         return (
           <g key={`t-${z.id}`}>
             {/* Ground smaller than one grid cell has no outline to draw, so it
                 gets a dot instead — the map can still say where it is. */}
-            {tiny && <circle cx={z.label[0]} cy={z.label[1]} r={fontSize * 0.32} fill={s.color} />}
+            {tiny && <circle cx={z.label[0]} cy={z.label[1]} r={fontSize * 0.32} fill={ink} />}
             {(!tiny || zoom >= DETAIL_LABEL_ZOOM) && (
             <text
               x={z.label[0]}
               y={z.label[1] - fontSize * 0.55}
               textAnchor="middle"
               fontSize={fontSize}
-              fill={s.color}
+              fill={ink}
               stroke="rgba(4,8,16,0.85)"
               strokeWidth={fontSize * 0.22}
               paintOrder="stroke"
               style={{ fontFamily: 'Orbitron, monospace', fontWeight: 700, letterSpacing: fontSize * 0.06 }}
             >
-              {z.name.toUpperCase()}
+              {tex.glyph} {z.name.toUpperCase()}
             </text>
             )}
-            {/* Second line: the percentage, then WHO. While companies are
-                still working through it, that is a letter each in their own
-                colour, so the map answers "who" as well as "how much" without
-                a legend. At 100% the zone has stopped being any one company's
-                — every company booked onto it has been through, so it is
-                1ATF's, and it says so on the unit map and on all six company
-                maps alike. */}
+            {/* Second line: WHO, not how much — the colour carries how much.
+                A letter per company that has been, in that company's own
+                colour. At 100% the zone has stopped being any one company's:
+                every company booked onto it has been through, so it reads
+                1ATF, and the outline has reached full assure-blue. */}
             {progress?.get(z.id) && (!tiny || zoom >= DETAIL_LABEL_ZOOM) && (
               <text
                 x={z.label[0]}
@@ -100,13 +108,10 @@ export default function MapZones({ map, zones, zoom = 1, progress = null }) {
                 paintOrder="stroke"
                 style={{ fontFamily: 'JetBrains Mono, monospace', fontWeight: 700 }}
               >
-                <tspan fill={progress.get(z.id).done ? ASSURE_BLUE : '#d7e2f4'}>
-                  {progress.get(z.id).pct}%
-                </tspan>
                 {progress.get(z.id).done ? (
-                  <tspan fill={ASSURE_BLUE} dx={fontSize * 0.3}>{SCU_LABEL}</tspan>
-                ) : progress.get(z.id).visited.map((c) => (
-                  <tspan key={c} fill={COMPANY_COLOR[c] || '#d7e2f4'} dx={fontSize * 0.3}>{c}</tspan>
+                  <tspan fill={ASSURE_BLUE}>{SCU_LABEL}</tspan>
+                ) : progress.get(z.id).visited.map((c, i) => (
+                  <tspan key={c} fill={COMPANY_COLOR[c] || '#d7e2f4'} dx={i ? fontSize * 0.3 : 0}>{c}</tspan>
                 ))}
               </text>
             )}

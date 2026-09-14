@@ -80,9 +80,39 @@ matches the map — a flat block will look like a different system.
    map's own legend off. Leave a small mono caption under it for the imagery
    credit line supplied with the export.
 4. **Progress strip.** A row of zone cards — one per activity area. Each card:
-   zone name in Orbitron small-caps, a hatched progress bar, a percentage in
-   mono, and small company chips showing who has been through. See the two
-   variants below for what the percentage means.
+   the kind glyph, the zone name in Orbitron small-caps, a hatched bar, and
+   small company chips showing who has been through. **No percentage numeral** —
+   the CARD'S COLOUR is the percentage, on the ramp below, exactly as on the
+   live map.
+
+   **The OKLab progress ramp** (Meridian red → 1ATF blue). Use these values;
+   do not re-derive them and do not substitute a straight RGB or HSL blend —
+   both of those run through magenta and violet, which are Support's and
+   Delta's colours, and a half-finished zone must never wear a company's
+   colour. Interpolated in OKLab the middle of the ramp is deliberately
+   LOW-CHROMA — contested ground, drained of allegiance:
+
+       0%   #ff3b46      1/6  #e85d6c     1/4  #db697d     1/3  #cf728c
+       50%  #b381aa      2/3  #938cc7     3/4  #8191d5     5/6  #6b95e3
+       100% #1e9bff
+
+   Night locations take the SAME ramp at 82% lightness — one systematic
+   darkening, not a second palette:
+
+       0%   #d30020      50%  #8e5e85     100% #0074d5
+
+   ⚠️ Lightness is near-constant across the ramp, so it carries nothing in
+   greyscale. Never let colour be the only thing saying how far along a zone
+   is: the chips and the glyph must work on a mono print too.
+
+**Telling activity areas from night locations** — colour is spoken for by
+progress, so kind uses three other channels, all of which survive greyscale
+and colour-blindness:
+
+  - **Activity area** — solid outline, ▲ before the name, full ramp lightness.
+  - **Night location** — dashed outline, ☾ before the name, 82% lightness.
+  - **Headquarters** — solid outline, ◆, and OFF the ramp entirely: it stays
+    amber `#f39c12`, because RHQ is not ground the unit has to take.
 
    The real activity areas are: AA Foxtrot, AA Golf, AA Hotel, AA India, AA Juliet, AA Kilo, AA Lima, AA Mike, AA NOVEMBER, AA Oscar, AA Papa, AA Pios, High Ropes, NAVEX, Quarry.
    The night locations are: NL Hilltop, NL Mountain View, NL Oakley Lane, NL Outpost, NL Romeo, NL Ropes, S COY NL.

@@ -405,12 +405,28 @@ assuming a page exists).
       zone its scheduled companies, who has been as at that day, and a
       percentage. There is deliberately no live ticking workflow.
     - ⚠️ **ONE MAP, AND IT IS THE UNIT'S** (2026-09-14 — this REVERSES the
-      per-company view added earlier the same day; don't reinstate it). A zone
-      shared by three companies reads 33% when one has been through, with the
-      visited companies' letters in their own colours, and 100% / `1ATF` once
-      all three have. There is no company toggle, no per-company mask and no
-      `company` argument on `zoneProgress`/`overallProgress`. The boot-gate
-      company still exists — it scopes INTEL, not the map.
+      per-company view added earlier the same day; don't reinstate it). There
+      is no company toggle, no per-company mask and no `company` argument on
+      `zoneProgress`/`overallProgress`. The boot-gate company still exists — it
+      scopes INTEL, not the map.
+    - ⚠️ **A ZONE'S COLOUR IS ITS PROGRESS; the printed percentage is gone.**
+      `zoneColor(pct, kind)` in mapZones.js ramps Meridian red `#ff3b46` →
+      1ATF `#1e9bff` **interpolated in OKLab**, and the PATH is the point: a
+      constant-chroma OKLCH sweep stays vivid but runs red → magenta → violet
+      → blue, straight through Support `#c9528a` and Delta `#8e54c4`, so a
+      half-done zone would wear a company's colour. The straight OKLab lerp
+      instead dips to low chroma mid-ramp (0.230 → 0.083 → 0.179), which can't
+      be mistaken for any company accent and reads as "contested". Lightness
+      barely moves (0.657 → 0.676) so every step is equally legible over dark
+      imagery — but that also means **the ramp carries nothing in greyscale**,
+      which is why kind and completeness are ALSO carried by texture and text.
+    - **Kind is carried by three non-colour channels** (`ZONE_TEXTURE`), since
+      colour is spoken for: night locations are dashed and drawn at 82%
+      lightness of the same ramp (one systematic move, not a second palette);
+      activity areas are solid; and every name takes a glyph — ▲ activity,
+      ☾ night, ◆ headquarters — that survives greyscale and colour-blindness.
+      **Headquarters is off the ramp entirely**, keeping its amber: RHQ is not
+      ground the unit has to take.
     - ⚠️ The converter **refuses to guess**: a cell that is not a recognisable
       company is reported by name and skipped, never silently dropped, and the
       run always prints what it ignored. The sheet legitimately contains
