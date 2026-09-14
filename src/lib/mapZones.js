@@ -11,6 +11,7 @@
 // change once a year when the camp plan does, which is a repo change. Whether
 // a zone is SHOWN is RHQ's call at any moment, so that lives in a per-map
 // `zones` content slice instead (see zonesSlice() in lib/maps.js).
+import { ASSURE_BLUE as TASKFORCE_COLOR, SCU_LABEL } from './territory'
 import singleton from '../data/singleton-zones.json'
 
 const ZONES = { singleton: singleton.zones }
@@ -47,4 +48,71 @@ export function zonesByKind(mapId) {
   return KIND_ORDER
     .map((kind) => ({ kind, style: ZONE_STYLE[kind], zones: all.filter((z) => z.kind === kind) }))
     .filter((g) => g.zones.length)
+}
+
+/**
+ * Canvas twin of MapZones.jsx, for the exporters.
+ *
+ * The Regional map's whole story is its zones — the hatch says who holds the
+ * ground, but only the zone outline and name say the ground IS the ropes
+ * course. Without this an exported replay of a camp map is anonymous shapes,
+ * which is exactly what a poster can't be.
+ *
+ * `progress` is the optional zoneProgress() Map (see lib/campPlan.js): a zone
+ * fills as its companies pass through, and once 1ATF has conquered it the
+ * outline and the readout switch to the task force's colour — the same rule
+ * the live overlay follows, so page and export can't tell different stories.
+ * Sub-cell ground (the eating areas) is skipped: it has no outline, and at
+ * poster scale its name lands on top of RHQ's.
+ */
+export function drawMapZones(ctx, zones, { cols, rows, w, h, scale = 1, progress = null } = {}) {
+  if (!zones?.length || !cols || !rows) return
+  const sx = w / cols
+  const sy = h / rows
+  ctx.save()
+  ctx.lineJoin = 'round'
+  for (const z of zones) {
+    if (!(z.cells?.length >= 3)) continue
+    const s = ZONE_STYLE[z.kind] || ZONE_STYLE.activity
+    const p = progress?.get(z.id)
+    ctx.beginPath()
+    z.cells.forEach(([x, y], i) => (i ? ctx.lineTo(x * sx, y * sy) : ctx.moveTo(x * sx, y * sy)))
+    ctx.closePath()
+    ctx.globalAlpha = p ? s.fill + (p.pct / 100) * 0.34 : s.fill
+    ctx.fillStyle = s.color
+    ctx.fill()
+    ctx.globalAlpha = p && p.pct === 0 ? 0.55 : 1
+    ctx.strokeStyle = p?.done ? TASKFORCE_COLOR : s.color
+    ctx.lineWidth = (p?.done ? 2.4 : 1.4) * scale * 0.5
+    ctx.stroke()
+  }
+  ctx.globalAlpha = 1
+  // Names last, so no polygon drawn after one buries it.
+  const size = 2.4 * sx
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'alphabetic'
+  ctx.lineJoin = 'round'
+  for (const z of zones) {
+    if (!(z.cells?.length >= 3)) continue
+    const s = ZONE_STYLE[z.kind] || ZONE_STYLE.activity
+    const p = progress?.get(z.id)
+    const [lx, ly] = z.label
+    ctx.font = `700 ${size}px Orbitron, monospace`
+    ctx.strokeStyle = 'rgba(4,8,16,0.85)'
+    ctx.lineWidth = size * 0.22
+    ctx.strokeText(z.name.toUpperCase(), lx * sx, ly * sy - size * 0.55)
+    ctx.fillStyle = s.color
+    ctx.fillText(z.name.toUpperCase(), lx * sx, ly * sy - size * 0.55)
+    if (!p) continue
+    // Percentage, then WHO: a letter per company while they are still working
+    // through it, or 1ATF once every scheduled company has been.
+    const who = p.done ? SCU_LABEL : p.visited.join(' ')
+    const text = `${p.pct}%${who ? ` ${who}` : ''}`
+    ctx.font = `700 ${size * 0.88}px "JetBrains Mono", monospace`
+    ctx.lineWidth = size * 0.2
+    ctx.strokeText(text, lx * sx, ly * sy + size * 0.75)
+    ctx.fillStyle = p.done ? TASKFORCE_COLOR : '#d7e2f4'
+    ctx.fillText(text, lx * sx, ly * sy + size * 0.75)
+  }
+  ctx.restore()
 }

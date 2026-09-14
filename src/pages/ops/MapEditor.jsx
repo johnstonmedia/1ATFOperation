@@ -12,6 +12,7 @@ import { PAINT, RHQ_PAINT, colorOf, coyLabelOf } from '../../lib/territory'
 import { useUnpaintableMask } from '../../lib/unpaintableMask'
 import { MAPS, mapById, mapFor, gridRefOf, territorySlice, campaignStartSlice, framesForMap, withMapFrames, zoneVisibilitySlice, mapReleaseSlice } from '../../lib/maps'
 import { visibleZones, zonesByKind, zoneCount } from '../../lib/mapZones'
+import { zoneProgress } from '../../lib/campPlan'
 import { hasCampPlan, campDays } from '../../lib/campPlan'
 import { buildCampFrames } from '../../lib/campFrames'
 import { sortFrames, framesValid, renumberFrames } from '../../lib/campaign'
@@ -325,6 +326,7 @@ export default function MapEditor() {
         defaultStartId={state[startSlice]}
         terr={terr}
         territory={savedTerr}
+        zones={editorZones}
         editing={editing}
         onStartEdit={startEdit}
         onForceClearEdit={() => setEditing(null)}
@@ -495,7 +497,7 @@ function PreviewMapModal({ territory, onClose }) {
 // independently — no more diff-chain, no more "re-recording the start wipes
 // everything after it".
 function CampaignPanel({
-  mapId, allFrames, frames, startSlice, defaultStartId, terr, territory,
+  mapId, allFrames, frames, startSlice, defaultStartId, terr, territory, zones = [],
   editing, onStartEdit, onForceClearEdit,
   draftFrameCells, onClearDraftFrame, onClearAllDraftFrames,
 }) {
@@ -517,6 +519,10 @@ function CampaignPanel({
   const liveDrift = active && territory.cells !== sorted[sorted.length - 1].cells
   // How much of the replay is still held back from the public (see toggleHidden).
   const hiddenCount = sorted.filter((f) => f.hidden).length
+  // Zone percentages for one frame, read off the camp plan at THAT frame's own
+  // day. Generated frames carry `day`; a hand-painted one doesn't, and gets no
+  // readout rather than a made-up one.
+  const progressAt = (f) => (typeof f?.day === 'number' ? zoneProgress(mapId, f.day) : null)
 
   const [exporting, setExporting] = useState(false)
   const [exportPct, setExportPct] = useState(0)
@@ -625,8 +631,24 @@ function CampaignPanel({
   const toggleHidden = (i) => {
     const next = sorted.map((f, k) => (k === i ? { ...f, hidden: !f.hidden, updatedAt: Date.now() } : f))
     writeFrames(next)
+    if (sorted[i].hidden) syncLiveTo(next)
     audit(sorted[i].hidden ? 'Released a campaign frame' : 'Held back a campaign frame', `frame ${i + 1}`)
     toast.push(sorted[i].hidden ? `Frame ${i + 1} is now visible on the Home page.` : `Frame ${i + 1} is hidden from visitors.`)
+  }
+
+  // THE LIVE MAP FOLLOWS THE LAST RELEASED FRAME.
+  //
+  // The live territory is what the exports treat as the campaign's present
+  // and what the static map shows when there is no replay. With the whole camp
+  // generated in advance the live map is still the blank camp-start board, so
+  // an exported video played the campaign forward and then ended by wiping
+  // every gain off the map. Releasing a frame is the moment the unit's actual
+  // position moves, so that is where the live map is brought up to it.
+  const syncLiveTo = (rows) => {
+    const shown = sortFrames(rows).filter((f) => !f.hidden)
+    const last = shown[shown.length - 1]
+    if (!last || last.cells === territory.cells) return
+    updateSlice(territorySlice(mapId), { ...territory, cells: last.cells })
   }
 
   // Release everything up to and including frame i — the ordinary end-of-day
@@ -635,6 +657,7 @@ function CampaignPanel({
   const releaseThrough = (i) => {
     const next = sorted.map((f, k) => ({ ...f, hidden: k > i, updatedAt: Date.now() }))
     writeFrames(next)
+    syncLiveTo(next)
     audit('Released campaign frames up to a point', `frames 1-${i + 1} of ${sorted.length}`)
     toast.push(`Frames 1–${i + 1} are now visible; the rest stay hidden.`)
   }
@@ -693,7 +716,7 @@ function CampaignPanel({
     setImgErr('')
     setImgBusy(true)
     try {
-      const { blob } = await exportProgressImage({ territory, frames: sorted, title: imgTitle })
+      const { blob } = await exportProgressImage({ territory, frames: sorted, title: imgTitle, zones, zoneProgress: progressAt(sorted[sorted.length - 1]) })
       downloadBlob(blob, `campaign-progress-${new Date().toISOString().slice(0, 10)}.png`)
       audit('Exported weekly progress image')
     } catch (e) {
@@ -709,7 +732,14 @@ function CampaignPanel({
     setExportPct(0)
     // Export replays against the SAVED territory (what the public sees), not
     // unsaved editor strokes.
-    job.current = exportCampaignReplay({ territory, frames: sorted, onProgress: setExportPct })
+    job.current = exportCampaignReplay({
+      territory, frames: sorted, zones,
+      // Each frame's zone readout is that frame's own camp day, so the export
+      // tells the same story the page does rather than stamping today's
+      // percentages onto every frame.
+      progressFor: (i) => progressAt(sorted[i]),
+      onProgress: setExportPct,
+    })
     try {
       const { blob, ext } = await job.current.promise
       downloadBlob(blob, `campaign-replay.${ext}`)

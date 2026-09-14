@@ -2,6 +2,7 @@ import { beaconStateFor } from './territory'
 import { mapFor, tileZoomFor, tilesFor } from './maps'
 import { renderTerritoryLayer, renderWaveLayer, drawCompanyLabels, drawLegend, imageFilterFor } from './terrainRender'
 import { drawMapLines } from './mapLines'
+import { drawMapZones } from './mapZones'
 import { frameCells, frameCaptions, sortFrames, transitionPlan, transitionDuration } from './campaign'
 import { companyLabelPoints, mergedGainLabels, legendCodes } from './companyLabels'
 
@@ -315,7 +316,7 @@ function drawBanner(ctx, text, W, H, scale, { top = false } = {}) {
 // Render the campaign replay to a video Blob.
 // Returns { promise: Promise<{ blob, ext }>, cancel() }.
 // onProgress (0..1) reflects wall-clock progress through the recording.
-export function exportCampaignReplay({ territory, frames: campaignFrames, onProgress }) {
+export function exportCampaignReplay({ territory, frames: campaignFrames, zones = [], progressFor = null, onProgress }) {
   let cancelled = false
   let stopLoop = () => {}
 
@@ -327,7 +328,12 @@ export function exportCampaignReplay({ territory, frames: campaignFrames, onProg
     const { cols, rows, showRHQ } = territory
     const frames = frameCells(campaignFrames)
     const captions = frameCaptions(campaignFrames)
-    if (frames[frames.length - 1] !== territory.cells) frames.push(territory.cells)
+    // The live map is the campaign's present, so the video ends on it — but
+    // only when it is genuinely a state the replay hasn't reached. With camp
+    // generated in advance and released a day at a time, the live board can
+    // legitimately be an EARLIER frame than the last one recorded; appending
+    // it then ended the video by wiping every gain back off the map.
+    if (!frames.includes(territory.cells)) frames.push(territory.cells)
     const transitions = frames.length - 1
     if (transitions < 1) throw new Error('No campaign history to export yet.')
     // A touch slower than the on-screen auto-replay: the video is a keepsake,
@@ -353,6 +359,9 @@ export function exportCampaignReplay({ territory, frames: campaignFrames, onProg
     if (cancelled) throw Object.assign(new Error('Export cancelled.'), { cancelled: true })
     let hatch = renderHatch(frames[0], cols, rows, showRHQ, W, H)
     const commitHatch = (cells) => { hatch = renderHatch(cells, cols, rows, showRHQ, W, H) }
+    // Zone percentages move with the committed frame, so the readout on a zone
+    // is that frame's day rather than the whole campaign's end state.
+    const commitZones = (k) => { if (progressFor) zoneProgress = progressFor(k) }
 
     // Everything painted onto the canvas for one instant of the replay. Split
     // out of the loop so the FIRST frame can be drawn before the recorder
@@ -371,9 +380,13 @@ export function exportCampaignReplay({ territory, frames: campaignFrames, onProg
       return derived.labels
     }
 
+    // Zone outlines sit UNDER the hatch, exactly as on the live map: a zone
+    // says "this is the ropes course", the hatch says who holds it.
+    let zoneProgress = progressFor ? progressFor(0) : null
     const paintFrame = (cells, plan, waveT, caption) => {
       ctx.clearRect(0, 0, W, H)
       ctx.drawImage(base, 0, 0)
+      drawMapZones(ctx, zones, { cols, rows, w: W, h: H, scale: SCALE, progress: zoneProgress })
       ctx.drawImage(hatch, 0, 0)
       if (plan && waveT !== null) {
         renderWaveLayer(ctx, plan, waveT, { cols, rows, w: W, h: H })
@@ -459,12 +472,13 @@ export function exportCampaignReplay({ territory, frames: campaignFrames, onProg
           if (k >= 0 && planK !== k) {
             // Entering move k: bake the previous move's end state into the
             // hatch layer and precompute this move's wave plan.
-            if (committed !== k) { commitHatch(frames[k]); committed = k }
+            if (committed !== k) { commitHatch(frames[k]); commitZones(k); committed = k }
             plan = transitionPlan(frames[k], frames[k + 1], cols, rows)
             planK = k
           }
           if (elapsed >= totalMs - END_HOLD_MS && committed !== transitions) {
             commitHatch(frames[transitions])
+            commitZones(transitions)
             committed = transitions
             plan = null
           }
@@ -538,7 +552,7 @@ export function defaultProgressTitle({ frames: campaignFrames, days = 7 } = {}) 
 // Returns { blob }. Throws if there's no campaign, or nothing was recorded
 // within the window — callers should disable the button in that case rather
 // than let this throw.
-export async function exportProgressImage({ territory, frames: campaignFrames, days = 7, title }) {
+export async function exportProgressImage({ territory, frames: campaignFrames, days = 7, title, zones = [], zoneProgress = null }) {
   const { cols, rows, showRHQ } = territory
   const sorted = sortFrames(campaignFrames || [])
   if (!sorted.length) throw new Error('No campaign frames recorded yet.')
@@ -562,6 +576,7 @@ export async function exportProgressImage({ territory, frames: campaignFrames, d
   ctx.imageSmoothingEnabled = false
 
   ctx.drawImage(await renderBaseMap(img, map, W, H), 0, 0)
+  drawMapZones(ctx, zones, { cols, rows, w: W, h: H, scale: SCALE, progress: zoneProgress })
   ctx.drawImage(renderHatch(finalCells, cols, rows, showRHQ, W, H), 0, 0)
   if (plan.clusters.length) renderWaveLayer(ctx, plan, 1, { cols, rows, w: W, h: H })
   drawCompanyLabels(ctx, companyLabelPoints(finalCells, cols, rows, { showRHQ, avoid: territory.places, overrides: territory.labelOverrides }), { cols, rows, w: W, h: H, scale: SCALE })

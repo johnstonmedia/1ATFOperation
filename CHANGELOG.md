@@ -61,6 +61,20 @@ keep entries short and focused on what a new collaborator needs to know.
   against the static image's ~12 m/px). This is why an exported replay of the
   Regional map looked coarse next to the live map: it was rendering the
   Sentinel-2 floor, upscaled 3x.
+- **Revealing a frame advances the LIVE map.** The live territory is what the
+  exports treat as the present and what the static map shows with no replay;
+  with camp generated in advance it was still the blank camp-start board, so an
+  exported video played the campaign forward and then ended by wiping every
+  gain off the map. `syncLiveTo()` writes the last released frame's cells to the
+  territory slice on Reveal / Reveal to here, and the video appends the live
+  state only when it is not already one of the frames.
+- **Zones are drawn in both exports** (`drawMapZones()`, the canvas twin of
+  MapZones.jsx): outlines under the hatch, names and the percentage/1ATF
+  readout on top, with each frame's readout taken from THAT frame's camp day.
+  Without it an exported camp replay was anonymous shapes.
+- **Legacy `DEFAULT_ZONES` deleted** — the Leaflet-era Australia polygons
+  (Northern Approach, Red Centre, Meridian Salient…) predating the KML import.
+  Unused by any code; the committed BIV26 zones are the only zone data now.
 - **Seeded Meridian demo data removed**: the three pre-painted `M` blobs in the
   NSW default territory, the two `hostile: true` stronghold flags on the
   Regional map, the Meridian demo activity row, and the Meridian contact in the
