@@ -10,7 +10,7 @@ import PixelMap from '../../components/PixelMap'
 import MapLegend from '../../components/MapLegend'
 import { PAINT, RHQ_PAINT, colorOf, coyLabelOf } from '../../lib/territory'
 import { useUnpaintableMask } from '../../lib/unpaintableMask'
-import { MAPS, mapById, mapFor, gridRefOf, territorySlice, campaignStartSlice, framesForMap, withMapFrames, zoneVisibilitySlice } from '../../lib/maps'
+import { MAPS, mapById, mapFor, gridRefOf, territorySlice, campaignStartSlice, framesForMap, withMapFrames, zoneVisibilitySlice, mapReleaseSlice } from '../../lib/maps'
 import { visibleZones, zonesByKind, zoneCount } from '../../lib/mapZones'
 import { hasCampPlan, campDays } from '../../lib/campPlan'
 import { buildCampFrames } from '../../lib/campFrames'
@@ -168,6 +168,26 @@ export default function MapEditor() {
     toast.push(`${map.name} is now the default map on the Home page.`)
   }
 
+  // DISTRIBUTION. A map that isn't the default is invisible to the public
+  // until this is switched on — the Regional map is built, painted and has
+  // every day of camp generated onto it long before anyone outside RHQ should
+  // be looking at it. Withdrawing puts it straight back out of reach.
+  const released = !!state[mapReleaseSlice(mapId)]?.released
+  const setReleased = async (next) => {
+    const ok = await confirm({
+      title: next ? 'Distribute this map' : 'Withdraw this map',
+      message: next
+        ? `Put ${map.name} on the Home page for everyone? Visitors will get a button to switch to it, and everything saved on it — territory, places and every released replay frame — becomes public.`
+        : `Take ${map.name} back off the Home page? Visitors lose the button to it immediately. Nothing painted on it is changed, and you can distribute it again at any time.`,
+      confirmLabel: next ? 'Distribute' : 'Withdraw',
+      danger: !next,
+    })
+    if (!ok) return
+    await updateSlice(mapReleaseSlice(mapId), { released: next, at: Date.now() })
+    audit(next ? 'Distributed a map to the portal' : 'Withdrew a map from the portal', map.name)
+    toast.push(next ? `${map.name} is now visible on the Home page.` : `${map.name} is no longer visible to visitors.`)
+  }
+
   // Load a frame into the shared canvas for repainting. Warns before
   // discarding unpainted changes if switching away from a frame mid-edit.
   // `frame` is a { id, order, label, cells } row from CampaignPanel, or null
@@ -229,7 +249,9 @@ export default function MapEditor() {
         <PreviewMapModal territory={{ ...terr, cells: canvasCells }} onClose={() => setPreviewOpen(false)} />
       )}
 
-      <MapSwitcher maps={MAPS} mapId={mapId} liveId={state.activeMap} onSwitch={switchMap} onMakeLive={makeLive} />
+      <MapSwitcher maps={MAPS} mapId={mapId} liveId={state.activeMap} onSwitch={switchMap} onMakeLive={makeLive}
+        released={released} onRelease={setReleased}
+        releasedIds={MAPS.filter((m) => state[mapReleaseSlice(m.id)]?.released).map((m) => m.id)} />
 
       {editing && (
         <div className="panel panel-pad row between center wrap" style={{ gap: 10, marginBottom: 10, borderColor: 'var(--accent)', background: 'rgba(54,224,192,0.06)' }}>
@@ -366,7 +388,7 @@ export default function MapEditor() {
 // different things, shown together so the difference is impossible to miss.
 // Only RHQ ever sees this: the public portal has no map switcher at all, it
 // just renders whatever `activeMap` names.
-function MapSwitcher({ maps, mapId, liveId, onSwitch, onMakeLive }) {
+function MapSwitcher({ maps, mapId, liveId, onSwitch, onMakeLive, released, onRelease, releasedIds = [] }) {
   const isLive = liveId === mapId
   return (
     <div className="panel panel-pad col" style={{ gap: 10, marginBottom: 12 }}>
@@ -389,9 +411,14 @@ function MapSwitcher({ maps, mapId, liveId, onSwitch, onMakeLive }) {
             >
               <div className="row center" style={{ gap: 8 }}>
                 <span style={{ fontWeight: 700 }}>{m.name}</span>
-                {m.id === liveId && (
-                  <span className="tag" style={{ fontSize: 9, color: 'var(--accent)', borderColor: 'var(--accent)' }}>DEFAULT</span>
-                )}
+                {m.id === liveId
+                  ? <span className="tag" style={{ fontSize: 9, color: 'var(--accent)', borderColor: 'var(--accent)' }}>DEFAULT</span>
+                  : (
+                    <span className="tag" style={{ fontSize: 9, ...(releasedIds.includes(m.id)
+                      ? {} : { color: 'var(--hostile)', borderColor: 'var(--hostile)' }) }}>
+                      {releasedIds.includes(m.id) ? 'DISTRIBUTED' : 'NOT DISTRIBUTED'}
+                    </span>
+                  )}
               </div>
               <div className="mono" style={{ fontSize: 10, opacity: 0.75, marginTop: 3 }}>{m.sub}</div>
             </button>
@@ -399,19 +426,28 @@ function MapSwitcher({ maps, mapId, liveId, onSwitch, onMakeLive }) {
         })}
       </div>
       <div className="row between center wrap" style={{ gap: 10 }}>
+        {/* Three states, and the copy must never leave RHQ guessing which one
+            they are in, because it decides whether what they save is public.
+            The DEFAULT map is always public — it is the one visitors land on.
+            Any other map is public only once DISTRIBUTED, and then everything
+            saved on it is public too. */}
         <span className="mono dim" style={{ fontSize: 11 }}>
-          {/* Both maps are PUBLIC — visitors can switch between them on the
-              Home page — so neither message may imply this one is hidden.
-              What "DEFAULT" buys you is only which map they land on. */}
           {isLive
             ? 'Visitors land on this map. Everything you save here goes straight to the Home page.'
-            : 'Visitors land on the map marked DEFAULT, but they can switch to this one from the Home page — so anything you save here is public too.'}
+            : released
+              ? 'DISTRIBUTED — visitors land on the map marked DEFAULT but can switch to this one, so anything you save here is public too.'
+              : 'NOT DISTRIBUTED — nobody outside the Operations Centre can open this map yet. Build it here, then distribute it when it should go out.'}
         </span>
-        {!isLive && (
-          <button className="primary" onClick={onMakeLive} style={{ flex: '0 0 auto' }}>
-            Make this the default map
-          </button>
-        )}
+        <div className="row center wrap" style={{ gap: 8, flex: '0 0 auto' }}>
+          {!isLive && (
+            <button className={released ? 'ghost' : 'primary'} onClick={() => onRelease(!released)}>
+              {released ? 'Withdraw from the portal' : 'Distribute to the portal'}
+            </button>
+          )}
+          {!isLive && (
+            <button className="ghost" onClick={onMakeLive}>Make this the default map</button>
+          )}
+        </div>
       </div>
     </div>
   )
@@ -479,6 +515,8 @@ function CampaignPanel({
   // recorded frame, the public site is showing something already out of
   // date until RHQ deliberately captures it.
   const liveDrift = active && territory.cells !== sorted[sorted.length - 1].cells
+  // How much of the replay is still held back from the public (see toggleHidden).
+  const hiddenCount = sorted.filter((f) => f.hidden).length
 
   const [exporting, setExporting] = useState(false)
   const [exportPct, setExportPct] = useState(0)
@@ -536,10 +574,14 @@ function CampaignPanel({
       })
       if (!ok) return
     }
-    writeFrames(built.map((f) => ({ ...f, id: rid(), map: mapId, ts: Date.now(), updatedAt: Date.now() })))
+    // Everything past the camp-start frame is HELD BACK. The whole camp is
+    // painted here in one go, and publishing all of it at once would show
+    // cadets the last day of camp before the first one has happened — RHQ
+    // reveals a day at a time from the rows below.
+    writeFrames(built.map((f, i) => ({ ...f, id: rid(), map: mapId, hidden: i > 0, ts: Date.now(), updatedAt: Date.now() })))
     onClearAllDraftFrames()
     audit('Built campaign frames from the camp plan', `${built.length} frames`)
-    toast.push(`${built.length} frames built from the camp plan.`)
+    toast.push(`${built.length} frames built — only the camp start is visible; reveal each day as it happens.`)
   }
 
   // Snapshot the current live painting as a new frame at the end.
@@ -573,6 +615,28 @@ function CampaignPanel({
     const next = sorted.map((f, k) => (k === i ? { ...f, useLabelOverrides: !f.useLabelOverrides, updatedAt: Date.now() } : f))
     writeFrames(next)
     audit(sorted[i].useLabelOverrides ? 'Disabled manual company labels on campaign frame' : 'Enabled manual company labels on campaign frame', `frame ${i + 1}`)
+  }
+
+  // RELEASE. Camp is generated in full before it starts, so every frame after
+  // the first is held back and RHQ reveals them one at a time as camp runs —
+  // otherwise the whole campaign lands on the Home page on day one. Hidden
+  // frames are ordinary frames here; only the public replay filters them out
+  // (releasedFrames in lib/campaign.js).
+  const toggleHidden = (i) => {
+    const next = sorted.map((f, k) => (k === i ? { ...f, hidden: !f.hidden, updatedAt: Date.now() } : f))
+    writeFrames(next)
+    audit(sorted[i].hidden ? 'Released a campaign frame' : 'Held back a campaign frame', `frame ${i + 1}`)
+    toast.push(sorted[i].hidden ? `Frame ${i + 1} is now visible on the Home page.` : `Frame ${i + 1} is hidden from visitors.`)
+  }
+
+  // Release everything up to and including frame i — the ordinary end-of-day
+  // action, since revealing day 3 without days 1 and 2 would leave the replay
+  // jumping over ground nobody saw taken.
+  const releaseThrough = (i) => {
+    const next = sorted.map((f, k) => ({ ...f, hidden: k > i, updatedAt: Date.now() }))
+    writeFrames(next)
+    audit('Released campaign frames up to a point', `frames 1-${i + 1} of ${sorted.length}`)
+    toast.push(`Frames 1–${i + 1} are now visible; the rest stay hidden.`)
   }
 
   const move = (i, dir) => {
@@ -662,11 +726,16 @@ function CampaignPanel({
     <div className="panel panel-pad col" style={{ gap: 8, marginTop: 14 }}>
       <div className="row between center wrap" style={{ gap: 8 }}>
         <strong className="head" style={{ fontSize: 14 }}>Campaign replay</strong>
-        {active && <span className="mono dim" style={{ fontSize: 10 }}>{count} FRAME{count === 1 ? '' : 'S'} RECORDED</span>}
+        {active && (
+          <span className="mono dim" style={{ fontSize: 10 }}>
+            {count} FRAME{count === 1 ? '' : 'S'} RECORDED
+            {hiddenCount > 0 && <span style={{ color: 'var(--accent)' }}> — {count - hiddenCount} RELEASED, {hiddenCount} HELD BACK</span>}
+          </span>
+        )}
       </div>
       <div className="mono dim" style={{ fontSize: 11 }}>
         {active
-          ? 'Replay is live — visitors watch the conquest animate through every recorded frame below when the map loads (or jump to any frame themselves via the picker on the Home page). Each frame can be repainted, relabelled, reordered, duplicated or deleted independently. "Set as Default Start" picks which frame the auto-play begins from — earlier frames stay archived and reachable via the picker either way. The live map above is only ever a starting point for the NEXT frame — it doesn\'t appear in the replay itself until you add it.'
+          ? 'Replay is live — visitors watch the conquest animate through every RELEASED frame below when the map loads (or jump to any frame themselves via the picker on the Home page). Each frame can be repainted, relabelled, reordered, duplicated or deleted independently. "Set as Default Start" picks which frame the auto-play begins from — earlier frames stay archived and reachable via the picker either way. The live map above is only ever a starting point for the NEXT frame — it doesn\'t appear in the replay itself until you add it. Frames built from the camp plan arrive HIDDEN: use "Reveal" (or "Reveal to here") at the end of each day so progress comes out a day at a time rather than all at once.'
           : 'No frames recorded yet. Paint the map above, then add it as the campaign start frame — you can add more as the campaign advances.'}
       </div>
 
@@ -764,6 +833,8 @@ function CampaignPanel({
               onRelabel={(label) => relabel(i, label)}
               onSetDefaultStart={() => setDefaultStart(f.id)}
               onToggleLabelOverrides={() => toggleLabelOverrides(i)}
+              onToggleHidden={() => toggleHidden(i)}
+              onReleaseThrough={() => releaseThrough(i)}
             />
           ))}
         </div>
@@ -782,14 +853,14 @@ function CampaignPanel({
 // One frame row. Keeps its own local label text so typing doesn't fire a
 // Firestore write per keystroke — the label only commits (onRelabel) when
 // the field loses focus or Enter is pressed, and only if it actually changed.
-function FrameRow({ f, index, isFirst, isLast, isEditing, isDefaultStart, hasDraft, onMove, onEdit, onDuplicate, onDelete, onRelabel, onSetDefaultStart, onToggleLabelOverrides }) {
+function FrameRow({ f, index, isFirst, isLast, isEditing, isDefaultStart, hasDraft, onMove, onEdit, onDuplicate, onDelete, onRelabel, onSetDefaultStart, onToggleLabelOverrides, onToggleHidden, onReleaseThrough }) {
   const [label, setLabel] = useState(f.label || '')
   useEffect(() => { setLabel(f.label || '') }, [f.label])
   const commit = () => { if (label !== (f.label || '')) onRelabel(label) }
 
   return (
     <div className="row center wrap" style={{ gap: 8, borderTop: '1px solid var(--line)', paddingTop: 6,
-      background: isEditing ? 'rgba(54,224,192,0.08)' : undefined }}>
+      background: isEditing ? 'rgba(54,224,192,0.08)' : undefined, opacity: f.hidden && !isEditing ? 0.62 : 1 }}>
       <span className="mono accent" style={{ fontSize: 11, flex: '0 0 auto' }}>{index === 0 ? 'START' : String(index + 1).padStart(2, '0')}</span>
       <input
         value={label}
@@ -801,6 +872,7 @@ function FrameRow({ f, index, isFirst, isLast, isEditing, isDefaultStart, hasDra
         style={{ flex: '1 1 160px' }}
       />
       {isDefaultStart && <span className="tag" style={{ fontSize: 9, flex: '0 0 auto', color: 'var(--accent)', borderColor: 'var(--accent)' }}>DEFAULT START</span>}
+      {f.hidden && <span className="tag mono" style={{ fontSize: 9, flex: '0 0 auto', opacity: 0.8 }} title="Held back — visitors don't see this frame on the Home page yet">◌ HIDDEN</span>}
       {hasDraft && <span className="tag mono" style={{ fontSize: 9, flex: '0 0 auto', color: 'var(--accent)', borderColor: 'var(--accent)' }} title="Repainted but not yet published — the site still shows the old version">● UNPUBLISHED</span>}
       <label className="row center" style={{ gap: 4, flex: '0 0 auto' }}
         title="When checked, this frame shows company labels at the positions dragged in “Arrange company labels manually” above. Unchecked (default), this frame always places labels automatically — a manual position only ever applies to the frames it's turned on for.">
@@ -819,6 +891,19 @@ function FrameRow({ f, index, isFirst, isLast, isEditing, isDefaultStart, hasDra
           title={isDefaultStart ? 'Clear default start — the public replay will start from the earliest frame again' : "Public replay's auto-play will start from here (earlier frames stay archived, still reachable via its frame picker)"}>
           {isDefaultStart ? 'Default ✓' : 'Set as Default Start'}
         </button>
+        {/* Reveal/hide this one frame; the second button is the end-of-day
+            action — bring the replay forward to here and leave the rest held
+            back, so the public timeline never has a gap in it. */}
+        <button className={f.hidden ? 'ghost' : 'primary'} style={{ padding: '3px 8px' }} onClick={onToggleHidden}
+          title={f.hidden ? 'Show this frame on the Home page' : 'Hide this frame from visitors again'}>
+          {f.hidden ? 'Reveal' : 'Visible ✓'}
+        </button>
+        {f.hidden && (
+          <button className="ghost" style={{ padding: '3px 8px' }} onClick={onReleaseThrough}
+            title="Reveal every frame up to and including this one, and hide everything after it">
+            Reveal to here
+          </button>
+        )}
         <button className="danger ghost" style={{ padding: '3px 8px' }} onClick={onDelete}>Delete</button>
       </div>
     </div>

@@ -1,4 +1,5 @@
 import { ZONE_STYLE } from '../lib/mapZones'
+import { ASSURE_BLUE, SCU_LABEL } from '../lib/territory'
 import { COMPANIES } from '../firebase/seed'
 
 const COMPANY_COLOR = COMPANIES.reduce((a, c) => ({ ...a, [c.letter]: c.accent }), {})
@@ -50,7 +51,7 @@ export default function MapZones({ map, zones, zoom = 1, progress = null }) {
             points={z.cells.map(([x, y]) => `${x},${y}`).join(' ')}
             fill={s.color}
             fillOpacity={fill}
-            stroke={s.color}
+            stroke={p?.done ? ASSURE_BLUE : s.color}
             strokeWidth={p?.done ? 2.4 : 1.4}
             strokeOpacity={p && p.pct === 0 ? 0.55 : 1}
             strokeLinejoin="round"
@@ -81,9 +82,13 @@ export default function MapZones({ map, zones, zoom = 1, progress = null }) {
               {z.name.toUpperCase()}
             </text>
             )}
-            {/* Second line: the percentage, then a letter per company that has
-                actually been through, in that company's own colour — so the
-                map answers "who" as well as "how much" without a legend. */}
+            {/* Second line: the percentage, then WHO. While companies are
+                still working through it, that is a letter each in their own
+                colour, so the map answers "who" as well as "how much" without
+                a legend. At 100% the zone has stopped being any one company's
+                — every company booked onto it has been through, so it is
+                1ATF's, and it says so on the unit map and on all six company
+                maps alike. */}
             {progress?.get(z.id) && (!tiny || zoom >= DETAIL_LABEL_ZOOM) && (
               <text
                 x={z.label[0]}
@@ -95,10 +100,12 @@ export default function MapZones({ map, zones, zoom = 1, progress = null }) {
                 paintOrder="stroke"
                 style={{ fontFamily: 'JetBrains Mono, monospace', fontWeight: 700 }}
               >
-                <tspan fill={progress.get(z.id).done ? s.color : '#d7e2f4'}>
+                <tspan fill={progress.get(z.id).done ? ASSURE_BLUE : '#d7e2f4'}>
                   {progress.get(z.id).pct}%
                 </tspan>
-                {progress.get(z.id).visited.map((c) => (
+                {progress.get(z.id).done ? (
+                  <tspan fill={ASSURE_BLUE} dx={fontSize * 0.3}>{SCU_LABEL}</tspan>
+                ) : progress.get(z.id).visited.map((c) => (
                   <tspan key={c} fill={COMPANY_COLOR[c] || '#d7e2f4'} dx={fontSize * 0.3}>{c}</tspan>
                 ))}
               </text>

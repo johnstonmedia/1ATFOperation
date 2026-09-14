@@ -20,7 +20,7 @@ import {
   DEMO_ROSTER,
   DEFAULT_ACTIVITY,
 } from '../firebase/seed'
-import { MAPS, PRIMARY_MAP_ID, mapById, mapSlices, territorySlice, campaignStartSlice, frameMapId } from './maps'
+import { MAPS, PRIMARY_MAP_ID, mapById, mapSlices, territorySlice, campaignStartSlice, mapReleaseSlice, frameMapId } from './maps'
 
 const LS_KEY = '1atf-state-v1'
 const LS_AUTHIDX = '1atf-authindex'
@@ -60,6 +60,10 @@ const DEFAULT_MAP_STATE = MAPS.reduce((acc, m) => {
   // remain reachable via the replay's manual frame picker — this only
   // controls where the AUTO-PLAY begins.
   acc[campaignStartSlice(m.id)] = null
+  // Not distributed until RHQ says so (see mapReleaseSlice). The map a
+  // visitor lands on — `activeMap` — is public whatever this says, so a
+  // fresh install is never a portal with no map on it.
+  acc[mapReleaseSlice(m.id)] = { released: false }
   return acc
 }, {})
 

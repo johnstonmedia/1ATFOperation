@@ -6,11 +6,11 @@ import { useCompany } from '../context/CompanyContext'
 import { useUnseen, useUnseenIntel, hasIntelBaseline, markIntelSeen } from '../hooks/useUnseen'
 import { decryptProgress } from '../lib/intelProgress'
 import { COMPANIES, PHONETIC, smeacOf, movementsOf } from '../firebase/seed'
-import { mapById, territorySlice, campaignStartSlice, framesForMap, otherMaps, zoneVisibilitySlice } from '../lib/maps'
+import { mapById, territorySlice, campaignStartSlice, framesForMap, zoneVisibilitySlice, isMapPublic, publicMaps } from '../lib/maps'
 import { visibleZones } from '../lib/mapZones'
 import { zoneProgress, hasCampPlan } from '../lib/campPlan'
-import { sortFrames } from '../lib/campaign'
-import { maskToCompany } from '../lib/campFrames'
+import { sortFrames, releasedFrames } from '../lib/campaign'
+import { companyCells } from '../lib/campFrames'
 import CampControls from '../components/CampControls'
 import useViewedMap from '../hooks/useViewedMap'
 
@@ -64,9 +64,17 @@ export default function Home() {
   // the same map and can't be mixed between them.
   const defaultMap = mapById(state.activeMap)
   const [viewedId, viewMap, isOverride] = useViewedMap(defaultMap.id)
-  const live = mapById(viewedId)
+  // A map that hasn't been distributed yet is not reachable here, even with a
+  // session override naming it: it may have been released and then pulled
+  // back, or the id may predate the gate. Fall back to the default map.
+  const live = mapById(isMapPublic(viewedId, defaultMap.id, state) ? viewedId : defaultMap.id)
   const territory = state[territorySlice(live.id)]
-  const frames = useMemo(() => framesForMap(state.campaignFrames, live.id), [state.campaignFrames, live.id])
+  // Only the frames RHQ has actually released — camp is generated in full in
+  // advance, and revealed a day at a time (see releasedFrames).
+  const frames = useMemo(
+    () => releasedFrames(framesForMap(state.campaignFrames, live.id)),
+    [state.campaignFrames, live.id],
+  )
   const allZones = useMemo(
     () => visibleZones(live.id, state[zoneVisibilitySlice(live.id)]),
     [live.id, state],
@@ -93,19 +101,25 @@ export default function Home() {
     () => (hasCampPlan(live.id) ? zoneProgress(live.id, day, campMode === 'company' ? company : null) : null),
     [live.id, day, campMode, company],
   )
-  // In company view the PAINTED GROUND is masked to that company plus RHQ, so
-  // a cadet sees what their own company took rather than the whole task
-  // force's board. Masking here rather than generating six sets of frames:
-  // it is the same plan either way, and per-company frames in a shared
-  // collection would be six more things to keep in step.
+  // In company view the PAINTED GROUND is rewritten to that company's own
+  // board: their ground, everything 1ATF has conquered, and RHQ. Done here at
+  // render time rather than by generating six sets of frames — it is the same
+  // plan either way, and per-company frames in a shared collection would be
+  // six more things to keep in step. Each generated frame is rebuilt against
+  // ITS OWN day (`f.day`), not the day on screen, so a company's progress
+  // grows through the replay instead of every frame showing the latest state.
   const maskCells = campMode === 'company' && company
   const viewTerritory = useMemo(
-    () => (maskCells ? { ...territory, cells: maskToCompany(territory.cells, company) } : territory),
-    [territory, maskCells, company],
+    () => (maskCells
+      ? { ...territory, cells: companyCells(live.id, territory.cells, territory.cols, territory.rows, company, day) }
+      : territory),
+    [territory, maskCells, company, live.id, day],
   )
   const viewFrames = useMemo(
-    () => (maskCells ? frames.map((f) => ({ ...f, cells: maskToCompany(f.cells, company) })) : frames),
-    [frames, maskCells, company],
+    () => (maskCells
+      ? frames.map((f) => ({ ...f, cells: companyCells(live.id, f.cells, territory.cols, territory.rows, company, f.day) }))
+      : frames),
+    [frames, maskCells, company, live.id, territory.cols, territory.rows],
   )
 
   // In company view the map shows only the zones that company is sent to;
@@ -163,7 +177,7 @@ export default function Home() {
           company={company} dayFromReplay={replayDrivesDay}
         />
       )}
-      <MapSwitch live={live} defaultId={defaultMap.id} isOverride={isOverride} onView={viewMap} />
+      <MapSwitch live={live} defaultId={defaultMap.id} isOverride={isOverride} onView={viewMap} state={state} />
 
       <div className="row wrap" style={{ marginTop: 20, gap: 16, alignItems: 'flex-start' }}>
         <div style={{ flex: '1 1 420px' }}>
@@ -185,10 +199,12 @@ export default function Home() {
 // new UI — with two maps that is exactly the single "view the other one"
 // button this was asked for.
 //
-// Hidden entirely when there is only one map: a switcher offering nothing is
-// just a confusing control.
-function MapSwitch({ live, defaultId, isOverride, onView }) {
-  const others = otherMaps(live.id)
+// Hidden entirely when there is only one map to offer: a switcher offering
+// nothing is just a confusing control. That is also what a visitor sees before
+// RHQ distributes the second map — the portal simply has one map, with no
+// button hinting at something they can't open.
+function MapSwitch({ live, defaultId, isOverride, onView, state }) {
+  const others = publicMaps(defaultId, state).filter((m) => m.id !== live.id)
   if (!others.length) return null
   return (
     <div className="row between center wrap" style={{ gap: 10, marginTop: 10 }}>

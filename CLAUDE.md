@@ -413,9 +413,21 @@ assuming a page exists).
     Campaign replay → **⚙ Build N Frames from Camp Plan** writes one frame per
     camp day plus a camp-start frame. They are ordinary frames afterwards, so
     RHQ can repaint or delete any of them.
-    - **First company into a zone owns it and keeps it** — later companies pass
-      through without the ground changing hands, because a map that churns
-      between friendly companies reads as confusion.
+    - **First company in owns it WHILE the rest are still to come; once every
+      scheduled company has been, the zone is 1ATF's** — its own owner code
+      `T` (`TASKFORCE_CODE` in territory.js, assure-blue, labelled `1ATF`),
+      not RHQ's `R`. Later companies pass through without the ground changing
+      hands between companies, because a map that churns between friendly
+      companies reads as confusion. The zone percentage is ALWAYS unit-wide,
+      in the company view too: three companies booked onto the ropes course
+      means one through reads 33% wherever it is shown.
+    - **1ATF ground survives the per-company mask**, so an area two companies
+      were booked onto and both visited reads as taken on all six companies'
+      maps — including the four never sent there.
+    - ⚠️ A company board is **rebuilt from the plan, not just masked**
+      (`companyCells` in campFrames.js, keyed on each frame's own `day`).
+      Masking alone erased ground the visitor's company had covered whenever
+      another company got there first and painted it their colour.
     - **Held-ness reuses the grid's light/solid convention**: lowercase while
       some scheduled company still has to come, uppercase once all have. No new
       cell codes.
@@ -424,8 +436,15 @@ assuming a page exists).
       readout instead of its own day buttons. Before this the timeline and the
       day selector were rival clocks that could disagree on screen. Don't
       reintroduce a second day control while generated frames exist.
+    - ⚠️ **Generated frames arrive HIDDEN** except the camp-start frame. Camp
+      is painted in full before it starts, so publishing the lot would show
+      cadets the last day on day one: each frame doc carries `hidden`,
+      `releasedFrames()` in campaign.js filters the PUBLIC replay only, and
+      Map: Territory gives each row **Reveal** / **Visible ✓** plus **Reveal
+      to here** (reveals up to that frame and re-hides the rest, so the public
+      timeline never has a gap). The Ops Centre always works on the full set.
     - **Company view masks the painted cells** (`maskToCompany`), so a cadet
-      sees their own company's ground plus RHQ and nothing else — done at
+      sees their own company's ground, 1ATF's and RHQ's and nothing else — done at
       render time rather than by generating per-company frames, which would put
       six more copies in a shared collection. RHQ survives the mask on purpose.
   - A map may declare an **`artKey`** (+ `artKeyLabel`): what its own art
@@ -452,7 +471,13 @@ assuming a page exists).
   don't match its map.
 - **`activeMap` is the DEFAULT map, not the only public one** (2026-09-13 —
   this REVERSES the earlier "the public sees exactly one map, there is
-  deliberately no public switcher" rule; don't reinstate it). RHQ sets the
+  deliberately no public switcher" rule; don't reinstate it), **but a
+  non-default map is invisible until DISTRIBUTED** (2026-09-14): a per-map
+  `mapRelease` slice, `isMapPublic()`/`publicMaps()` in maps.js, and
+  **Distribute to the portal** / **Withdraw** in Ops Centre → Map: Territory.
+  The default map is always public (a default nobody may open leaves Home
+  with no map on it); every other map has no switch button and cannot be
+  reached by a session override until RHQ distributes it. RHQ sets the
   default in Ops Centre → Map: Territory ("Make this the default map"), and a
   visitor lands on it. A **map switch under the map on Home** then lets them
   view any other map — one button per map that isn't on screen, so a third map
@@ -466,9 +491,11 @@ assuming a page exists).
     it, so the visitor returns to "whatever RHQ says". Every storage read is
     guarded (private mode throws; a stored id can name a map deleted in a
     deploy) and falls back to the default.
-  - ⚠️ **Both maps are therefore public.** Editing a non-default map is NOT
-    invisible any more — the Ops Centre copy says so, and must keep saying so.
-    Anything saved on either map can be seen by anyone.
+  - ⚠️ **A DISTRIBUTED map is fully public.** Editing it is not invisible —
+    the Ops Centre copy distinguishes all three states (default / distributed
+    / not distributed) and must keep doing so, because it is what tells RHQ
+    whether what they save is public. Anything saved on the default map, or on
+    any distributed map, can be seen by anyone.
   - The Staff Centre still shows only `activeMap`; it is an RHQ/staff overview
     of the live picture, not a browser.
   - *Which map you're editing* and *which map is the default* remain two
@@ -660,6 +687,15 @@ assuming a page exists).
   The hatch renderer lives in
   [src/lib/terrainRender.js](src/lib/terrainRender.js), shared with two
   exports in [src/lib/replayExport.js](src/lib/replayExport.js):
+  ⚠️ Both exports render through the map's **live tiles** where it has them:
+  `renderBaseMap()` is async and composites XYZ tiles over `map.image` at
+  export resolution, then applies the map's filter in ONE 1:1 pass (the
+  no-resample rule below still holds) — the same single-filter-over-both
+  arrangement the live page uses. Tiles load `crossOrigin='anonymous'` so a
+  server without CORS fails cleanly to the static art rather than tainting the
+  canvas and throwing at the end of a long export; capped at 400 tiles.
+  Without this an export of the Regional map rendered the Sentinel-2 FLOOR
+  upscaled 3x, which is why it looked coarse beside the live map.
   **Export Campaign Replay** (offscreen re-render recorded in real time via
   MediaRecorder to MP4, WebM on browsers that can't mux MP4 — 1944×1008,
   20 Mbps: hatch fills are fine high-contrast repeating lines, exactly what

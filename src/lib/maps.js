@@ -151,12 +151,23 @@ export const campaignStartSlice = (mapId) =>
 export const zoneVisibilitySlice = (mapId) =>
   (mapId === PRIMARY_MAP_ID ? 'zoneVisibility' : `zoneVisibility_${mapId}`)
 
+// Whether a map has been DISTRIBUTED to the public — `{ released, at }`.
+//
+// A map is built, painted and its replay generated well before anyone outside
+// RHQ should see it: the Regional map exists in the repo weeks before camp,
+// with every day of the camp already painted on it. Distribution is therefore
+// a deliberate action in the Ops Centre, not a consequence of the map
+// existing. Until it is taken, the map isn't offered on Home and can't be
+// reached by a saved session override either.
+export const mapReleaseSlice = (mapId) =>
+  (mapId === PRIMARY_MAP_ID ? 'mapRelease' : `mapRelease_${mapId}`)
+
 // Which map a slice name belongs to, or null if it isn't map-scoped. Used by
 // the Backups panel so a version of "Map: Territory" says which map it is.
 export function mapOfSlice(slice) {
   for (const m of MAPS) {
     if (slice === territorySlice(m.id) || slice === campaignStartSlice(m.id)
-        || slice === zoneVisibilitySlice(m.id)) return m
+        || slice === zoneVisibilitySlice(m.id) || slice === mapReleaseSlice(m.id)) return m
   }
   return null
 }
@@ -165,7 +176,23 @@ export function mapOfSlice(slice) {
 // into SINGLE_SLICES so each map is loaded, persisted and version-backed
 // exactly like any other piece of content.
 export const mapSlices = () =>
-  MAPS.flatMap((m) => [territorySlice(m.id), campaignStartSlice(m.id), zoneVisibilitySlice(m.id)])
+  MAPS.flatMap((m) => [territorySlice(m.id), campaignStartSlice(m.id), zoneVisibilitySlice(m.id), mapReleaseSlice(m.id)])
+
+/**
+ * Can the public see this map at all?
+ *
+ * The DEFAULT map always can — a default nobody is allowed to look at would
+ * leave the Home page with no map on it, and RHQ choosing a map as the one
+ * visitors land on IS the decision to publish it. Every other map has to be
+ * distributed first, from Ops Centre → Map: Territory.
+ */
+export function isMapPublic(mapId, activeMapId, state) {
+  if (mapId === (isKnownMap(activeMapId) ? activeMapId : PRIMARY_MAP_ID)) return true
+  return !!state?.[mapReleaseSlice(mapId)]?.released
+}
+
+export const publicMaps = (activeMapId, state) =>
+  MAPS.filter((m) => isMapPublic(m.id, activeMapId, state))
 
 /* ------------------------------ georeference ----------------------------- */
 

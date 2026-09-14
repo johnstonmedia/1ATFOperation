@@ -26,7 +26,7 @@ export const MIN_LABEL_CELLS = 45
 
 // Order labels are emitted in, so overlapping draws are at least stable
 // between renders rather than depending on Map iteration of a changing grid.
-const CODE_ORDER = ['A', 'B', 'C', 'D', 'E', 'S', 'R', 'M']
+const CODE_ORDER = ['A', 'B', 'C', 'D', 'E', 'S', 'T', 'R', 'M']
 
 // Owner codes the map key lists. Deliberately the FULL fixed roster rather
 // than whoever currently holds ground: the key is a constant reference for

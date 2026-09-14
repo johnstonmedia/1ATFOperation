@@ -17,6 +17,59 @@ keep entries short and focused on what a new collaborator needs to know.
 
 ---
 
+## 2026-09-14 (b) — 1ATF conquest, staged release, tiles in exports, no seeded Meridian
+
+- **A zone is conquered by 1ATF, not by a company.** New owner code `T`
+  (`TASKFORCE_CODE` in territory.js, assure-blue `#1e9bff`, labelled `1ATF`).
+  While companies are still working through a zone it stays the FIRST
+  visitor's, lowercase/loosely held; once EVERY company the plan sends there
+  has been, it flips to solid 1ATF. The percentage on a zone is therefore
+  always unit-wide, in both views — three companies booked onto the ropes
+  course means one through reads 33% wherever it is shown.
+- **Conquered ground shows on every company's map.** `T` survives the
+  per-company mask, so an area two companies were booked onto and both
+  visited reads as taken on all six companies' maps, including the four never
+  sent there.
+- **Company boards are now built, not just masked** (`companyCells` in
+  campFrames.js). Masking alone erased ground the visitor's own company had
+  covered whenever another company got there first and painted it their
+  colour; the plan is now re-read per frame (against `f.day`, not the day on
+  screen) so a cadet's own progress is right at every point in the replay.
+- **Campaign frames can be held back** (`hidden` on the frame doc,
+  `releasedFrames()` in campaign.js). Camp is generated in full before it
+  starts, so **frames built from the camp plan now arrive HIDDEN** except the
+  camp-start frame; Map: Territory gives each row **Reveal** / **Visible ✓**
+  plus **Reveal to here** (the end-of-day action — reveals up to that frame
+  and re-hides the rest, so the public timeline never has a gap). Only Home
+  filters; the Ops Centre always works on the full set.
+- **A non-default map is not public until distributed.** New per-map
+  `mapRelease` slice + `isMapPublic()`/`publicMaps()`; Ops Centre → Map:
+  Territory has **Distribute to the portal** / **Withdraw**. ⚠️ This
+  QUALIFIES the 2026-09-13 "both maps are public" rule: the DEFAULT map is
+  still always public (a default nobody may open leaves Home with no map),
+  but every other map is invisible — no switch button, and a session override
+  naming it falls back to the default — until RHQ distributes it. The ops
+  copy now states which of the three states you are editing in.
+- **Exports render through the live tiles.** `renderBaseMap()` in
+  replayExport.js is async and composites the XYZ tiles over `map.image` at
+  export resolution, then applies the map's filter in ONE 1:1 pass (so the
+  no-resample rule that fixed blurry exports still holds), matching the live
+  page where a single CSS filter wraps art and tiles together. Tiles load with
+  `crossOrigin='anonymous'` — a server without CORS fails cleanly to the
+  static art instead of tainting the canvas and throwing at the end of a long
+  export. Capped at 400 tiles per export (≈z16 on the Regional frame, ~2.5 m/px
+  against the static image's ~12 m/px). This is why an exported replay of the
+  Regional map looked coarse next to the live map: it was rendering the
+  Sentinel-2 floor, upscaled 3x.
+- **Seeded Meridian demo data removed**: the three pre-painted `M` blobs in the
+  NSW default territory, the two `hostile: true` stronghold flags on the
+  Regional map, the Meridian demo activity row, and the Meridian contact in the
+  seeded movement. The Meridian NARRATIVE is untouched (quote, SMEAC, the
+  `meridian` brief, intel intro, `--hostile` colour) — it is the campaign's
+  story, and removing it would empty the Home page. ⚠️ The seed only applies
+  where no Firestore document exists; a live NSW territory already saved needs
+  **Clear all** in Map: Territory.
+
 ## 2026-09-14 — Campaign frames generated from the camp plan; company-scoped board
 The replay is now built from the plan rather than painted, and a company sees
 only its own ground.

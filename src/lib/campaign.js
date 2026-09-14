@@ -57,6 +57,22 @@ export function frameUsesLabelOverrides(frames) {
   return sortFrames(frames).map((f) => !!f.useLabelOverrides)
 }
 
+/**
+ * The frames the PUBLIC replay may show: everything not held back.
+ *
+ * Camp is generated all at once — every day of it is painted and stored
+ * before camp starts (see lib/campFrames.js). Releasing that wholesale would
+ * hand cadets the ending on day one, so each frame carries a `hidden` flag and
+ * RHQ reveals them one at a time as camp runs. The Ops Centre always works on
+ * the full set; only Home filters.
+ *
+ * Frames saved before the flag existed have no `hidden` and are visible, which
+ * is the behaviour they already had.
+ */
+export function releasedFrames(frames) {
+  return (frames || []).filter((f) => !f.hidden)
+}
+
 /* --------------------------- replay transitions -------------------------- */
 
 // Owner-code -> display label for the conquest flash.

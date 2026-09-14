@@ -233,9 +233,10 @@ function buildTerritoryCells() {
       if (x >= 0 && x < T_COLS && y >= 0 && y < T_ROWS) g[y * T_COLS + x] = code
     }
   }
-  blob(125, 59, 14, 8, 'M') // North Sydney
-  blob(35, 46, 14, 8, 'M')  // Marrangaroo
-  blob(108, 8, 14, 8, 'M')  // Singleton
+  // Deliberately empty: no seeded Meridian ground. The campaign starts from a
+  // blank board and RHQ paints what the companies actually take, the same way
+  // the Regional map does (see buildSingletonCells below). Re-adding a
+  // pre-painted threat here would put ground on the map nobody fought for.
   return g.join('')
 }
 export const DEFAULT_TERRITORY = {
@@ -307,10 +308,10 @@ export const DEFAULT_SINGLETON_TERRITORY = {
     { id: 'sg-sp4', name: 'Sentry Post No4', x: 149, y: 32 },
     { id: 'sg-sp10', name: 'Sentry Post No10', x: 196, y: 24 },
     { id: 'sg-dfsw', name: 'DFSW2 Firing Range', x: 135, y: 24 },
-    { id: 'sg-cave', name: 'Yellow Billys Cave', x: 140, y: 84, hostile: true },
+    { id: 'sg-cave', name: 'Yellow Billys Cave', x: 140, y: 84 },
     { id: 'sg-calf', name: 'Calf Pen', x: 145, y: 78 },
     { id: 'sg-retrans', name: 'Retrans Peak', x: 28, y: 12 },
-    { id: 'sg-bbr', name: 'Broken Back Range', x: 179, y: 131, hostile: true },
+    { id: 'sg-bbr', name: 'Broken Back Range', x: 179, y: 131 },
   ],
 }
 
@@ -385,7 +386,7 @@ export const DEFAULT_NARRATIVE = {
     intro: 'Company actions behind the latest changes to the operational map.',
     entries: [
       { id: 'mv-a', companies: ['A'], text: 'Pushed the northern screen forward and held the gained ground through the week.' },
-      { id: 'mv-b', companies: ['B'], text: 'Cleared the approach to Singleton, forcing the Meridian line back off the ridge.' },
+      { id: 'mv-b', companies: ['B'], text: 'Cleared the approach to Singleton and held the ridge.' },
       { id: 'mv-c', companies: ['C'], text: 'Consolidated the coastal corridor; no ground lost during the period.' },
       { id: 'mv-e', companies: ['E'], text: 'Reinforced the Southern Line after Bravo’s advance opened a gap.' },
       { id: 'mv-s', companies: ['S'], text: 'Moved the forward supply point up behind the new front, sustaining the advance.' },
@@ -507,5 +508,4 @@ export const DEMO_ROSTER = [
 
 export const DEFAULT_ACTIVITY = [
   { id: 'a1', company: 'Alpha', text: 'Secured Northern Approach grid 130E.', ts: Date.now() - 86400000 },
-  { id: 'a2', company: 'Meridian', text: 'Meridian probe repelled at Red Centre.', ts: Date.now() - 43200000 },
 ]

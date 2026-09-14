@@ -1,5 +1,5 @@
 import { beaconStateFor } from './territory'
-import { mapFor } from './maps'
+import { mapFor, tileZoomFor, tilesFor } from './maps'
 import { renderTerritoryLayer, renderWaveLayer, drawCompanyLabels, drawLegend, imageFilterFor } from './terrainRender'
 import { drawMapLines } from './mapLines'
 import { frameCells, frameCaptions, sortFrames, transitionPlan, transitionDuration } from './campaign'
@@ -58,6 +58,74 @@ function loadImage(src) {
   })
 }
 
+/* ------------------------------ tile basemap ------------------------------ */
+// A map with a live tile source (the Regional map's satellite imagery) must
+// export through the SAME tiles the page shows, not through `map.image`.
+//
+// `map.image` is the FLOOR, not an alternative: on the Regional map it is a
+// 10 m/px Sentinel-2 still, which is what a visitor sees for a moment before
+// the tiles arrive and all they see if the tiles never do. Exporting from it
+// alone was rendering the video and the weekly still off that floor — the
+// whole frame blown up ~3x from an image with a third of the detail, which is
+// why an export looked coarse and hard to relate to the ground while the live
+// map looked sharp.
+//
+// The tiles are fetched with CORS. A tile server that doesn't send the header
+// simply fails to load here (rather than silently tainting the canvas, which
+// would make captureStream and toBlob throw at the very end of a long
+// export). Whatever doesn't load just isn't drawn, and the static art
+// underneath shows through — the same degradation the live map has.
+
+// Ceiling on how many tiles one export may fetch. Deeper zoom is finer
+// imagery but four times the requests; this lands around z16 on the Regional
+// frame (~2.5 m/px against the static image's ~12 m/px).
+const MAX_EXPORT_TILES = 400
+const TILE_CONCURRENCY = 8
+
+function loadTile(url) {
+  return new Promise((resolve) => {
+    const img = new Image()
+    // Without this a drawn tile taints the canvas and every later toBlob /
+    // captureStream call throws SecurityError. With it, a server that doesn't
+    // allow cross-origin reads fails cleanly and we fall back to the art.
+    img.crossOrigin = 'anonymous'
+    img.onload = () => resolve(img)
+    img.onerror = () => resolve(null)
+    img.src = url
+  })
+}
+
+// Returns a W x H canvas of tile imagery, or null when the map has no tile
+// source or not one tile could be fetched.
+async function renderTileLayer(map, W, H) {
+  if (!map?.tiles) return null
+  let z = tileZoomFor(map, W)
+  let tiles = tilesFor(map, z)
+  while (tiles.length > MAX_EXPORT_TILES && z > (map.tiles.minZoom ?? 0)) {
+    z -= 1
+    tiles = tilesFor(map, z)
+  }
+  if (!tiles.length || tiles.length > MAX_EXPORT_TILES) return null
+
+  const cv = document.createElement('canvas')
+  cv.width = W; cv.height = H
+  const ctx = cv.getContext('2d')
+  ctx.imageSmoothingEnabled = true // photographic, unlike the pixel-art maps
+
+  const queue = tiles.slice()
+  let drawn = 0
+  const worker = async () => {
+    for (let t = queue.pop(); t; t = queue.pop()) {
+      const img = await loadTile(t.url)
+      if (!img) continue
+      ctx.drawImage(img, (t.left / 100) * W, (t.top / 100) * H, (t.width / 100) * W, (t.height / 100) * H)
+      drawn += 1
+    }
+  }
+  await Promise.all(Array.from({ length: TILE_CONCURRENCY }, worker))
+  return drawn ? cv : null
+}
+
 /* --------------------------- shared draw helpers -------------------------- */
 
 // Render the base map art onto a W x H canvas, filtered but crisp.
@@ -70,23 +138,43 @@ function loadImage(src) {
 // through a different internal raster path that re-enables smoothing
 // regardless of imageSmoothingEnabled — that was the source of the blurry
 // map art in exported video and images.
-function renderBaseMap(img, map, W, H) {
-  const native = document.createElement('canvas')
-  native.width = map.pixelWidth
-  native.height = map.pixelHeight
-  const nctx = native.getContext('2d')
-  nctx.imageSmoothingEnabled = false
-  try { nctx.filter = imageFilterFor(map) } catch { /* keep default */ }
-  nctx.drawImage(img, 0, 0)
-  nctx.filter = 'none'
-
+async function renderBaseMap(img, map, W, H) {
   const base = document.createElement('canvas')
   base.width = W; base.height = H
   const bctx = base.getContext('2d')
   bctx.imageSmoothingEnabled = false
   bctx.fillStyle = '#0a0f1a'
   bctx.fillRect(0, 0, W, H)
-  bctx.drawImage(native, 0, 0, map.pixelWidth, map.pixelHeight, 0, 0, W, H)
+
+  const tiles = await renderTileLayer(map, W, H)
+  if (tiles) {
+    // Tile maps composite art + tiles at EXPORT resolution first and filter
+    // that in one pass. The rule the comment above protects still holds: the
+    // filtered draw is 1:1 (W x H onto W x H), so there is nothing for a
+    // filter raster path to resample and re-smooth. One filter over both
+    // layers also matches the live map, where a single CSS filter wraps the
+    // static art and the tiles together so they can't look like two maps.
+    const raw = document.createElement('canvas')
+    raw.width = W; raw.height = H
+    const rctx = raw.getContext('2d')
+    rctx.imageSmoothingEnabled = false
+    rctx.drawImage(img, 0, 0, map.pixelWidth, map.pixelHeight, 0, 0, W, H)
+    rctx.imageSmoothingEnabled = true
+    rctx.drawImage(tiles, 0, 0)
+    try { bctx.filter = imageFilterFor(map) } catch { /* keep default */ }
+    bctx.drawImage(raw, 0, 0)
+    bctx.filter = 'none'
+  } else {
+    const native = document.createElement('canvas')
+    native.width = map.pixelWidth
+    native.height = map.pixelHeight
+    const nctx = native.getContext('2d')
+    nctx.imageSmoothingEnabled = false
+    try { nctx.filter = imageFilterFor(map) } catch { /* keep default */ }
+    nctx.drawImage(img, 0, 0)
+    nctx.filter = 'none'
+    bctx.drawImage(native, 0, 0, map.pixelWidth, map.pixelHeight, 0, 0, W, H)
+  }
   // The map's vector boundaries. They live over the art rather than inside it
   // (see lib/mapLines.js), so without this an exported still or video would be
   // the one place they went missing.
@@ -261,7 +349,8 @@ export function exportCampaignReplay({ territory, frames: campaignFrames, onProg
     // The base (map art) and the committed hatch layer only change once per
     // move — pre-render both so the per-tick cost is two drawImage calls plus
     // the flat-tint wave.
-    const base = renderBaseMap(img, map, W, H)
+    const base = await renderBaseMap(img, map, W, H)
+    if (cancelled) throw Object.assign(new Error('Export cancelled.'), { cancelled: true })
     let hatch = renderHatch(frames[0], cols, rows, showRHQ, W, H)
     const commitHatch = (cells) => { hatch = renderHatch(cells, cols, rows, showRHQ, W, H) }
 
@@ -472,7 +561,7 @@ export async function exportProgressImage({ territory, frames: campaignFrames, d
   const ctx = canvas.getContext('2d')
   ctx.imageSmoothingEnabled = false
 
-  ctx.drawImage(renderBaseMap(img, map, W, H), 0, 0)
+  ctx.drawImage(await renderBaseMap(img, map, W, H), 0, 0)
   ctx.drawImage(renderHatch(finalCells, cols, rows, showRHQ, W, H), 0, 0)
   if (plan.clusters.length) renderWaveLayer(ctx, plan, 1, { cols, rows, w: W, h: H })
   drawCompanyLabels(ctx, companyLabelPoints(finalCells, cols, rows, { showRHQ, avoid: territory.places, overrides: territory.labelOverrides }), { cols, rows, w: W, h: H, scale: SCALE })

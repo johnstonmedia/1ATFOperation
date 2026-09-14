@@ -30,30 +30,47 @@ export const LAST_DAY = (mapId) => campDays(mapId).reduce((n, d) => Math.max(n, 
  *   visited    those who have been, as at throughDay
  *   pending    those still to come
  *   pct        visited / scheduled, 0..100, rounded
- *   done       pct === 100
+ *   done       pct === 100 — 1ATF has conquered it
+ *   mine       this company is scheduled here     (only when `company` given)
+ *   mineDone   this company has been              (only when `company` given)
  * }
  *
- * `company` narrows it to one company's own progress — the COMPANY map. Then
- * `scheduled` is just that company's visits, so a zone is simply done or not,
- * and zones they never visit drop out of the map entirely.
+ * ⚠️ THE PERCENTAGE IS ALWAYS UNIT-WIDE, even in the company view. A zone is
+ * not conquered until EVERY company the plan sends there has been through it:
+ * three companies are booked onto the ropes course, so one company through
+ * reads 33% on every map that shows it. Making the company view divide by its
+ * own visits would have the same ground read 100% for Alpha and 33% for the
+ * unit at the same moment, which is not one campaign.
+ *
+ * `company` therefore changes WHICH ZONES ARE LISTED, not the arithmetic:
+ * the ones that company is sent to, PLUS every zone 1ATF has already
+ * conquered. Ground the task force holds belongs to all of it, so once a zone
+ * is done it shows on every company's map whether they were sent there or not.
  */
 export function zoneProgress(mapId, throughDay, company = null) {
   const plan = planFor(mapId)
   const out = new Map()
   if (!plan) return out
   for (const v of plan.visits) {
-    if (company && v.company !== company) continue
     let z = out.get(v.zone)
     if (!z) out.set(v.zone, (z = { scheduled: new Set(), visited: new Set() }))
     z.scheduled.add(v.company)
     if (v.day <= throughDay) z.visited.add(v.company)
   }
-  for (const [, z] of out) {
+  for (const [id, z] of out) {
+    const mine = z.scheduled.has(company)
+    const mineDone = z.visited.has(company)
     z.scheduled = [...z.scheduled].sort()
     z.visited = [...z.visited].sort()
     z.pending = z.scheduled.filter((c) => !z.visited.includes(c))
     z.pct = z.scheduled.length ? Math.round((z.visited.length / z.scheduled.length) * 100) : 0
     z.done = z.pct === 100
+    if (company) {
+      z.mine = mine
+      z.mineDone = mineDone
+      // Not theirs and not yet taken by the unit: nothing to show them.
+      if (!mine && !z.done) out.delete(id)
+    }
   }
   return out
 }

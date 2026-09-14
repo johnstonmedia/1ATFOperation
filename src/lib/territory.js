@@ -32,9 +32,27 @@ export const OCEAN_COLOR = PRIMARY.blockFill
 const MERIDIAN_COLOR = '#ff3b46'
 const RHQ_COLOR = COMPANIES.find((c) => c.letter === 'R')?.accent || '#f39c12'
 
-// Paint palette on the recruit map = six companies + Meridian.
+// Colour and name for ground the WHOLE task force holds — deliberately NOT one
+// of the six company accents, so a unit-wide win reads as one at a glance.
+// Single source of truth: change these two values to restyle/relabel every
+// 1ATF-held cell, every recaptured stronghold beacon and the map key row.
+export const ASSURE_BLUE = '#1e9bff'
+export const SCU_LABEL = '1ATF'
+
+// The 1ATF owner code. An activity area is only CONQUERED once every company
+// the plan sends there has been through it; at that point the ground stops
+// belonging to whichever company got there first and becomes the task force's
+// (see lib/campFrames.js). That is a state a zone reaches, not a place, which
+// is why it is its own code rather than a reuse of RHQ's 'R' — RHQ is a fixed
+// location on the ground. It also survives the per-company mask, so anything
+// 1ATF has taken shows on every company's map whether they were sent there or
+// not.
+export const TASKFORCE_CODE = 'T'
+
+// Paint palette on the recruit map = six companies + 1ATF + Meridian.
 export const PAINT = [
   ...COMPANIES.filter((c) => c.letter !== 'R').map((c) => ({ code: c.letter, label: c.name, color: c.accent })),
+  { code: TASKFORCE_CODE, label: SCU_LABEL, color: ASSURE_BLUE },
   { code: 'M', label: 'Meridian', color: MERIDIAN_COLOR },
 ]
 export const RHQ_PAINT = { code: 'R', label: 'RHQ', color: RHQ_COLOR }
@@ -52,6 +70,7 @@ export function lighten(hex, amt = 0.5) {
 }
 
 export const isRHQCode = (code) => !!code && code.toUpperCase() === 'R'
+export const isTaskforceCode = (code) => !!code && code.toUpperCase() === TASKFORCE_CODE
 
 /* ------------------------------ occupancy ------------------------------ */
 // Who holds a given point on the map. Used by the persistent occupier
@@ -59,12 +78,9 @@ export const isRHQCode = (code) => !!code && code.toUpperCase() === 'R'
 // flat cell grid with no zone entities, so a "zone" here is the named place
 // and its occupier is whoever holds the ground around it.
 
-// Colour a stronghold beacon switches to once SCU has retaken it —
-// deliberately NOT one of the six company accents, so a recaptured
-// stronghold reads as a unit-wide win at a glance. Single source of truth:
-// change this one value to restyle every recaptured stronghold.
-export const ASSURE_BLUE = '#1e9bff'
-export const SCU_LABEL = '1ATF'
+// ASSURE_BLUE / SCU_LABEL (the colour and tag a recaptured stronghold beacon
+// switches to) are declared with the palette above, since 1ATF-held ground now
+// paints in the same colour and must not be able to drift from it.
 
 export const isMeridianCode = (code) => !!code && code.toUpperCase() === 'M'
 // Everything that isn't Meridian or empty belongs to SCU / 1ATF.
@@ -84,6 +100,7 @@ export function coyLabelOf(code) {
   const up = code.toUpperCase()
   if (isMeridianCode(up)) return 'MERIDIAN'
   if (isRHQCode(up)) return 'RHQ'
+  if (isTaskforceCode(up)) return SCU_LABEL
   return labelOf(up) ? `${up}-COY` : null
 }
 
