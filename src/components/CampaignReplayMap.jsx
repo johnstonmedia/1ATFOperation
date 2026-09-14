@@ -53,7 +53,7 @@ const playBtnStyle = {
   gap: 7,
 }
 
-export default function CampaignReplayMap({ territory, frames: campaignFrames, zones, zoneProgress, defaultStartId, maxWidth }) {
+export default function CampaignReplayMap({ territory, frames: campaignFrames, zones, zoneProgress, defaultStartId, maxWidth, onFrame }) {
   const { cols, rows } = territory
 
   // Frames: one per recorded frame, sorted by order — ONLY real, saved
@@ -115,6 +115,7 @@ export default function CampaignReplayMap({ territory, frames: campaignFrames, z
       territory={territory}
       zones={zones}
       zoneProgress={zoneProgress}
+      onFrame={onFrame}
       frames={frames}
       captions={captions}
       frameMeta={frameMeta}
@@ -125,7 +126,7 @@ export default function CampaignReplayMap({ territory, frames: campaignFrames, z
   )
 }
 
-function Replay({ territory, zones, zoneProgress, frames, captions, frameMeta, labelFlags, startIdx, maxWidth }) {
+function Replay({ territory, zones, zoneProgress, onFrame, frames, captions, frameMeta, labelFlags, startIdx, maxWidth }) {
   const { cols, rows } = territory
   const transitions = frames.length - 1
   const perMs = useMemo(() => transitionDuration(transitions), [transitions])
@@ -158,6 +159,10 @@ function Replay({ territory, zones, zoneProgress, frames, captions, frameMeta, l
   const commitFrame = useCallback((idx) => {
     eng.current.committedIdx = idx
     setCommittedIdx(idx)
+    // Tell the page which frame is on screen, so anything else keyed to the
+    // campaign timeline (the camp-day progress overlay) follows the replay
+    // rather than running as a second, contradictory clock.
+    onFrame?.(idx)
   }, [])
 
   // Rest on a specific frame index — an instant cut, no animation. This is

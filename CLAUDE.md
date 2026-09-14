@@ -407,6 +407,27 @@ assuming a page exists).
       ("Ssupport") and name mismatches ("Juliett" → `aa-juliet`; the sheet's
       "Ropes" ACTIVITY is `high-ropes`, a different place from its `nl-ropes`
       night location) as an explicit mapping rather than fuzzy matching.
+  - **The replay is GENERATED from the plan**, not painted
+    ([campFrames.js](src/lib/campFrames.js), rasterised by
+    [zoneRaster.js](src/lib/zoneRaster.js)): Ops Centre → Map: Territory →
+    Campaign replay → **⚙ Build N Frames from Camp Plan** writes one frame per
+    camp day plus a camp-start frame. They are ordinary frames afterwards, so
+    RHQ can repaint or delete any of them.
+    - **First company into a zone owns it and keeps it** — later companies pass
+      through without the ground changing hands, because a map that churns
+      between friendly companies reads as confusion.
+    - **Held-ness reuses the grid's light/solid convention**: lowercase while
+      some scheduled company still has to come, uppercase once all have. No new
+      cell codes.
+    - ⚠️ **The replay owns the camp day.** Generated frames carry a `day`, the
+      committed frame reports it up via `onFrame`, and CampControls shows a
+      readout instead of its own day buttons. Before this the timeline and the
+      day selector were rival clocks that could disagree on screen. Don't
+      reintroduce a second day control while generated frames exist.
+    - **Company view masks the painted cells** (`maskToCompany`), so a cadet
+      sees their own company's ground plus RHQ and nothing else — done at
+      render time rather than by generating per-company frames, which would put
+      six more copies in a shared collection. RHQ survives the mask on purpose.
   - A map may declare an **`artKey`** (+ `artKeyLabel`): what its own art
     carries under the territory hatch, rendered by
     [MapLegend.jsx](src/components/MapLegend.jsx) behind a `+ <artKeyLabel>`

@@ -17,6 +17,44 @@ keep entries short and focused on what a new collaborator needs to know.
 
 ---
 
+## 2026-09-14 — Campaign frames generated from the camp plan; company-scoped board
+The replay is now built from the plan rather than painted, and a company sees
+only its own ground.
+
+- **⚙ Build 5 Frames from Camp Plan** (Ops Centre → Map: Territory → Campaign
+  replay) generates one frame per camp day plus a camp-start frame, painting
+  ground from the schedule. Generated frames are ordinary frames afterwards, so
+  any of them can still be repainted, relabelled or deleted. Replacing an
+  existing replay is behind a confirm.
+  - **The first company into a zone takes it and keeps it.** Later companies
+    pass through without the ground changing hands — a progress map that churns
+    between friendly companies reads as confusion, and "conquered" means taken
+    from the Meridian, which happens once.
+  - **Held-ness uses the grid's existing light/solid convention** rather than
+    new cell codes: a zone is lowercase (loosely held) until every company on
+    its plan has been through, then uppercase. Verified in the generated
+    output — camp start is RHQ only, the middle days are mostly lowercase, and
+    Day 4 is entirely uppercase.
+- ⚠️ **Fixed a contradiction this created.** The replay timeline and the camp
+  day selector were two independent clocks: the map could show Day 4 while the
+  progress bar underneath said START / 0%. The replay now OWNS the day —
+  generated frames carry their day, the committed frame reports it up, and the
+  duplicate day buttons are replaced by a "SHOWING DAY n" readout. Verified:
+  autoplay ends on DAY 4 / 100%, first bubble gives CAMP START / 0%, third
+  gives DAY 2 / 49% of 86.
+- **The company view now masks the painted ground**, not just the zone
+  outlines: a cadet in company view sees their company's ground and RHQ's and
+  nothing else. Done by masking cells at render time rather than generating six
+  sets of frames — same plan either way, and per-company frames in a shared
+  collection would be six more things to keep in step. RHQ deliberately
+  survives the mask so the board keeps its anchor. Verified: unit view draws
+  all seven company labels, Alpha view draws A-COY and RHQ only.
+- The poster prompt now carries the real camp data — the 15 activity areas and
+  6 night locations by name, the four dated days, the 86-slot unit total, and
+  the High Ropes worked example — so a mock-up reads true.
+
+---
+
 ## 2026-09-13 (sixth) — The camp plan drives zone progress
 The BIV26 plan workbook is now the map's schedule: **86 visits across 22 zones,
 11 sessions, 4 camp days**, with UNIT and per-COMPANY progress views and a

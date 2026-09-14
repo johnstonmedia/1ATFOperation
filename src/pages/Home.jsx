@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import CampaignReplayMap from '../components/CampaignReplayMap'
 import { useData } from '../context/DataContext'
@@ -9,6 +9,8 @@ import { COMPANIES, PHONETIC, smeacOf, movementsOf } from '../firebase/seed'
 import { mapById, territorySlice, campaignStartSlice, framesForMap, otherMaps, zoneVisibilitySlice } from '../lib/maps'
 import { visibleZones } from '../lib/mapZones'
 import { zoneProgress, hasCampPlan } from '../lib/campPlan'
+import { sortFrames } from '../lib/campaign'
+import { maskToCompany } from '../lib/campFrames'
 import CampControls from '../components/CampControls'
 import useViewedMap from '../hooks/useViewedMap'
 
@@ -73,11 +75,39 @@ export default function Home() {
   // view of committed plan data — nothing here is stored or shared.
   const [day, setDay] = useState(0)
   const [mode, setMode] = useState('unit')
+  // Frames generated from the camp plan carry the day they represent. When
+  // they exist the REPLAY owns the clock: whichever frame is on screen sets
+  // the day the zone overlay reports, so the map and the percentages can never
+  // disagree. Hand-painted frames carry no day and leave the selector alone.
+  const frameDays = useMemo(
+    () => sortFrames(frames).map((f) => (typeof f.day === 'number' ? f.day : null)),
+    [frames],
+  )
+  const replayDrivesDay = frameDays.length > 0 && frameDays.every((d) => d !== null)
+  const onFrame = useCallback((idx) => {
+    const d = frameDays[idx]
+    if (typeof d === 'number') setDay(d)
+  }, [frameDays])
   const campMode = mode === 'company' && company ? 'company' : 'unit'
   const campProgress = useMemo(
     () => (hasCampPlan(live.id) ? zoneProgress(live.id, day, campMode === 'company' ? company : null) : null),
     [live.id, day, campMode, company],
   )
+  // In company view the PAINTED GROUND is masked to that company plus RHQ, so
+  // a cadet sees what their own company took rather than the whole task
+  // force's board. Masking here rather than generating six sets of frames:
+  // it is the same plan either way, and per-company frames in a shared
+  // collection would be six more things to keep in step.
+  const maskCells = campMode === 'company' && company
+  const viewTerritory = useMemo(
+    () => (maskCells ? { ...territory, cells: maskToCompany(territory.cells, company) } : territory),
+    [territory, maskCells, company],
+  )
+  const viewFrames = useMemo(
+    () => (maskCells ? frames.map((f) => ({ ...f, cells: maskToCompany(f.cells, company) })) : frames),
+    [frames, maskCells, company],
+  )
+
   // In company view the map shows only the zones that company is sent to;
   // the rest is not their camp. RHQ ground stays, so the board keeps its anchor.
   const zones = useMemo(() => {
@@ -126,9 +156,12 @@ export default function Home() {
 
       {/* Animated campaign-history replay; plain static map when no campaign
           start state has been recorded yet. */}
-      <CampaignReplayMap territory={territory} frames={frames} zones={zones} zoneProgress={campProgress} defaultStartId={state[campaignStartSlice(live.id)]} />
+      <CampaignReplayMap territory={viewTerritory} frames={viewFrames} zones={zones} zoneProgress={campProgress} defaultStartId={state[campaignStartSlice(live.id)]} onFrame={onFrame} />
       {hasCampPlan(live.id) && (
-        <CampControls mapId={live.id} day={day} onDay={setDay} mode={campMode} onMode={setMode} company={company} />
+        <CampControls
+          mapId={live.id} day={day} onDay={setDay} mode={campMode} onMode={setMode}
+          company={company} dayFromReplay={replayDrivesDay}
+        />
       )}
       <MapSwitch live={live} defaultId={defaultMap.id} isOverride={isOverride} onView={viewMap} />
 

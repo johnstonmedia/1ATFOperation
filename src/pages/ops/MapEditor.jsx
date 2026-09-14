@@ -12,6 +12,8 @@ import { PAINT, RHQ_PAINT, colorOf, coyLabelOf } from '../../lib/territory'
 import { useUnpaintableMask } from '../../lib/unpaintableMask'
 import { MAPS, mapById, mapFor, gridRefOf, territorySlice, campaignStartSlice, framesForMap, withMapFrames, zoneVisibilitySlice } from '../../lib/maps'
 import { visibleZones, zonesByKind, zoneCount } from '../../lib/mapZones'
+import { hasCampPlan, campDays } from '../../lib/campPlan'
+import { buildCampFrames } from '../../lib/campFrames'
 import { sortFrames, framesValid, renumberFrames } from '../../lib/campaign'
 import { exportCampaignReplay, exportProgressImage, exportSupported, downloadBlob, defaultProgressTitle } from '../../lib/replayExport'
 
@@ -518,6 +520,28 @@ function CampaignPanel({
     onClearAllDraftFrames()
   }
 
+  // Build the whole replay from the camp plan — one frame per camp day, ground
+  // painted from the schedule (see lib/campFrames.js). Only possible because
+  // the plan is settled in advance; this GENERATES the campaign rather than
+  // recording it. Every generated frame is an ordinary frame afterwards, so
+  // RHQ can repaint, relabel or delete any of them.
+  const buildFromPlan = async () => {
+    const built = buildCampFrames(mapId, terr)
+    if (!built.length) return
+    if (count) {
+      const ok = await confirm({
+        title: 'Replace the replay?',
+        message: `Building from the camp plan replaces all ${count} frame${count === 1 ? '' : 's'} on this map with ${built.length} — one per camp day. Anything painted by hand into the existing frames is lost.`,
+        confirmLabel: 'Replace frames',
+      })
+      if (!ok) return
+    }
+    writeFrames(built.map((f) => ({ ...f, id: rid(), map: mapId, ts: Date.now(), updatedAt: Date.now() })))
+    onClearAllDraftFrames()
+    audit('Built campaign frames from the camp plan', `${built.length} frames`)
+    toast.push(`${built.length} frames built from the camp plan.`)
+  }
+
   // Snapshot the current live painting as a new frame at the end.
   const addFromLive = () => {
     const frame = { id: rid(), map: mapId, order: count, cells: terr.cells, label: '', ts: Date.now(), updatedAt: Date.now() }
@@ -668,6 +692,15 @@ function CampaignPanel({
         <button className="primary" onClick={addFromLive} title="Snapshot the current live painting as a new frame at the end of the timeline.">
           + Add Frame from Live Map
         </button>
+        {hasCampPlan(mapId) && (
+          <button
+            className="ghost"
+            onClick={buildFromPlan}
+            title={`Generate one frame per camp day from the plan — ground painted by who is scheduled where. Replaces any existing frames.`}
+          >
+            ⚙ Build {campDays(mapId).length + 1} Frames from Camp Plan
+          </button>
+        )}
         {active && <button className="danger ghost" onClick={clearAll}>Clear replay history</button>}
         {active && (
           <button

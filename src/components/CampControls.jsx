@@ -16,7 +16,7 @@ import { PHONETIC } from '../firebase/seed'
 // DAY 0 is the blank board — camp hasn't started. Day N means everything up to
 // the end of that day has happened. Because the whole plan is known in advance
 // this needs no recording during camp: move the day on and the map is right.
-export default function CampControls({ mapId, day, onDay, mode, onMode, company }) {
+export default function CampControls({ mapId, day, onDay, mode, onMode, company, dayFromReplay = false }) {
   const days = campDays(mapId)
   if (!days.length) return null
   const last = LAST_DAY(mapId)
@@ -47,6 +47,20 @@ export default function CampControls({ mapId, day, onDay, mode, onMode, company 
         </span>
       </div>
 
+      {/* When the replay's frames ARE the camp days, the timeline rail above
+          is already the day control — a second set of buttons here would be a
+          rival clock showing a different answer. Report the day instead. */}
+      {dayFromReplay ? (
+        <div className="row center wrap" style={{ gap: 8 }}>
+          <span className="mono dim" style={{ fontSize: 11, letterSpacing: 1 }}>SHOWING</span>
+          <span className="mono" style={{ fontSize: 12, color: 'var(--accent)', letterSpacing: 1 }}>
+            {day === 0 ? 'CAMP START' : `DAY ${day}`}
+          </span>
+          <span className="mono dim" style={{ fontSize: 10 }}>
+            {day === 0 ? 'camp has not started' : `${days.find((d) => d.n === day)?.date || ''} — use the replay timeline above to move through camp`}
+          </span>
+        </div>
+      ) : (
       <div className="row center wrap" style={{ gap: 6 }}>
         <span className="mono dim" style={{ fontSize: 11, letterSpacing: 1 }}>THROUGH</span>
         <button className={day === 0 ? 'primary' : 'ghost'} onClick={() => onDay(0)}
@@ -62,6 +76,7 @@ export default function CampControls({ mapId, day, onDay, mode, onMode, company 
           {day === 0 ? 'Camp has not started' : `${days.find((d) => d.n === day)?.date || ''}${day === last ? ' — end of camp' : ''}`}
         </span>
       </div>
+      )}
     </div>
   )
 }

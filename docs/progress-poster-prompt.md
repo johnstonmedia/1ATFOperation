@@ -13,6 +13,10 @@ Weekly Update Image**. That already renders the map, place names, the company
 key and what changed in the window, at 1944px wide. Drop that PNG into the
 artboard rather than trying to redraw the map in the poster.
 
+**The real camp data** is committed at `src/data/singleton-schedule.json` (who
+is where, when) and `src/data/singleton-zones.json` (the ground). Numbers in
+the prompt below are the actual BIV26 ones, so a mock-up reads true.
+
 ---
 
 Design a set of daily operational progress posters for a cadet unit's field
@@ -61,19 +65,27 @@ matches the map — a flat block will look like a different system.
 ## Poster anatomy, top to bottom
 
 1. **Header band.** "1ATF" in Orbitron at large size, with "1st Australian Task
-   Force" beside it in dimmed text. Right-aligned: a mono block with `DAY 03`
-   and the date. A thin teal rule under the band.
+   Force" beside it in dimmed text. Right-aligned: a mono block with the day
+   and date. A thin teal rule under the band.
+   The camp is **four days**: Day 1 SUN 20 SEP, Day 2 MON 21 SEP, Day 3 TUE
+   22 SEP, Day 4 WED 23 SEP — so the day counter reads `DAY 2 / 4`, and there
+   is a fifth "camp start" sheet before them all.
 2. **Status line.** One mono line, uppercase, small: the operation name and a
    live tag (a small teal dot + `LIVE OPERATIONAL PICTURE`).
 3. **The map.** The dominant element — roughly 55% of the poster height. Inset
    it in a panel with a hairline border and a 4px radius. Do not crop the
    map's own legend off. Leave a small mono caption under it for the imagery
    credit line supplied with the export.
-4. **Progress strip.** A row of zone cards — one per activity area (ropes
-   course, navex, quarry, etc.). Each card: zone name in Orbitron small-caps,
-   a hatched progress bar, a percentage in mono, and small company chips
-   showing who has been through. See the two variants below for what the
-   percentage means.
+4. **Progress strip.** A row of zone cards — one per activity area. Each card:
+   zone name in Orbitron small-caps, a hatched progress bar, a percentage in
+   mono, and small company chips showing who has been through. See the two
+   variants below for what the percentage means.
+
+   The real activity areas are: AA Foxtrot, AA Golf, AA Hotel, AA India, AA Juliet, AA Kilo, AA Lima, AA Mike, AA NOVEMBER, AA Oscar, AA Papa, AA Pios, High Ropes, NAVEX, Quarry.
+   The night locations are: NL Hilltop, NL Mountain View, NL Oakley Lane, NL Outpost, NL Romeo, NL Ropes, S COY NL.
+   A poster does not need all of them on one sheet — the busiest are NAVEX
+   (5 companies, 13 sessions) and High Ropes (all 6 companies), and those two
+   carry the story.
 5. **Company standings.** A compact table or row of tiles, one per company, in
    that company's colour: areas completed, ground held. Mono numerals.
 6. **Footer.** The unit motto `LUCET PER MINISTERIUM` in small mono on the
@@ -86,8 +98,9 @@ Every zone card shows *collective* progress: the fraction of the companies
 scheduled to visit that zone which have actually been through. If Alpha, Bravo
 and Charlie are all scheduled for the ropes course and only Alpha has been,
 the card reads `33%` with Alpha's chip filled and Bravo's and Charlie's shown
-as empty outlines. Under the bar, a short mono line names who has been:
-`ALPHA COMPLETE`. The bar itself is hatched in the colours of the companies
+as empty outlines. The real worked example is **High Ropes**, which all six
+companies pass through: it runs 17% → 50% → 83% → 100% across the four days.
+Under the bar, a short mono line names who has been: `ALPHA COMPLETE`. The bar itself is hatched in the colours of the companies
 that have completed it, split proportionally.
 
 **COMPANY poster** — one per company, six variants driven by the company colour.
@@ -108,6 +121,10 @@ header band.
 - Generous margins; this is a wall poster read from two metres as well as a
   screen read from fifty centimetres. The day number and the map must be
   legible at a glance from across a room.
-- Provide the empty "Day 0" state too: the map with only the sector boundaries
-  and RHQ, every zone card at 0%. Camp starts from an empty board and that
-  first poster sets the expectation.
+- Provide the empty "camp start" state too: the map with only the sector
+  boundaries and RHQ, every zone card at 0%. Camp genuinely starts from an
+  empty board and that first poster sets the expectation.
+- The unit total across camp is **86 activity slots**, so the unit poster's
+  headline figure is "N of 86". A company's own total is far smaller (Bravo,
+  for instance, has 15) — size the company poster's numerals for two digits,
+  not three.
