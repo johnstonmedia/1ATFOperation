@@ -228,10 +228,10 @@ function drawKey(ctx, x, y, w, { map, progress, showRHQ }) {
 // the ground. Omitted entirely on a hand-painted frame, which has no plan
 // behind it to total.
 function drawSummary(ctx, x, y, w, progress) {
-  if (!progress || !progress.size) return
+  if (!progress || !progress.size) return y
   let done = 0, total = 0, complete = 0
   for (const [, p] of progress) { done += p.done; total += p.total; if (p.complete) complete += 1 }
-  if (!total) return
+  if (!total) return y
   const pct = Math.round((done / total) * 100)
 
   textLine(ctx, 'PROGRESS', x, y, { size: 20, spacing: 3, color: ACCENT })
@@ -257,6 +257,7 @@ function drawSummary(ctx, x, y, w, progress) {
     ctx.drawImage(cv, x + 1, cy + 1, filled, barH - 1)
   }
   ctx.restore()
+  return cy + barH
 }
 
 // Outline every cell taken between two frames. Drawn as the OUTER EDGE of the
@@ -342,6 +343,100 @@ function drawAreaTable(ctx, x, y, w, listed, numbered, progress, prevProgress) {
   return cy + Math.ceil(listed.length / 2) * rowH + 8
 }
 
+/**
+ * The whole annotation, as ONE THIN BAND along the bottom of the sheet.
+ *
+ * ⚠️ IT IS DELIBERATELY SMALL. This started as a full-height column beside the
+ * map, then a large floating panel, and both were the same mistake: a wall
+ * sheet is looked at from across a room, where the only thing readable is the
+ * map, and every millimetre the annotation takes is a millimetre the progress
+ * does not get. So the band carries exactly what cannot be read off the ground
+ * — which area each number is, how many visits it has had, and which companies
+ * have been through — plus a four-swatch key and one line of totals. Anything
+ * that merely EXPLAINS the map (what the hatch means in words, what a fraction
+ * means, the boundary colours, a company colour legend, a large percentage
+ * numeral) was removed: it is either obvious from the map or it is not worth
+ * the paper. Don't grow this back into a panel.
+ */
+function drawStrip(ctx, listed, numbered, progress, prevProgress, showRHQ, map) {
+  const rows = Math.ceil(listed.length / 3)
+  const rowH = 26
+  const H = 34 + rows * rowH + 34
+  const y0 = PAGE_H - H
+
+  ctx.save()
+  ctx.fillStyle = 'rgba(4,8,16,0.90)'
+  ctx.fillRect(0, y0, PAGE_W, H)
+  ctx.fillStyle = 'rgba(54,224,192,0.5)'
+  ctx.fillRect(0, y0, PAGE_W, 2)
+  ctx.restore()
+
+  // Key: four swatches on one line, no prose.
+  let kx = 26
+  const ky = y0 + 26
+  const chip = (draw, label, color) => {
+    draw(kx, ky - 15, 34, 18)
+    textLine(ctx, label, kx + 42, ky, { size: 15, font: 'JetBrains Mono, monospace', spacing: 0.6, color })
+    kx += 42 + label.length * 10 + 30
+  }
+  const hatchChip = (code) => (x, y, w2, h2) => {
+    const cv = document.createElement('canvas')
+    cv.width = w2 * 2; cv.height = h2 * 2
+    renderHatchSwatch(cv.getContext('2d'), code, cv.width, cv.height)
+    ctx.drawImage(cv, x, y, w2, h2)
+  }
+  chip(hatchChip(TASKFORCE_CODE.toLowerCase()), 'TAKING', INK)
+  chip(hatchChip(TASKFORCE_CODE), 'TAKEN', INK)
+  if (showRHQ) chip(hatchChip('R'), 'RHQ', INK)
+  chip((x, y, w2, h2) => {
+    ctx.save(); ctx.strokeStyle = GAIN; ctx.lineWidth = 2.5
+    ctx.strokeRect(x, y, w2, h2)
+    ctx.globalAlpha = 0.22; ctx.fillStyle = GAIN; ctx.fillRect(x, y, w2, h2); ctx.restore()
+  }, 'TAKEN TODAY', GAIN)
+
+  // Totals, right-aligned on the same line as the key.
+  let done = 0, total = 0, complete = 0
+  for (const [, p] of progress) { done += p.done; total += p.total; if (p.complete) complete += 1 }
+  if (total) {
+    textLine(ctx, `${Math.round((done / total) * 100)}%  ·  ${done} of ${total} visits  ·  ${complete} of ${progress.size} areas complete`,
+      PAGE_W - 26, ky, { size: 19, font: 'JetBrains Mono, monospace', spacing: 0.8, color: '#fff', align: 'right' })
+  }
+
+  // Areas, three columns.
+  const colW = (PAGE_W - 52) / 3
+  listed.forEach((z, k) => {
+    const p = progress.get(z.id)
+    if (!p) return
+    const col = Math.floor(k / rows)
+    const rx = 26 + col * colW
+    const ry = y0 + 34 + (k % rows) * rowH + 18
+    const st = ZONE_STYLE[z.kind] || ZONE_STYLE.activity
+    if (prevProgress?.get(z.id) && p.done > prevProgress.get(z.id).done) {
+      ctx.save(); ctx.fillStyle = GAIN; ctx.globalAlpha = 0.16
+      ctx.fillRect(rx - 5, ry - 17, colW - 16, rowH - 3); ctx.restore()
+    }
+    textLine(ctx, String(numbered.get(z.id)).padStart(2, ' '), rx, ry,
+      { size: 17, font: 'JetBrains Mono, monospace', color: st.color })
+    textLine(ctx, z.name.toUpperCase(), rx + 36, ry,
+      { size: 17, font: 'JetBrains Mono, monospace', spacing: 0.3, color: p.complete ? '#fff' : INK })
+    let tx = rx + colW - 30
+    const who = p.visited || []
+    for (let j = who.length - 1; j >= 0; j--) {
+      textLine(ctx, who[j], tx, ry, { size: 17, font: 'JetBrains Mono, monospace', color: COMPANY_COLOR[who[j]] || INK, align: 'right' })
+      tx -= 16
+    }
+    textLine(ctx, `${p.done}/${p.total}`, tx - 4, ry,
+      { size: 17, font: 'JetBrains Mono, monospace', color: p.complete ? TASKFORCE_COLOR : INK, align: 'right' })
+  })
+
+  if (map.tiles?.attribution) {
+    textLine(ctx, map.tiles.attribution, PAGE_W - 26, PAGE_H - 10,
+      { size: 12, color: DIM, weight: 500, align: 'right', font: 'Rajdhani, sans-serif' })
+  }
+  textLine(ctx, 'LUCET PER MINISTERIUM', 26, PAGE_H - 10,
+    { size: 12, spacing: 2, color: DIM, font: 'JetBrains Mono, monospace' })
+}
+
 /* ---------------------------------- pages --------------------------------- */
 
 export function framesPdfSupported() {
@@ -364,21 +459,21 @@ export async function exportFramesPdf({ territory, frames: campaignFrames, zones
   // The printed map shows what the screen shows: a map that opens on a focus
   // box is cropped to it here too, rather than printing ground the portal
   // deliberately frames out.
-  const f = map.focus || { x0: 0, y0: 0, x1: cols, y1: rows }
+  // The print crops wider than the screen does — see `printFocus` in maps.js.
+  const f = map.printFocus || map.focus || { x0: 0, y0: 0, x1: cols, y1: rows }
   const cropW = Math.max(1, f.x1 - f.x0)
   const cropH = Math.max(1, f.y1 - f.y0)
 
-  // ⚠️ THE MAP BLEEDS TO THE PAGE EDGE — no margin, no panel border, no gap.
-  // It is the document; everything else is annotation printed beside it. A
-  // framed map on a wall sheet wastes the millimetres that decide whether an
-  // area is legible from across a room, and a border draws the eye to the
-  // boundary of the paper instead of to the ground.
-  const headH = 68
-  const panelH = PAGE_H - headH // full bleed: left, bottom and top of the panel
-  const maxMapW = PAGE_W - 360 - 26
-  const keyW = PAGE_W - Math.min(maxMapW, (panelH * cropW) / cropH) - 26 - MARGIN
-  const drawW = Math.min(maxMapW, (panelH * cropW) / cropH)
-  const drawH = drawW * (cropH / cropW)
+  // ⚠️ THE MAP IS THE WHOLE SHEET. Not bled to the edges with a header above
+  // and a key beside it — that arrangement still spent a quarter of an A3 on
+  // chrome, and chrome is what the map is competing with for the millimetres
+  // that decide whether an area reads from across a room. The map now covers
+  // the page corner to corner, the title sits ON it, and the key floats in a
+  // quiet corner OF it. `printFocus` is shaped to the page so this costs no
+  // stretching and crops no camp ground.
+  const drawW = PAGE_W
+  const drawH = PAGE_H
+  const keyW = 720
 
   // Render the whole map once at the resolution the crop needs, then take the
   // focus rectangle out of it — the renderers all work in full-grid
@@ -441,41 +536,40 @@ export async function exportFramesPdf({ territory, frames: campaignFrames, zones
     ctx.fillStyle = GROUND
     ctx.fillRect(0, 0, PAGE_W, PAGE_H)
 
-    // ONE header line. Unit, then what day this sheet is, then where — the
-    // three things someone walking up to the wall needs before the map.
-    textLine(ctx, '1ATF', 26, 46, { size: 44, spacing: 4 })
-    const heading = (title || fr.label || `FRAME ${i + 1}`).toUpperCase()
-    textLine(ctx, heading, 190, 44, { size: 29, spacing: 3, color: ACCENT })
-    textLine(ctx, `SHEET ${i + 1} OF ${frames.length}`, PAGE_W - MARGIN, 24,
-      { size: 16, spacing: 2, color: DIM, align: 'right', font: 'JetBrains Mono, monospace' })
-    if (map.focus?.label) {
-      textLine(ctx, `${map.focus.label} — AREA OF OPERATIONS`, PAGE_W - MARGIN, 48,
-        { size: 17, spacing: 1.8, color: GAIN, align: 'right', font: 'JetBrains Mono, monospace' })
-    }
-
-    // Map panel — the focus rectangle out of the full render, hard against the
-    // left and bottom edges of the sheet.
+    // Map — the crop rectangle out of the full render, covering the sheet.
     const px = 0
-    const py = headH
+    const py = 0
     ctx.save()
     ctx.imageSmoothingEnabled = true
     ctx.drawImage(full,
       (f.x0 / cols) * fullW, (f.y0 / rows) * fullH, (cropW / cols) * fullW, (cropH / rows) * fullH,
       px, py, drawW, drawH)
     ctx.restore()
-    const kx = px + drawW + 26
-    const keyEnd = drawKey(ctx, kx, py + 22, keyW, { map, progress, showRHQ })
-    const tableEnd = drawAreaTable(ctx, kx, keyEnd + 10, keyW, listed, numbered, progress, i > 0 ? progressFor?.(i - 1) : null)
-    drawSummary(ctx, kx, tableEnd + 16, keyW, progress)
 
-    // Footer credits sit in the key column, not over the map — with the map
-    // full-bleed there is no margin left to put them in.
-    textLine(ctx, 'LUCET PER MINISTERIUM', kx, PAGE_H - 40,
-      { size: 13, spacing: 2, color: DIM, font: 'JetBrains Mono, monospace' })
-    if (map.tiles?.attribution) {
-      textLine(ctx, map.tiles.attribution, kx, PAGE_H - 20,
-        { size: 12, color: DIM, weight: 500, font: 'Rajdhani, sans-serif' })
+    // ⚠️ TITLE AFTER THE MAP — it sits ON the sheet, not above it. Drawn
+    // before the map it was simply painted over, which is what happens to any
+    // chrome that forgets the map now covers the whole page. On a scrim rather
+    // than in a band of its own: the top of this crop is open paddock on every
+    // sheet, so the type costs the map nothing there, whereas a header band
+    // costs it a strip whether that strip had anything in it or not.
+    const grad = ctx.createLinearGradient(0, 0, 0, 150)
+    grad.addColorStop(0, 'rgba(4,8,16,0.9)')
+    grad.addColorStop(1, 'rgba(4,8,16,0)')
+    ctx.fillStyle = grad
+    ctx.fillRect(0, 0, PAGE_W, 150)
+    textLine(ctx, '1ATF', 30, 56, { size: 46, spacing: 4 })
+    const heading = (title || fr.label || `FRAME ${i + 1}`).toUpperCase()
+    textLine(ctx, heading, 200, 54, { size: 31, spacing: 3, color: ACCENT })
+    textLine(ctx, `SHEET ${i + 1} OF ${frames.length}`, PAGE_W - 30, 32,
+      { size: 17, spacing: 2, color: DIM, align: 'right', font: 'JetBrains Mono, monospace' })
+    if (map.focus?.label) {
+      textLine(ctx, `${map.focus.label} — AREA OF OPERATIONS`, PAGE_W - 30, 58,
+        { size: 18, spacing: 1.8, color: GAIN, align: 'right', font: 'JetBrains Mono, monospace' })
     }
+
+    drawStrip(ctx, listed, numbered, progress, i > 0 ? progressFor?.(i - 1) : null, showRHQ, map)
+
+
 
     jpegs.push(await canvasJpeg(page))
   }

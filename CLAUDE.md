@@ -804,17 +804,35 @@ assuming a page exists).
   collection, not a `content/*` slice — public read, RHQ write, same shape as
   the others); `campaignDefaultStart` is a normal `SINGLE_SLICES` entry so
   it's already covered by the generic `content/*` rule.
-- **PDF export** ([src/lib/framesPdf.js](src/lib/framesPdf.js), the
-  `🖨 Export N Frames as PDF` button in Map: Territory → Campaign replay): one
+- **PDF export** ([src/lib/framesPdf.js](src/lib/framesPdf.js)) — in **two
+  places**: `🖨 Export N Frames as PDF` in Ops Centre → Map: Territory →
+  Campaign replay, and a **public `🖨 PRINT SHEETS` button under the map on
+  Home** (`PrintSheets` in Home.jsx). The public one is deliberate and safe:
+  it prints exactly the frames the replay above already plays, because Home
+  hands it the RELEASED set, so it can never leak a day RHQ has not revealed.
+  One
   **A3-landscape** page per frame at 150 dpi, cropped to the map's `focus` box
   so print shows what the screen shows. These are WALL SHEETS read from across
   a room, which sets every decision below.
-  - **The map BLEEDS to the page edge** — no margin, no panel border, no gap —
-    with one header line above it and the key beside it. A framed map on a wall
-    sheet wastes the millimetres that decide whether an area is legible from
-    across a room, and a border draws the eye to the edge of the paper instead
-    of to the ground. The footer credits sit in the key column, since there is
-    no margin left to put them in.
+  - ⚠️ **THE MAP IS THE WHOLE SHEET.** Not bled to the edges with a header
+    band above and a key column beside it — that arrangement still spent a
+    quarter of an A3 on chrome, and chrome is exactly what the map competes
+    with for the millimetres that decide whether an area reads from across a
+    room. The map covers the page corner to corner, the title sits ON it under
+    a gradient scrim, and everything else is ONE THIN BAND across the bottom
+    (`drawStrip`). ⚠️ The title must be drawn AFTER the map — before it, it is
+    simply painted over.
+  - **`printFocus`** on the map record is the print's own crop: the same ground
+    as `focus` widened to the PAGE's proportions, so the map fills the sheet
+    without stretching and without cropping camp ground. A square-ish crop on a
+    landscape page is what forced a side column in the first place.
+  - ⚠️ **The bottom band is deliberately SMALL, and shouldn't grow back.** It
+    carries only what cannot be read off the ground — which area each number
+    is, its visit count, which companies have been — plus four key swatches and
+    one line of totals. Everything that merely EXPLAINS the map (prose about
+    what the hatch means, what a fraction means, the boundary colours, a
+    company colour legend, a large percentage numeral and bar) was removed: it
+    is either obvious from the map or not worth the paper.
   - ⚠️ **THE EXPORT NEEDS CORS AND THE SCREEN DOES NOT** — the one way a print
     can come out worse than the page it came from. Displaying a cross-origin
     tile needs no permission; READING one back out of a canvas does, which is

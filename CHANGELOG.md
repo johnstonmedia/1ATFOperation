@@ -128,6 +128,16 @@ keep entries short and focused on what a new collaborator needs to know.
   and the map panel renders at 2× and draws down: z15-whole-frame before,
   z16-over-the-region after — 132 tiles, ~2.0 m/px, twice the linear resolution
   for fewer requests.
+- **The PDF is now map, edge to edge, with one thin band at the bottom.** The
+  key column and header band together were spending a quarter of an A3 on
+  chrome. The map covers the whole sheet (`printFocus` crops to the page's own
+  proportions so nothing stretches or is cut), the title sits on it under a
+  scrim, and the annotation is a single strip carrying only what can't be read
+  off the ground — area numbers, visit counts, company letters, four swatches
+  and one totals line. The prose, the boundary key, the company legend and the
+  big percentage block are gone.
+- **The site itself can export the PDF now** — a public `🖨 PRINT SHEETS`
+  button under the map on Home, printing the released frames only.
 - **The PDF map bleeds to the page edge** — no margin, no border, one header
   line — and the export now REPORTS whether it got the satellite imagery.
   ⚠️ The exporter needs `Access-Control-Allow-Origin` on the tiles and the live

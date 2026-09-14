@@ -75,6 +75,13 @@ export const MAPS = [
     // FULL sheet: this is where the map opens, not a crop, so a visitor can
     // still pan or zoom out to the rest.
     focus: { x0: 58, y0: 36, x1: 270, y1: 248, label: 'SECTOR 8' },
+    // Where the PRINT crops to. The screen's focus box is square-ish, which on
+    // a landscape sheet leaves a column of page the map cannot fill — and that
+    // column, plus a header band, is the "frame" that was taking the sheet
+    // away from the progress. `printFocus` is the same ground widened to the
+    // page's own proportions, so the map covers the WHOLE sheet and the key
+    // floats over a quiet corner of it instead of sitting beside it.
+    printFocus: { x0: 20, y0: 39, x1: 308, y1: 243 },
     image: asset('singleton.webp'),
     pixelWidth: 1080,
     pixelHeight: 765,
