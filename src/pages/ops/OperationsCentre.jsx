@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
+import { useData } from '../../context/DataContext'
 import { useToast } from '../../context/ToastContext'
 import Logo from '../../components/Logo'
 import LastUpdated from '../../components/LastUpdated'
@@ -108,6 +109,7 @@ export default function OperationsCentre() {
           <button className="ghost" onClick={() => setRailOpen(true)} aria-label="Open sections menu">☰ MENU</button>
           <span className="mono accent" style={{ fontSize: 11 }}>{SECTIONS.find((s) => s.id === section)?.label}</span>
         </div>
+        <LoadErrors />
         {section === 'narrative' && <NarrativeEditor />}
         {section === 'map' && <MapEditor />}
         {section === 'briefings' && <BriefingsEditor />}
@@ -119,6 +121,40 @@ export default function OperationsCentre() {
         {section === 'help' && <HelpAdmin />}
         {section === 'backups' && <BackupsPanel />}
         {section === 'audit' && <AuditLog />}
+      </div>
+    </div>
+  )
+}
+
+// What the last load could NOT read from Firestore.
+//
+// Every read failure falls back to the seed so the site still renders (see
+// loadFirebase) — which means a denied read of, say, `content/territory` draws
+// the seeded map and looks exactly like the campaign progress having been
+// wiped. This names the real cause instead. `permission-denied` on a
+// world-readable path means the live ruleset is older than firestore.rules in
+// the repo, which is the standing republish in HANDOVER §0.
+function LoadErrors() {
+  const { state } = useData()
+  const errs = state.loadErrors || []
+  if (!errs.length) return null
+  const denied = errs.some((e) => e.code === 'permission-denied')
+  return (
+    <div className="panel panel-pad col" style={{ gap: 6, marginBottom: 14, borderColor: 'var(--hostile)' }}>
+      <strong className="head hostile" style={{ fontSize: 13 }}>
+        ⚠ {errs.length} thing{errs.length === 1 ? '' : 's'} could not be read from Firestore
+      </strong>
+      <div className="mono dim" style={{ fontSize: 11 }}>
+        Anything listed here is showing its SEEDED default, not your saved content — so a map
+        can look blank or reset when the data is really still in Firestore, untouched.
+        {denied && ' A "permission-denied" below means the live rules are older than firestore.rules in the repo: Firebase Console → Firestore → Rules → paste → Publish (HANDOVER §0).'}
+      </div>
+      <div className="mono" style={{ fontSize: 11 }}>
+        {errs.map((e) => (
+          <div key={e.scope}>
+            <span className="hostile">{e.code}</span> <span className="dim">—</span> {e.scope}
+          </div>
+        ))}
       </div>
     </div>
   )

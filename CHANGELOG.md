@@ -75,6 +75,14 @@ keep entries short and focused on what a new collaborator needs to know.
 - **Legacy `DEFAULT_ZONES` deleted** — the Leaflet-era Australia polygons
   (Northern Approach, Red Centre, Meridian Salient…) predating the KML import.
   Unused by any code; the committed BIV26 zones are the only zone data now.
+- **Firestore read failures are no longer silent.** `loadFirebase` swallowed
+  every failed read and fell back to the seed, so a denied `content/territory`
+  read drew the seeded map and looked exactly like the campaign progress having
+  been wiped — with nothing in the console. Failures are now recorded on
+  `state.loadErrors` (and `console.warn`ed, since a public visitor has no Ops
+  Centre) and listed at the top of the Operations Centre, naming the path and
+  the Firestore error code; a `permission-denied` on a world-readable path
+  points at the HANDOVER §0 rules republish.
 - **Seeded Meridian demo data removed**: the three pre-painted `M` blobs in the
   NSW default territory, the two `hostile: true` stronghold flags on the
   Regional map, the Meridian demo activity row, and the Meridian contact in the

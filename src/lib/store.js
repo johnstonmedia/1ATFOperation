@@ -91,6 +91,11 @@ const DEFAULT_STATE = {
   // Per-content-slice metadata, e.g. { zones: { updatedAt } }. Populated from
   // the Firestore docs (or localStorage) so the UI can show "last updated".
   contentMeta: {},
+  // What could NOT be read on the last load — see loadFirebase. A denied read
+  // silently falls back to the seed, which on a map looks exactly like "the
+  // progress is gone" rather than like a permissions problem, so the failures
+  // are recorded here and surfaced in the Ops Centre.
+  loadErrors: [],
 }
 
 /* ----------------------------- LOCAL MODE ------------------------------ */
@@ -118,6 +123,17 @@ function saveLocal(state) {
 async function loadFirebase() {
   const { doc, getDoc, collection, getDocs } = await import('firebase/firestore')
   const out = structuredClone(DEFAULT_STATE)
+  // A read that fails still falls back to the seed — the site must render for
+  // a signed-out visitor, and several collections are legitimately unreadable
+  // to one. But the fallback is indistinguishable from real empty content: a
+  // denied `content/territory` read draws the seeded map, which reads as "the
+  // campaign progress has vanished" rather than "check the rules". Record what
+  // failed so the Ops Centre can say which it is.
+  const fail = (scope, e) => {
+    out.loadErrors.push({ scope, code: e?.code || 'unknown', message: e?.message || String(e) })
+    // Always in the console too, since a public visitor sees no Ops Centre.
+    console.warn(`[1atf] could not read ${scope}:`, e?.code || e)
+  }
   await Promise.all(
     SINGLE_SLICES.map(async (slice) => {
       try {
@@ -126,8 +142,8 @@ async function loadFirebase() {
           out[slice] = snap.data().value
           out.contentMeta[slice] = { updatedAt: snap.data().updatedAt || null }
         }
-      } catch {
-        /* keep default */
+      } catch (e) {
+        fail(`content/${slice}`, e)
       }
     }),
   )
@@ -135,8 +151,10 @@ async function loadFirebase() {
     try {
       const snap = await getDocs(collection(db, coll))
       out[coll] = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
-    } catch {
-      /* permission denied for signed-out / non-RHQ visitor */
+    } catch (e) {
+      // Expected for a signed-out / non-RHQ visitor on the RHQ-only
+      // collections; a real problem on the world-readable ones.
+      fail(coll, e)
     }
   }
   return out
