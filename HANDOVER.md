@@ -37,6 +37,14 @@ under a `map` field. All of those are covered by rules blocks already in the
 file, so maps add nothing new to publish — but they inherit the
 `campaignFrames` blocker above, for every map rather than one.
 
+The same goes for 2026-09-14: **map distribution** stores a per-map
+`mapRelease` / `mapRelease_<id>` document, and **staged frame release** adds a
+`hidden` field to a `campaignFrames` document. `content/{slice}` is a wildcard
+match with no field validation and `campaignFrames` is `read: true` /
+`write: isRHQ()` with none either, so neither needs a new block. Both inherit
+the same `campaignFrames` blocker: until the republish, revealing a frame
+cannot be saved live.
+
 ### While you're in there: Storage (added 2026-08-04)
 
 The Briefings editor now takes a **dragged-in video file**, which is the app's
