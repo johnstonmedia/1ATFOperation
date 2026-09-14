@@ -838,20 +838,28 @@ assuming a page exists).
     tile needs no permission; READING one back out of a canvas does, which is
     what `crossOrigin='anonymous'` asks for. A tile service that doesn't answer
     with `Access-Control-Allow-Origin` fails the load in the exporter while
-    still displaying perfectly on the live map, so the print silently drops to
-    the ~12 m static base. There is NO client-side workaround (`fetch` is
-    blocked the same way; an opaque response has no readable bytes), so instead
-    `exportFramesPdf` REPORTS what it got (`tiles: { tiled, drawn, total, z }`)
-    and Map: Territory says so outright when a print came from the offline
-    base. If that message appears, the fix is a tile source that sends the
-    header — not a change in this code.
-  - ⚠️ **Areas are NUMBERED on the map, named in a table beside it.** Printing
-    each area's name, count and company letters on the map itself was tried and
-    is unreadable: two dozen labels at a size legible from two metres collide
-    into a mat, and shrinking them to fit defeats printing A3 at all.
-    `drawMapZones(..., { numbered })` draws a badge per area; `drawAreaTable()`
-    spells them out. Numbering is stable across all five sheets, so they can be
-    compared area by area.
+    still displaying perfectly on the live map, so the print drops to the ~12 m
+    static base. No client-side code can make a service send a header (`fetch`
+    is blocked the same way; an opaque response has no readable bytes) — so the
+    answer is a SECOND source that already does. `map.tiles.printFallback`
+    (Esri World Imagery, CORS-enabled and far sharper than 12 m) is tried by
+    the exporters only, and only when the primary returns nothing readable, so
+    **a print always carries real satellite imagery whichever one supplied
+    it**. `onStatus` reports which was used and the page prints THAT source's
+    attribution — crediting NSW Spatial Services for Esri's imagery would be
+    wrong. The live map is untouched by any of this and always uses SIX Maps.
+  - ⚠️ **Areas are NAMED ON THE GROUND.** A numbered-badge-plus-lookup-table
+    version existed briefly and was wrong: a map you have to cross-reference to
+    read is not a map of anywhere. What actually made names unreadable was
+    printing the NAME, the visit count AND a row of company letters at each
+    one — three lines per area across two dozen areas. Counts and letters live
+    in the bottom band, so the map carries one short line each.
+    `drawMapZones(..., { printLabels })` DECLUTTERS placement: biggest area
+    first (the big ones have the strongest claim to their own centre), each
+    later label nudged vertically until clear, and drawn anyway if it can't be
+    — losing an area's name is worse than a tight fit. Sub-cell ground (eating
+    areas, field kitchen) is skipped, the same rule the screen applies past
+    `DETAIL_LABEL_ZOOM`.
   - **Companies are named even though they own nothing.** The ground is 1ATF's
     — an area is a percentage takeover — but "has my company done the ropes
     course yet" is the question these sheets get asked, so every row carries the

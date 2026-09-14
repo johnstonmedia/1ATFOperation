@@ -125,13 +125,35 @@ function loadTile(url) {
 // stops it running away.
 async function renderTileLayer(map, W, H, region = null, onStatus = null) {
   if (!map?.tiles) return null
-  const maxZ = map.tiles.maxZoom ?? 19
-  const minZ = map.tiles.minZoom ?? 0
+  // Try the map's own source first; if not one tile can be read back (see the
+  // CORS note above), try the print fallback before giving up on imagery
+  // altogether. `map.tiles.printFallback` is another satellite source that is
+  // known to send the header.
+  const first = await renderTileSource(map, map.tiles, W, H, region)
+  if (first?.canvas) { onStatus?.({ ...first.stat, source: 'primary', attribution: map.tiles.attribution }); return first.canvas }
+  const fb = map.tiles.printFallback
+  if (fb) {
+    const second = await renderTileSource(map, fb, W, H, region)
+    if (second?.canvas) {
+      onStatus?.({ ...second.stat, source: 'fallback', attribution: fb.attribution })
+      return second.canvas
+    }
+  }
+  onStatus?.({ tiled: false, drawn: 0, total: first?.stat?.total || 0, source: null })
+  return null
+}
+
+async function renderTileSource(map, src, W, H, region = null) {
+  if (!src?.url) return null
+  const maxZ = src.maxZoom ?? 19
+  const minZ = src.minZoom ?? 0
+  const forSource = (zz) => tilesFor(map, zz, region || undefined)
+    .map((t) => ({ ...t, url: src.url.replace('{z}', zz).replace('{x}', t.key.split('/')[1]).replace('{y}', t.key.split('/')[2]) }))
   let z = tileZoomFor(map, W)
-  let tiles = tilesFor(map, z, region || undefined)
+  let tiles = forSource(z)
   // Climb while the budget allows (region renders usually can).
   while (z < maxZ) {
-    const deeper = tilesFor(map, z + 1, region || undefined)
+    const deeper = forSource(z + 1)
     if (deeper.length > MAX_EXPORT_TILES) break
     z += 1
     tiles = deeper
@@ -139,7 +161,7 @@ async function renderTileLayer(map, W, H, region = null, onStatus = null) {
   // ...and fall back if even the starting level was too many.
   while (tiles.length > MAX_EXPORT_TILES && z > minZ) {
     z -= 1
-    tiles = tilesFor(map, z, region || undefined)
+    tiles = forSource(z)
   }
   if (!tiles.length || tiles.length > MAX_EXPORT_TILES) return null
 
@@ -159,8 +181,7 @@ async function renderTileLayer(map, W, H, region = null, onStatus = null) {
     }
   }
   await Promise.all(Array.from({ length: TILE_CONCURRENCY }, worker))
-  onStatus?.({ tiled: drawn > 0, drawn, total: tiles.length, z })
-  return drawn ? cv : null
+  return { canvas: drawn ? cv : null, stat: { tiled: drawn > 0, drawn, total: tiles.length, z } }
 }
 
 /**

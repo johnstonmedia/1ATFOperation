@@ -127,7 +127,7 @@ export function zoneInk(zone) {
  * Sub-cell ground (the eating areas) is skipped: it has no outline, and at
  * poster scale its name lands on top of RHQ's.
  */
-export function drawMapZones(ctx, zones, { cols, rows, w, h, scale = 1, progress = null, zoneScale = 1, numbered = null } = {}) {
+export function drawMapZones(ctx, zones, { cols, rows, w, h, scale = 1, progress = null, zoneScale = 1, printLabels = false } = {}) {
   if (!zones?.length || !cols || !rows) return
   const sx = w / cols
   const sy = h / rows
@@ -155,32 +155,52 @@ export function drawMapZones(ctx, zones, { cols, rows, w, h, scale = 1, progress
   }
   ctx.globalAlpha = 1
 
-  // NUMBERED MODE (print). Two dozen area names, each with a count and a row
-  // of company letters, cannot coexist on one sheet — at a size readable from
-  // two metres they collide into an unreadable mat, and shrinking them to fit
-  // defeats the point of printing A3. So the map carries a numbered badge per
-  // area and the names, counts and companies go in a table beside it, which is
-  // the classic answer for a dense printed map and leaves the ground visible.
-  if (numbered) {
-    const r = (w / cols) * (cols / 90) * 0.78 * zoneScale
+  // PRINT MODE: the area's NAME on the ground, nothing else.
+  //
+  // Names were briefly replaced by numbered badges with a lookup table, and
+  // that was the wrong trade: a map you have to cross-reference to read is not
+  // a map of anywhere. What actually made names unreadable was printing the
+  // NAME, the visit count AND a row of company letters at each one — three
+  // lines per area over two dozen areas. The count and the letters live in the
+  // sheet's bottom band now, so the map carries one short line each and has
+  // room for it.
+  //
+  // Placement is DECLUTTERED rather than trusted: labels are placed biggest
+  // area first (the big ones have the strongest claim to their own centre) and
+  // any that would overlap one already down is nudged vertically until it is
+  // clear. A label that cannot be cleared is still drawn — losing an area's
+  // name entirely is worse than a tight fit.
+  if (printLabels) {
+    const size = (w / cols) * (cols / 90) * zoneScale
     ctx.textAlign = 'center'
-    ctx.textBaseline = 'middle'
-    for (const z of zones) {
-      const n = numbered.get(z.id)
-      if (!n) continue
-      const s2 = ZONE_STYLE[z.kind] || ZONE_STYLE.activity
-      const [lx, ly] = z.label
-      const cx = lx * sx, cy = ly * sy
-      ctx.beginPath()
-      ctx.arc(cx, cy, r, 0, Math.PI * 2)
-      ctx.fillStyle = 'rgba(6,10,18,0.82)'
-      ctx.fill()
-      ctx.lineWidth = Math.max(1, r * 0.16)
-      ctx.strokeStyle = s2.color
-      ctx.stroke()
-      ctx.font = `700 ${r * 1.15}px Orbitron, sans-serif`
-      ctx.fillStyle = s2.color
-      ctx.fillText(String(n), cx, cy + r * 0.04)
+    ctx.textBaseline = 'alphabetic'
+    ctx.font = `700 ${size}px Orbitron, sans-serif`
+    const placed = []
+    // Sub-cell ground (the eating areas, the field kitchen) is skipped, the
+    // same rule the screen applies past DETAIL_LABEL_ZOOM: they sit metres
+    // apart inside RHQ, so on one sheet their names land on top of each other
+    // and on RHQ's. They have no outline to label anyway.
+    const order = [...zones].filter((z) => z.cells?.length >= 3)
+      .sort((a, b) => (b.cells?.length || 0) - (a.cells?.length || 0))
+    for (const z of order) {
+      const st = ZONE_STYLE[z.kind] || ZONE_STYLE.activity
+      const tex = ZONE_TEXTURE[z.kind] || ZONE_TEXTURE.activity
+      const text = `${tex.glyph} ${z.name.toUpperCase()}`
+      const tw = ctx.measureText(text).width
+      const bx = z.label[0] * sx
+      let by = z.label[1] * sy
+      const hits = (yy) => placed.some((r) => Math.abs(r.x - bx) < (r.w + tw) / 2 + size * 0.3
+        && Math.abs(r.y - yy) < size * 1.25)
+      for (const dy of [0, -1.45, 1.45, -2.9, 2.9, -4.35, 4.35]) {
+        by = z.label[1] * sy + dy * size
+        if (!hits(by)) break
+      }
+      placed.push({ x: bx, y: by, w: tw })
+      ctx.lineWidth = size * 0.26
+      ctx.strokeStyle = 'rgba(4,8,16,0.9)'
+      ctx.strokeText(text, bx, by)
+      ctx.fillStyle = st.color
+      ctx.fillText(text, bx, by)
     }
     ctx.restore()
     return

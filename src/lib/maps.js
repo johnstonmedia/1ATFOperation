@@ -81,7 +81,10 @@ export const MAPS = [
     // away from the progress. `printFocus` is the same ground widened to the
     // page's own proportions, so the map covers the WHOLE sheet and the key
     // floats over a quiet corner of it instead of sitting beside it.
-    printFocus: { x0: 20, y0: 39, x1: 308, y1: 243 },
+    // ⚠️ Shaped to the PAGE (1.414:1) and sized so the camp clears the sheet's
+    // bottom band — an area whose name lands under the band has effectively
+    // lost its label, which is what happened to AA Papa at a tighter crop.
+    printFocus: { x0: 0, y0: 30, x1: 354, y1: 280 },
     image: asset('singleton.webp'),
     pixelWidth: 1080,
     pixelHeight: 765,
@@ -133,6 +136,27 @@ export const MAPS = [
       minZoom: 12,
       maxZoom: 19,
       attribution: 'Imagery © NSW Spatial Services (Department of Customer Service)',
+      // ⚠️ PRINT FALLBACK — a SECOND satellite source, used only by the
+      // exporters and only if the first one cannot be read back off a canvas.
+      //
+      // Displaying a tile needs no permission; reading one out of a canvas to
+      // save it does, and that is `Access-Control-Allow-Origin`. If SIX Maps
+      // does not send it, the live map stays perfect and every export silently
+      // drops to the ~12 m Sentinel still — which is how a print ends up
+      // looking nothing like the screen it came from. There is no client-side
+      // way to make a service send a header, so the answer is to have a second
+      // source that already does: Esri's World Imagery is CORS-enabled, public,
+      // and sharper than 12 m over Singleton. A print then always carries real
+      // satellite imagery, whichever one supplied it.
+      //
+      // The attribution follows the source that was actually used — printing
+      // Esri's imagery under NSW Spatial Services' credit would be wrong.
+      printFallback: {
+        url: 'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+        minZoom: 12,
+        maxZoom: 19,
+        attribution: 'Imagery © Esri, Maxar, Earthstar Geographics and the GIS User Community',
+      },
     },
     // The key comes from the same module that draws the lines, so a colour
     // change can't leave the legend describing something nothing renders.

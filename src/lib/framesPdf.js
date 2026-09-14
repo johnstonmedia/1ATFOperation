@@ -358,7 +358,7 @@ function drawAreaTable(ctx, x, y, w, listed, numbered, progress, prevProgress) {
  * numeral) was removed: it is either obvious from the map or it is not worth
  * the paper. Don't grow this back into a panel.
  */
-function drawStrip(ctx, listed, numbered, progress, prevProgress, showRHQ, map) {
+function drawStrip(ctx, listed, progress, prevProgress, showRHQ, map) {
   const rows = Math.ceil(listed.length / 3)
   const rowH = 26
   const H = 34 + rows * rowH + 34
@@ -415,9 +415,9 @@ function drawStrip(ctx, listed, numbered, progress, prevProgress, showRHQ, map) 
       ctx.save(); ctx.fillStyle = GAIN; ctx.globalAlpha = 0.16
       ctx.fillRect(rx - 5, ry - 17, colW - 16, rowH - 3); ctx.restore()
     }
-    textLine(ctx, String(numbered.get(z.id)).padStart(2, ' '), rx, ry,
-      { size: 17, font: 'JetBrains Mono, monospace', color: st.color })
-    textLine(ctx, z.name.toUpperCase(), rx + 36, ry,
+    const tex = ZONE_TEXTURE[z.kind] || ZONE_TEXTURE.activity
+    textLine(ctx, tex.glyph, rx, ry, { size: 16, font: 'JetBrains Mono, monospace', color: st.color })
+    textLine(ctx, z.name.toUpperCase(), rx + 26, ry,
       { size: 17, font: 'JetBrains Mono, monospace', spacing: 0.3, color: p.complete ? '#fff' : INK })
     let tx = rx + colW - 30
     const who = p.visited || []
@@ -487,14 +487,11 @@ export async function exportFramesPdf({ territory, frames: campaignFrames, zones
   // static art still covers the whole frame underneath, so nothing is missing
   // if a visitor ever zooms out of a page. This is the difference between the
   // print showing the 10 m Sentinel floor and showing real imagery.
-  // Areas are NUMBERED for print, in reading order down the sheet, and the
-  // numbers are the same on every page so the five sheets can be compared
-  // area by area without re-reading the table each time.
-  const numbered = new Map()
+  // The bottom band lists areas in reading order down the sheet, matching the
+  // names printed on the ground itself.
   const listed = zones
     .filter((z) => (progressFor ? progressFor(frames.length - 1)?.has(z.id) : true))
     .sort((a, b) => (a.label[1] - b.label[1]) || (a.label[0] - b.label[0]))
-  listed.forEach((z, k) => numbered.set(z.id, k + 1))
 
   const region = { x0: f.x0 / cols, x1: f.x1 / cols, y0: f.y0 / rows, y1: f.y1 / rows }
   // Reported back to the caller so the Ops Centre can say whether the print
@@ -517,7 +514,7 @@ export async function exportFramesPdf({ territory, frames: campaignFrames, zones
     // beside a zone you can zoom into; on a wall sheet it has to be legible at
     // two metres with no zoom at all, and the default size — tuned for a
     // ~700px on-screen map — lands under 3 mm on A3.
-    drawMapZones(fc, zones, { cols, rows, w: fullW, h: fullH, scale: fullW / map.pixelWidth, progress, zoneScale: 1.5, numbered })
+    drawMapZones(fc, zones, { cols, rows, w: fullW, h: fullH, scale: fullW / map.pixelWidth, progress, zoneScale: 1.15, printLabels: true })
     const hatch = document.createElement('canvas')
     hatch.width = fullW; hatch.height = fullH
     renderTerritoryLayer(hatch.getContext('2d'), { cells: fr.cells, cols, rows, showRHQ, w: fullW, h: fullH })
@@ -567,7 +564,7 @@ export async function exportFramesPdf({ territory, frames: campaignFrames, zones
         { size: 18, spacing: 1.8, color: GAIN, align: 'right', font: 'JetBrains Mono, monospace' })
     }
 
-    drawStrip(ctx, listed, numbered, progress, i > 0 ? progressFor?.(i - 1) : null, showRHQ, map)
+    drawStrip(ctx, listed, progress, i > 0 ? progressFor?.(i - 1) : null, showRHQ, map)
 
 
 

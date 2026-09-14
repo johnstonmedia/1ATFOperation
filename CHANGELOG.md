@@ -128,6 +128,18 @@ keep entries short and focused on what a new collaborator needs to know.
   and the map panel renders at 2× and draws down: z15-whole-frame before,
   z16-over-the-region after — 132 tiles, ~2.0 m/px, twice the linear resolution
   for fewer requests.
+- ⚠️ **A print now always gets real satellite imagery.** The exporter needs
+  CORS and the screen does not, so if SIX Maps won't send the header the print
+  was dropping to the 12 m static base while the live map stayed perfect. No
+  client code can make a service send a header, so there is now a second
+  source: `map.tiles.printFallback` (Esri World Imagery, CORS-enabled), tried
+  by the exporters only and only when the primary returns nothing readable. The
+  page prints whichever source's attribution actually supplied it.
+- **Area NAMES are back on the printed map**, replacing the numbered badges —
+  a map you have to cross-reference to read is not a map of anywhere. Counts
+  and company letters moved to the bottom band, leaving one short line per
+  area, and placement declutters (biggest area first, later labels nudged clear,
+  drawn anyway if they can't be). Sub-cell ground is skipped, as on screen.
 - **The PDF is now map, edge to edge, with one thin band at the bottom.** The
   key column and header band together were spending a quarter of an A3 on
   chrome. The map covers the whole sheet (`printFocus` crops to the page's own
