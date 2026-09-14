@@ -18,15 +18,22 @@ import { mapFor } from './maps'
 import { renderTerritoryLayer, renderHatchSwatch, imageFilterFor } from './terrainRender'
 import { drawMapLines } from './mapLines'
 import { drawMapZones, ZONE_STYLE, ZONE_TEXTURE, KIND_ORDER } from './mapZones'
+import { ASSURE_BLUE as TASKFORCE_COLOR } from './territory'
 import { sortFrames } from './campaign'
-import { coyLabelOf, colorOf, TASKFORCE_CODE, SCU_LABEL } from './territory'
+import { TASKFORCE_CODE, SCU_LABEL } from './territory'
+import { COMPANIES } from '../firebase/seed'
+
+const COMPANY_COLOR = COMPANIES.reduce((a, c) => ({ ...a, [c.letter]: c.accent }), {})
 import { renderPrintBase } from './replayExport'
 
-// A4 landscape at 150 dpi. Enough for a sharp A4 print and an A3 enlargement
-// at arm's length, without making a 5-page file enormous.
-const PAGE_W = 1754
-const PAGE_H = 1240
-const MARGIN = 54
+// ⚠️ A3 LANDSCAPE at 150 dpi — these are wall sheets, read from across a room
+// at camp, not handouts. Everything below is sized for that: the map takes as
+// much of the page as its shape allows and the chrome is one header line plus
+// the key, because a page that spends its area on framing is a page whose map
+// is too small to read standing up.
+const PAGE_W = 2480
+const PAGE_H = 1754
+const MARGIN = 46
 const JPEG_QUALITY = 0.93
 // The map panel is rendered at this multiple of its printed size and drawn
 // down. 150 dpi is fine for text, but satellite imagery on paper wants the
@@ -38,6 +45,8 @@ const INK = '#d7e2f4'
 const DIM = '#8294b5'
 const ACCENT = '#36e0c0'
 const GROUND = '#070b14'
+// What was taken on THIS sheet's day, as opposed to ground already held.
+const GAIN = '#ffd23c'
 
 /* ------------------------------- PDF writer ------------------------------- */
 
@@ -131,16 +140,16 @@ function textLine(ctx, s, x, y, { size = 20, font = 'Orbitron, sans-serif', colo
 // a sheet pulled off the wall on its own still has to be readable.
 function drawKey(ctx, x, y, w, { map, progress, showRHQ }) {
   let cy = y
-  textLine(ctx, 'MAP KEY', x, cy, { size: 16, spacing: 3, color: ACCENT })
+  textLine(ctx, 'MAP KEY', x, cy, { size: 20, spacing: 3, color: ACCENT })
   cy += 26
 
   const swatch = (code, label, note) => {
-    const sw = 40, sh = 20
+    const sw = 44, sh = 24
     const cv = document.createElement('canvas')
     cv.width = sw * 2; cv.height = sh * 2
     renderHatchSwatch(cv.getContext('2d'), code, cv.width, cv.height)
     ctx.drawImage(cv, x, cy - sh + 4, sw, sh)
-    textLine(ctx, label, x + sw + 12, cy, { size: 15, font: 'JetBrains Mono, monospace', spacing: 1 })
+    textLine(ctx, label, x + sw + 12, cy, { size: 19, font: 'JetBrains Mono, monospace', spacing: 1 })
     if (note) { cy += 17; textLine(ctx, note, x + sw + 12, cy, { size: 12, font: 'Rajdhani, sans-serif', color: DIM, weight: 500 }) }
     cy += 30
   }
@@ -149,8 +158,22 @@ function drawKey(ctx, x, y, w, { map, progress, showRHQ }) {
   swatch(TASKFORCE_CODE, `${SCU_LABEL} — TAKEN`, 'every scheduled visit complete')
   if (showRHQ) swatch('R', 'RHQ', 'Ex Admin Area — held throughout')
 
+  // The one thing a sheet says that the sheet before it did not.
+  ctx.save()
+  ctx.strokeStyle = GAIN
+  ctx.lineWidth = 3
+  ctx.strokeRect(x + 1, cy - 20, 44, 24)
+  ctx.fillStyle = GAIN
+  ctx.globalAlpha = 0.22
+  ctx.fillRect(x + 1, cy - 20, 44, 24)
+  ctx.restore()
+  textLine(ctx, 'TAKEN TODAY', x + 58, cy, { size: 19, font: 'JetBrains Mono, monospace', spacing: 1, color: GAIN })
+  cy += 21
+  textLine(ctx, 'ground this day added to the map', x + 58, cy, { size: 15, font: 'Rajdhani, sans-serif', color: DIM, weight: 500 })
+  cy += 38
+
   cy += 8
-  textLine(ctx, 'AREAS', x, cy, { size: 16, spacing: 3, color: ACCENT })
+  textLine(ctx, 'AREAS', x, cy, { size: 20, spacing: 3, color: ACCENT })
   cy += 24
   for (const kind of KIND_ORDER) {
     const st = ZONE_STYLE[kind]
@@ -160,10 +183,10 @@ function drawKey(ctx, x, y, w, { map, progress, showRHQ }) {
     ctx.strokeStyle = st.color
     ctx.lineWidth = 2
     ctx.setLineDash(tex.dash ? tex.dash.map((d) => d * 2.2) : [])
-    ctx.strokeRect(x + 1, cy - 15, 38, 18)
+    ctx.strokeRect(x + 1, cy - 18, 44, 22)
     ctx.restore()
-    textLine(ctx, `${tex.glyph}  ${st.label.toUpperCase()}`, x + 52, cy, { size: 14, font: 'JetBrains Mono, monospace', spacing: 0.6, color: st.color })
-    cy += 28
+    textLine(ctx, `${tex.glyph}  ${st.label.toUpperCase()}`, x + 58, cy, { size: 18, font: 'JetBrains Mono, monospace', spacing: 0.6, color: st.color })
+    cy += 34
   }
 
   if (progress) {
@@ -179,23 +202,23 @@ function drawKey(ctx, x, y, w, { map, progress, showRHQ }) {
   }
 
   cy += 4
-  textLine(ctx, 'BOUNDARIES', x, cy, { size: 16, spacing: 3, color: ACCENT })
+  textLine(ctx, 'BOUNDARIES', x, cy, { size: 20, spacing: 3, color: ACCENT })
   cy += 24
   for (const line of map.artKey || []) {
     ctx.save()
     ctx.strokeStyle = line.color
     ctx.lineWidth = 3
-    ctx.beginPath(); ctx.moveTo(x, cy - 6); ctx.lineTo(x + 38, cy - 6); ctx.stroke()
+    ctx.beginPath(); ctx.moveTo(x, cy - 7); ctx.lineTo(x + 44, cy - 7); ctx.stroke()
     ctx.restore()
     // Both boundary rows are "Area boundary — …", so the DISTINGUISHING half
     // has to lead; heading them both with the common part made the key say the
     // same thing twice.
     const parts = String(line.label).split(' — ')
     const head = (parts.length > 1 ? parts.slice(1).join(' — ') : parts[0]).toUpperCase()
-    textLine(ctx, head, x + 52, cy, { size: 13, font: 'JetBrains Mono, monospace', spacing: 0.5 })
-    cy += 16
-    textLine(ctx, parts.length > 1 ? parts[0] : '', x + 52, cy, { size: 12, font: 'Rajdhani, sans-serif', color: DIM, weight: 500 })
-    cy += 26
+    textLine(ctx, head, x + 58, cy, { size: 17, font: 'JetBrains Mono, monospace', spacing: 0.5 })
+    cy += 20
+    textLine(ctx, parts.length > 1 ? parts[0] : '', x + 58, cy, { size: 15, font: 'Rajdhani, sans-serif', color: DIM, weight: 500 })
+    cy += 32
   }
   return cy
 }
@@ -211,18 +234,18 @@ function drawSummary(ctx, x, y, w, progress) {
   if (!total) return
   const pct = Math.round((done / total) * 100)
 
-  textLine(ctx, 'PROGRESS', x, y, { size: 16, spacing: 3, color: ACCENT })
-  let cy = y + 40
-  textLine(ctx, `${pct}%`, x, cy, { size: 44, color: '#fff' })
-  textLine(ctx, `${done} of ${total} scheduled visits`, x + 130, cy - 20,
-    { size: 15, font: 'JetBrains Mono, monospace', spacing: 0.6 })
-  textLine(ctx, `${complete} of ${progress.size} areas fully taken`, x + 130, cy,
-    { size: 15, font: 'JetBrains Mono, monospace', spacing: 0.6, color: DIM })
+  textLine(ctx, 'PROGRESS', x, y, { size: 20, spacing: 3, color: ACCENT })
+  let cy = y + 54
+  textLine(ctx, `${pct}%`, x, cy, { size: 62, color: '#fff' })
+  textLine(ctx, `${done} of ${total} scheduled visits`, x + 190, cy - 26,
+    { size: 19, font: 'JetBrains Mono, monospace', spacing: 0.6 })
+  textLine(ctx, `${complete} of ${progress.size} areas fully taken`, x + 190, cy,
+    { size: 19, font: 'JetBrains Mono, monospace', spacing: 0.6, color: DIM })
 
   // A plain bar of the same hatch the map uses, so the number and the ground
   // are stated in one language.
-  cy += 34
-  const barH = 22
+  cy += 40
+  const barH = 28
   ctx.save()
   ctx.strokeStyle = 'rgba(99,130,190,0.35)'
   ctx.strokeRect(x + 0.5, cy + 0.5, w - 1, barH)
@@ -234,6 +257,89 @@ function drawSummary(ctx, x, y, w, progress) {
     ctx.drawImage(cv, x + 1, cy + 1, filled, barH - 1)
   }
   ctx.restore()
+}
+
+// Outline every cell taken between two frames. Drawn as the OUTER EDGE of the
+// gained region rather than a fill: a fill would hide the hatch underneath and
+// the sheet would stop saying who holds the ground, which is the thing the
+// outline is annotating.
+function drawGains(ctx, prevCells, cells, cols, rows, w, h) {
+  if (!prevCells || prevCells.length !== cells.length) return
+  const cw = w / cols
+  const ch = h / rows
+  const gained = (i) => i >= 0 && i < cells.length
+    && cells[i] !== '.' && prevCells[i] === '.'
+  ctx.save()
+  // A soft wash first so the region reads at a glance from across the room...
+  ctx.fillStyle = GAIN
+  ctx.globalAlpha = 0.18
+  for (let i = 0; i < cells.length; i++) {
+    if (!gained(i)) continue
+    ctx.fillRect((i % cols) * cw, Math.floor(i / cols) * ch, cw + 0.5, ch + 0.5)
+  }
+  // ...then the edge, which is what actually delineates it in print.
+  ctx.globalAlpha = 1
+  ctx.strokeStyle = GAIN
+  ctx.lineWidth = Math.max(1.5, cw * 0.5)
+  ctx.beginPath()
+  for (let i = 0; i < cells.length; i++) {
+    if (!gained(i)) continue
+    const x = i % cols, y = Math.floor(i / cols)
+    const px = x * cw, py = y * ch
+    if (y === 0 || !gained(i - cols)) { ctx.moveTo(px, py); ctx.lineTo(px + cw, py) }
+    if (y === rows - 1 || !gained(i + cols)) { ctx.moveTo(px, py + ch); ctx.lineTo(px + cw, py + ch) }
+    if (x === 0 || !gained(i - 1)) { ctx.moveTo(px, py); ctx.lineTo(px, py + ch) }
+    if (x === cols - 1 || !gained(i + 1)) { ctx.moveTo(px + cw, py); ctx.lineTo(px + cw, py + ch) }
+  }
+  ctx.stroke()
+  ctx.restore()
+}
+
+// The area table: the map's numbered badges spelled out. Number, name, visits
+// done of scheduled, and the letters of the companies through it so far.
+//
+// A row whose count moved SINCE THE PREVIOUS SHEET is marked, so a reader can
+// see what changed today without comparing two pages side by side — the same
+// question the gain outlines answer on the map.
+function drawAreaTable(ctx, x, y, w, listed, numbered, progress, prevProgress) {
+  if (!progress || !listed.length) return y
+  textLine(ctx, 'AREAS — VISITS DONE / SCHEDULED', x, y, { size: 20, spacing: 3, color: ACCENT })
+  let cy = y + 30
+  const rowH = 25
+  const colW = w / 2
+  listed.forEach((z, k) => {
+    const p = progress.get(z.id)
+    if (!p) return
+    const col = k < Math.ceil(listed.length / 2) ? 0 : 1
+    const row = col === 0 ? k : k - Math.ceil(listed.length / 2)
+    const rx = x + col * colW
+    const ry = cy + row * rowH
+    const st = ZONE_STYLE[z.kind] || ZONE_STYLE.activity
+    const prev = prevProgress?.get(z.id)
+    const moved = prev && p.done > prev.done
+
+    if (moved) {
+      ctx.save()
+      ctx.fillStyle = GAIN
+      ctx.globalAlpha = 0.16
+      ctx.fillRect(rx - 4, ry - 17, colW - 12, rowH - 3)
+      ctx.restore()
+    }
+    textLine(ctx, String(numbered.get(z.id)).padStart(2, ' '), rx, ry,
+      { size: 16, font: 'JetBrains Mono, monospace', color: st.color })
+    textLine(ctx, z.name.toUpperCase(), rx + 34, ry,
+      { size: 16, font: 'JetBrains Mono, monospace', spacing: 0.3, color: p.complete ? '#fff' : INK })
+    // Count and companies right-aligned, so the eye can run down them.
+    const who = (p.visited || [])
+    let tx = rx + colW - 22
+    for (let j = who.length - 1; j >= 0; j--) {
+      textLine(ctx, who[j], tx, ry, { size: 16, font: 'JetBrains Mono, monospace', color: COMPANY_COLOR[who[j]] || INK, align: 'right' })
+      tx -= 15
+    }
+    textLine(ctx, `${p.done}/${p.total}`, tx - 4, ry,
+      { size: 16, font: 'JetBrains Mono, monospace', color: p.complete ? TASKFORCE_COLOR : INK, align: 'right' })
+  })
+  return cy + Math.ceil(listed.length / 2) * rowH + 8
 }
 
 /* ---------------------------------- pages --------------------------------- */
@@ -262,12 +368,14 @@ export async function exportFramesPdf({ territory, frames: campaignFrames, zones
   const cropW = Math.max(1, f.x1 - f.x0)
   const cropH = Math.max(1, f.y1 - f.y0)
 
-  // Map panel on the left, key column on the right.
-  const keyW = 380
-  const panelW = PAGE_W - MARGIN * 2 - keyW - 28
-  const headH = 104
+  // ONE header line, then map and key. The map gets every pixel its shape can
+  // use; the key column is only as wide as what is left over, because on A3
+  // the map is the document and the rest is annotation.
+  const headH = 76
   const panelH = PAGE_H - MARGIN * 2 - headH
-  const drawW = Math.min(panelW, (panelH * cropW) / cropH)
+  const maxMapW = PAGE_W - MARGIN * 2 - 360 - 30
+  const keyW = PAGE_W - MARGIN * 2 - Math.min(maxMapW, (panelH * cropW) / cropH) - 30
+  const drawW = Math.min(maxMapW, (panelH * cropW) / cropH)
   const drawH = drawW * (cropH / cropW)
 
   // Render the whole map once at the resolution the crop needs, then take the
@@ -282,6 +390,15 @@ export async function exportFramesPdf({ territory, frames: campaignFrames, zones
   // static art still covers the whole frame underneath, so nothing is missing
   // if a visitor ever zooms out of a page. This is the difference between the
   // print showing the 10 m Sentinel floor and showing real imagery.
+  // Areas are NUMBERED for print, in reading order down the sheet, and the
+  // numbers are the same on every page so the five sheets can be compared
+  // area by area without re-reading the table each time.
+  const numbered = new Map()
+  const listed = zones
+    .filter((z) => (progressFor ? progressFor(frames.length - 1)?.has(z.id) : true))
+    .sort((a, b) => (a.label[1] - b.label[1]) || (a.label[0] - b.label[0]))
+  listed.forEach((z, k) => numbered.set(z.id, k + 1))
+
   const region = { x0: f.x0 / cols, x1: f.x1 / cols, y0: f.y0 / rows, y1: f.y1 / rows }
   const base = await renderPrintBase(map, fullW, fullH, { region })
 
@@ -294,11 +411,22 @@ export async function exportFramesPdf({ territory, frames: campaignFrames, zones
     full.width = fullW; full.height = fullH
     const fc = full.getContext('2d')
     fc.drawImage(base, 0, 0)
-    drawMapZones(fc, zones, { cols, rows, w: fullW, h: fullH, scale: fullW / map.pixelWidth, progress })
+    // ⚠️ `zoneScale` enlarges the zone type for print. On screen a name sits
+    // beside a zone you can zoom into; on a wall sheet it has to be legible at
+    // two metres with no zoom at all, and the default size — tuned for a
+    // ~700px on-screen map — lands under 3 mm on A3.
+    drawMapZones(fc, zones, { cols, rows, w: fullW, h: fullH, scale: fullW / map.pixelWidth, progress, zoneScale: 1.5, numbered })
     const hatch = document.createElement('canvas')
     hatch.width = fullW; hatch.height = fullH
     renderTerritoryLayer(hatch.getContext('2d'), { cells: fr.cells, cols, rows, showRHQ, w: fullW, h: fullH })
     fc.drawImage(hatch, 0, 0)
+
+    // WHAT CHANGED TODAY. A sheet that only shows the cumulative position
+    // makes five pages that look nearly alike; the question a wall of them has
+    // to answer is "what did we take yesterday". Ground that is held on this
+    // frame and was not on the one before is outlined in the gain colour, over
+    // the ordinary hatch — so the sheet reads as position first, then progress.
+    if (i > 0) drawGains(fc, frames[i - 1].cells, fr.cells, cols, rows, fullW, fullH)
 
     const page = document.createElement('canvas')
     page.width = PAGE_W; page.height = PAGE_H
@@ -306,19 +434,19 @@ export async function exportFramesPdf({ territory, frames: campaignFrames, zones
     ctx.fillStyle = GROUND
     ctx.fillRect(0, 0, PAGE_W, PAGE_H)
 
-    // Heading
-    textLine(ctx, '1ATF', MARGIN, MARGIN + 40, { size: 44, spacing: 4 })
-    textLine(ctx, '1st Australian Task Force', MARGIN + 150, MARGIN + 38, { size: 22, color: DIM, weight: 600, font: 'Rajdhani, sans-serif' })
+    // ONE header line. Unit, then what day this sheet is, then where — the
+    // three things someone walking up to the wall needs before the map.
+    textLine(ctx, '1ATF', MARGIN, MARGIN + 42, { size: 46, spacing: 4 })
     const heading = (title || fr.label || `FRAME ${i + 1}`).toUpperCase()
-    textLine(ctx, heading, MARGIN, MARGIN + 78, { size: 24, spacing: 3, color: ACCENT })
-    const count = `SHEET ${i + 1} OF ${frames.length}`
-    textLine(ctx, count, PAGE_W - MARGIN, MARGIN + 40, { size: 15, spacing: 2, color: DIM, align: 'right', font: 'JetBrains Mono, monospace' })
+    textLine(ctx, heading, MARGIN + 165, MARGIN + 40, { size: 30, spacing: 3, color: ACCENT })
+    textLine(ctx, `SHEET ${i + 1} OF ${frames.length}`, PAGE_W - MARGIN, MARGIN + 18,
+      { size: 17, spacing: 2, color: DIM, align: 'right', font: 'JetBrains Mono, monospace' })
     if (map.focus?.label) {
-      textLine(ctx, `${map.focus.label} — AREA OF OPERATIONS`, PAGE_W - MARGIN, MARGIN + 70,
-        { size: 14, spacing: 1.6, color: '#ffd23c', align: 'right', font: 'JetBrains Mono, monospace' })
+      textLine(ctx, `${map.focus.label} — AREA OF OPERATIONS`, PAGE_W - MARGIN, MARGIN + 44,
+        { size: 18, spacing: 1.8, color: GAIN, align: 'right', font: 'JetBrains Mono, monospace' })
     }
     ctx.fillStyle = 'rgba(54,224,192,0.55)'
-    ctx.fillRect(MARGIN, MARGIN + 92, PAGE_W - MARGIN * 2, 2)
+    ctx.fillRect(MARGIN, MARGIN + 62, PAGE_W - MARGIN * 2, 2)
 
     // Map panel — the focus rectangle out of the full render.
     const px = MARGIN
@@ -333,8 +461,10 @@ export async function exportFramesPdf({ territory, frames: campaignFrames, zones
     ctx.lineWidth = 1
     ctx.strokeRect(px + 0.5, py + 0.5, drawW - 1, drawH - 1)
 
-    const keyEnd = drawKey(ctx, px + drawW + 28, py + 24, keyW, { map, progress, showRHQ })
-    drawSummary(ctx, px + drawW + 28, keyEnd + 18, keyW, progress)
+    const kx = px + drawW + 30
+    const keyEnd = drawKey(ctx, kx, py + 22, keyW, { map, progress, showRHQ })
+    const tableEnd = drawAreaTable(ctx, kx, keyEnd + 10, keyW, listed, numbered, progress, i > 0 ? progressFor?.(i - 1) : null)
+    drawSummary(ctx, kx, tableEnd + 16, keyW, progress)
 
     textLine(ctx, 'LUCET PER MINISTERIUM', MARGIN, PAGE_H - MARGIN + 18,
       { size: 12, spacing: 2, color: DIM, font: 'JetBrains Mono, monospace' })

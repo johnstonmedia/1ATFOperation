@@ -806,10 +806,31 @@ assuming a page exists).
   it's already covered by the generic `content/*` rule.
 - **PDF export** ([src/lib/framesPdf.js](src/lib/framesPdf.js), the
   `🖨 Export N Frames as PDF` button in Map: Territory → Campaign replay): one
-  A4-landscape page per frame at 150 dpi, map left and a key right, plus a
-  progress block totalled off the same per-zone counts the map is drawn from so
-  the headline can't disagree with the ground. Each page is cropped to the
-  map's `focus` box, so print shows what the screen shows.
+  **A3-landscape** page per frame at 150 dpi, cropped to the map's `focus` box
+  so print shows what the screen shows. These are WALL SHEETS read from across
+  a room, which sets every decision below.
+  - **Chrome is one header line.** The map takes every pixel its shape allows;
+    a page that spends its area on framing is a page whose map is too small to
+    read standing up.
+  - ⚠️ **Areas are NUMBERED on the map, named in a table beside it.** Printing
+    each area's name, count and company letters on the map itself was tried and
+    is unreadable: two dozen labels at a size legible from two metres collide
+    into a mat, and shrinking them to fit defeats printing A3 at all.
+    `drawMapZones(..., { numbered })` draws a badge per area; `drawAreaTable()`
+    spells them out. Numbering is stable across all five sheets, so they can be
+    compared area by area.
+  - **Companies are named even though they own nothing.** The ground is 1ATF's
+    — an area is a percentage takeover — but "has my company done the ropes
+    course yet" is the question these sheets get asked, so every row carries the
+    letters of the companies through it so far in their own colours.
+    Attribution without ownership.
+  - **Each sheet says what changed THAT DAY**: ground held on this frame and
+    not the one before is outlined in `GAIN` on the map (`drawGains`, an outline
+    over a light wash — a solid fill would hide the hatch and stop the sheet
+    saying who holds the ground), and its table row is highlighted. Without
+    this, five cumulative sheets look nearly alike.
+  - A progress block totals off the same per-zone counts the map is drawn from,
+    so the headline can't disagree with the ground.
   - ⚠️ **Print tiles are fetched for the CROPPED REGION ONLY**, and that is
     what makes the print sharp. The tile budget (`MAX_EXPORT_TILES`, 400) is
     what picks the zoom level, so spending it on the whole frame when the page

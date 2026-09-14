@@ -12,7 +12,10 @@
 // a zone is SHOWN is RHQ's call at any moment, so that lives in a per-map
 // `zones` content slice instead (see zonesSlice() in lib/maps.js).
 import { ASSURE_BLUE as TASKFORCE_COLOR, SCU_LABEL } from './territory'
+import { COMPANIES } from '../firebase/seed'
 import singleton from '../data/singleton-zones.json'
+
+const COMPANY_COLOR = COMPANIES.reduce((a, c) => ({ ...a, [c.letter]: c.accent }), {})
 
 // ⚠️ Zone vertices are CELL COORDINATES, so they only mean anything against
 // the grid they were authored in. The JSON records that grid and `zonesFor`
@@ -124,7 +127,7 @@ export function zoneInk(zone) {
  * Sub-cell ground (the eating areas) is skipped: it has no outline, and at
  * poster scale its name lands on top of RHQ's.
  */
-export function drawMapZones(ctx, zones, { cols, rows, w, h, scale = 1, progress = null } = {}) {
+export function drawMapZones(ctx, zones, { cols, rows, w, h, scale = 1, progress = null, zoneScale = 1, numbered = null } = {}) {
   if (!zones?.length || !cols || !rows) return
   const sx = w / cols
   const sy = h / rows
@@ -151,9 +154,42 @@ export function drawMapZones(ctx, zones, { cols, rows, w, h, scale = 1, progress
     ctx.setLineDash([])
   }
   ctx.globalAlpha = 1
+
+  // NUMBERED MODE (print). Two dozen area names, each with a count and a row
+  // of company letters, cannot coexist on one sheet — at a size readable from
+  // two metres they collide into an unreadable mat, and shrinking them to fit
+  // defeats the point of printing A3. So the map carries a numbered badge per
+  // area and the names, counts and companies go in a table beside it, which is
+  // the classic answer for a dense printed map and leaves the ground visible.
+  if (numbered) {
+    const r = (w / cols) * (cols / 90) * 0.78 * zoneScale
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    for (const z of zones) {
+      const n = numbered.get(z.id)
+      if (!n) continue
+      const s2 = ZONE_STYLE[z.kind] || ZONE_STYLE.activity
+      const [lx, ly] = z.label
+      const cx = lx * sx, cy = ly * sy
+      ctx.beginPath()
+      ctx.arc(cx, cy, r, 0, Math.PI * 2)
+      ctx.fillStyle = 'rgba(6,10,18,0.82)'
+      ctx.fill()
+      ctx.lineWidth = Math.max(1, r * 0.16)
+      ctx.strokeStyle = s2.color
+      ctx.stroke()
+      ctx.font = `700 ${r * 1.15}px Orbitron, sans-serif`
+      ctx.fillStyle = s2.color
+      ctx.fillText(String(n), cx, cy + r * 0.04)
+    }
+    ctx.restore()
+    return
+  }
+
   // Names last, so no polygon drawn after one buries it.
   // Frame-relative, not cell-relative — see the same note in MapZones.jsx.
-  const size = (w / cols) * (cols / 90)
+  // `zoneScale` lets print ask for larger type than the screen wants.
+  const size = (w / cols) * (cols / 90) * zoneScale
   ctx.textAlign = 'center'
   ctx.textBaseline = 'alphabetic'
   ctx.lineJoin = 'round'
@@ -171,15 +207,29 @@ export function drawMapZones(ctx, zones, { cols, rows, w, h, scale = 1, progress
     ctx.fillStyle = ink
     ctx.fillText(name, lx * sx, ly * sy - size * 0.55)
     if (!p) continue
-    // Visits done of visits scheduled — the same count the painted cells show,
-    // for anyone close enough to read it. 1ATF once the last one lands.
-    const text = p.complete ? SCU_LABEL : `${p.done}/${p.total}`
-    if (!text) continue
+    // Visits done of visits scheduled, then WHO HAS BEEN — a letter per
+    // company in its own colour. The ground is 1ATF's either way (an area is a
+    // percentage takeover, not a company's prize), but "has my company done the
+    // ropes course" is the question a cadet actually asks of these sheets, so
+    // the attribution is printed even though the ownership isn't.
+    const count = p.complete ? `${p.total}/${p.total}` : `${p.done}/${p.total}`
+    const who = p.visited || []
     ctx.font = `700 ${size * 0.88}px "JetBrains Mono", monospace`
     ctx.lineWidth = size * 0.2
-    ctx.strokeText(text, lx * sx, ly * sy + size * 0.75)
-    ctx.fillStyle = p.complete ? TASKFORCE_COLOR : '#d7e2f4'
-    ctx.fillText(text, lx * sx, ly * sy + size * 0.75)
+    const gap = size * 0.34
+    const parts = [{ t: count, c: p.complete ? TASKFORCE_COLOR : '#d7e2f4' },
+      ...who.map((k) => ({ t: k, c: COMPANY_COLOR[k] || '#d7e2f4' }))]
+    const wTot = parts.reduce((n, q) => n + ctx.measureText(q.t).width, 0) + gap * (parts.length - 1)
+    let cx = lx * sx - wTot / 2
+    const by = ly * sy + size * 0.8
+    ctx.textAlign = 'left'
+    for (const q of parts) {
+      ctx.strokeText(q.t, cx, by)
+      ctx.fillStyle = q.c
+      ctx.fillText(q.t, cx, by)
+      cx += ctx.measureText(q.t).width + gap
+    }
+    ctx.textAlign = 'center'
   }
   ctx.restore()
 }

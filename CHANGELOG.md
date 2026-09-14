@@ -128,6 +128,14 @@ keep entries short and focused on what a new collaborator needs to know.
   and the map panel renders at 2× and draws down: z15-whole-frame before,
   z16-over-the-region after — 132 tiles, ~2.0 m/px, twice the linear resolution
   for fewer requests.
+- **The PDF is now an A3 wall sheet.** One header line and nothing else around
+  the map; areas numbered on the map with the names, counts and company letters
+  in a table beside it (labelling them on the map itself collides into an
+  unreadable mat at any size legible from two metres); every sheet outlines the
+  ground taken THAT DAY and highlights the table rows that moved, so five
+  cumulative sheets no longer look alike; and every area names the companies
+  through it so far, in their colours — attribution without ownership, since
+  the ground itself stays 1ATF's.
 - **PDF export of the whole campaign** (`framesPdf.js`): one A4-landscape page
   per frame at 150 dpi, map left, key right, progress block under it, each page
   cropped to the map's focus box. No PDF dependency — a page is one full-page
