@@ -1,49 +1,31 @@
 import { campDays, overallProgress, LAST_DAY } from '../lib/campPlan'
-import { PHONETIC } from '../firebase/seed'
 
-// The camp progress control: whose progress, and how far through camp.
+// How far through camp the map is showing, and how much of the plan that is.
 //
-// TWO VIEWS, one set of data (see lib/campPlan.js):
-//   UNIT     every company's progress together. A zone shared by three
-//            companies reads 33% when one of them has been through it.
-//   COMPANY  only the visitor's own company, and only the zones they are
-//            actually sent to. A zone is then simply done or not.
-//
-// The company comes from the boot gate the visitor already answered for intel
-// scoping, so there is no second picker. Someone who skipped the gate only
-// gets the unit view, and is told why rather than shown a dead button.
+// ONE MAP, THE UNIT'S. A zone shared by three companies reads 33% when one of
+// them has been through it, and 100% — 1ATF's — once all three have. A
+// per-company view of the same camp existed briefly and was removed: six cuts
+// of one dataset is six things to keep straight, and showing a cadet only
+// their own company's ground worked against the thing the map is for.
 //
 // DAY 0 is the blank board — camp hasn't started. Day N means everything up to
 // the end of that day has happened. Because the whole plan is known in advance
 // this needs no recording during camp: move the day on and the map is right.
-export default function CampControls({ mapId, day, onDay, mode, onMode, company, dayFromReplay = false }) {
+export default function CampControls({ mapId, day, onDay, dayFromReplay = false }) {
   const days = campDays(mapId)
   if (!days.length) return null
   const last = LAST_DAY(mapId)
-  const co = mode === 'company' ? company : null
-  const overall = overallProgress(mapId, day, co)
-  const coName = company ? (PHONETIC[company] || company) : ''
+  const overall = overallProgress(mapId, day)
 
   return (
     <div className="panel panel-pad col" style={{ gap: 10, marginTop: 10 }}>
       <div className="row between center wrap" style={{ gap: 10 }}>
         <div className="row center wrap" style={{ gap: 8 }}>
           <span className="tag">CAMP PROGRESS</span>
-          <button className={mode === 'unit' ? 'primary' : 'ghost'} onClick={() => onMode('unit')}
-            style={{ padding: '2px 12px', fontSize: 11 }}>UNIT</button>
-          <button
-            className={mode === 'company' ? 'primary' : 'ghost'}
-            onClick={() => company && onMode('company')}
-            disabled={!company}
-            title={company ? `Only ${coName}'s own activities` : 'Choose your company in the nav to see this'}
-            style={{ padding: '2px 12px', fontSize: 11, opacity: company ? 1 : 0.45 }}
-          >
-            {company ? `${coName.toUpperCase()} ONLY` : 'MY COMPANY'}
-          </button>
         </div>
         <span className="mono" style={{ fontSize: 12, letterSpacing: 1 }}>
           <span style={{ color: 'var(--accent)' }}>{overall.pct}%</span>
-          <span className="dim"> — {overall.done} of {overall.total} activities{mode === 'company' ? ` for ${coName}` : ''}</span>
+          <span className="dim"> — {overall.done} of {overall.total} activities</span>
         </span>
       </div>
 

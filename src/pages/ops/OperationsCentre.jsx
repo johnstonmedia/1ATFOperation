@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { useData } from '../../context/DataContext'
+import { FIREBASE_ENABLED } from '../../firebase/config'
 import { useToast } from '../../context/ToastContext'
 import Logo from '../../components/Logo'
 import LastUpdated from '../../components/LastUpdated'
@@ -109,6 +110,7 @@ export default function OperationsCentre() {
           <button className="ghost" onClick={() => setRailOpen(true)} aria-label="Open sections menu">☰ MENU</button>
           <span className="mono accent" style={{ fontSize: 11 }}>{SECTIONS.find((s) => s.id === section)?.label}</span>
         </div>
+        <LocalModeWarning />
         <LoadErrors />
         {section === 'narrative' && <NarrativeEditor />}
         {section === 'map' && <MapEditor />}
@@ -121,6 +123,32 @@ export default function OperationsCentre() {
         {section === 'help' && <HelpAdmin />}
         {section === 'backups' && <BackupsPanel />}
         {section === 'audit' && <AuditLog />}
+      </div>
+    </div>
+  )
+}
+
+// LOCAL MODE is invisible until it bites, and it bites in a way that looks
+// like data loss: nothing is read from or written to Firestore, so every panel
+// shows seeded defaults and an empty campaign — while sign-in still "works",
+// because in LOCAL MODE the bootstrap admin is accepted with any password
+// (see AuthContext). A deployment built with VITE_FIREBASE_DISABLE set
+// therefore looks exactly like a live site that has lost its content. Say so.
+function LocalModeWarning() {
+  if (FIREBASE_ENABLED) return null
+  return (
+    <div className="panel panel-pad col" style={{ gap: 6, marginBottom: 14, borderColor: 'var(--hostile)' }}>
+      <strong className="head hostile" style={{ fontSize: 13 }}>⚠ LOCAL MODE — not connected to Firebase</strong>
+      <div className="mono dim" style={{ fontSize: 11 }}>
+        This build reads and writes your browser only. Nothing here is the live site's content, nothing
+        you save reaches Firestore, and anyone else sees none of it. Campaign frames, roster and intel
+        will all look empty or reset no matter what is in Firestore — the data is untouched, this build
+        just isn't looking at it. Sign-in still works because the administrator ID is accepted locally
+        with any password.
+        <br />
+        <strong>Cause: <code>VITE_FIREBASE_DISABLE</code> is set at build time.</strong> Remove it from the
+        hosting project&rsquo;s environment variables and redeploy. (Vite inlines env vars into the bundle,
+        so removing it only takes effect on a fresh build.)
       </div>
     </div>
   )

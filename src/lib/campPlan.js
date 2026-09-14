@@ -31,23 +31,17 @@ export const LAST_DAY = (mapId) => campDays(mapId).reduce((n, d) => Math.max(n, 
  *   pending    those still to come
  *   pct        visited / scheduled, 0..100, rounded
  *   done       pct === 100 — 1ATF has conquered it
- *   mine       this company is scheduled here     (only when `company` given)
- *   mineDone   this company has been              (only when `company` given)
  * }
  *
- * ⚠️ THE PERCENTAGE IS ALWAYS UNIT-WIDE, even in the company view. A zone is
- * not conquered until EVERY company the plan sends there has been through it:
- * three companies are booked onto the ropes course, so one company through
- * reads 33% on every map that shows it. Making the company view divide by its
- * own visits would have the same ground read 100% for Alpha and 33% for the
- * unit at the same moment, which is not one campaign.
- *
- * `company` therefore changes WHICH ZONES ARE LISTED, not the arithmetic:
- * the ones that company is sent to, PLUS every zone 1ATF has already
- * conquered. Ground the task force holds belongs to all of it, so once a zone
- * is done it shows on every company's map whether they were sent there or not.
+ * ⚠️ THERE IS ONE MAP AND IT IS THE UNIT'S. A zone is not conquered until
+ * EVERY company the plan sends there has been through it: three companies are
+ * booked onto the ropes course, so one company through reads 33%, and at 100%
+ * the ground is 1ATF's rather than any one company's. A per-company cut of
+ * this existed briefly and was removed — six versions of the same camp is six
+ * things to keep straight, and it undercut the point that the task force takes
+ * ground together.
  */
-export function zoneProgress(mapId, throughDay, company = null) {
+export function zoneProgress(mapId, throughDay) {
   const plan = planFor(mapId)
   const out = new Map()
   if (!plan) return out
@@ -57,29 +51,21 @@ export function zoneProgress(mapId, throughDay, company = null) {
     z.scheduled.add(v.company)
     if (v.day <= throughDay) z.visited.add(v.company)
   }
-  for (const [id, z] of out) {
-    const mine = z.scheduled.has(company)
-    const mineDone = z.visited.has(company)
+  for (const [, z] of out) {
     z.scheduled = [...z.scheduled].sort()
     z.visited = [...z.visited].sort()
     z.pending = z.scheduled.filter((c) => !z.visited.includes(c))
     z.pct = z.scheduled.length ? Math.round((z.visited.length / z.scheduled.length) * 100) : 0
     z.done = z.pct === 100
-    if (company) {
-      z.mine = mine
-      z.mineDone = mineDone
-      // Not theirs and not yet taken by the unit: nothing to show them.
-      if (!mine && !z.done) out.delete(id)
-    }
   }
   return out
 }
 
 // Roll-up for a headline: how much of the whole plan has happened.
-export function overallProgress(mapId, throughDay, company = null) {
+export function overallProgress(mapId, throughDay) {
   const plan = planFor(mapId)
   if (!plan) return { done: 0, total: 0, pct: 0 }
-  const visits = company ? plan.visits.filter((v) => v.company === company) : plan.visits
+  const visits = plan.visits
   const done = visits.filter((v) => v.day <= throughDay).length
   return { done, total: visits.length, pct: visits.length ? Math.round((done / visits.length) * 100) : 0 }
 }

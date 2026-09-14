@@ -255,6 +255,16 @@ assuming a page exists).
   devices, not people. Surfaced in Ops Centre → Intercepted Intelligence
   ("Decrypts"), and described in [Privacy.jsx](src/pages/Privacy.jsx) —
   **update that notice if the shape ever changes**.
+- ⚠️ **LOCAL MODE is a deployment hazard, not just a dev convenience.** A build
+  made with `VITE_FIREBASE_DISABLE` set reads and writes the browser only, so
+  every panel shows seeded defaults and an empty campaign — while sign-in still
+  appears to work, because the bootstrap admin is accepted with ANY password in
+  that mode (`signIn`'s LOCAL MODE branch). A preview deploy carrying that
+  variable therefore looks exactly like a live site that has lost its content.
+  The Ops Centre now says so outright (`LocalModeWarning` in
+  OperationsCentre.jsx), alongside `LoadErrors`, which lists any Firestore read
+  that failed — reads fall back to the seed silently, so a denied
+  `content/territory` otherwise reads as wiped progress.
 - Data layer in `src/lib/store.js` (mode-agnostic: same async API over
   Firestore or localStorage). `DataContext` provides `updateSlice`,
   `replaceRoster`, `append`, `reportError`, `reload`, `logAudit`.
@@ -394,12 +404,13 @@ assuming a page exists).
       everything else. `zoneProgress(mapId, throughDay, company?)` gives each
       zone its scheduled companies, who has been as at that day, and a
       percentage. There is deliberately no live ticking workflow.
-    - **Two views, one dataset.** UNIT: a zone shared by three companies reads
-      33% when one has been through, with the visited companies' letters in
-      their own colours. COMPANY: only the visitor's own company and only the
-      zones they are sent to, so a zone is simply done or not. The company
-      comes from the boot gate already answered for intel scoping — no second
-      picker; a visitor who skipped the gate gets unit view and is told why.
+    - ⚠️ **ONE MAP, AND IT IS THE UNIT'S** (2026-09-14 — this REVERSES the
+      per-company view added earlier the same day; don't reinstate it). A zone
+      shared by three companies reads 33% when one has been through, with the
+      visited companies' letters in their own colours, and 100% / `1ATF` once
+      all three have. There is no company toggle, no per-company mask and no
+      `company` argument on `zoneProgress`/`overallProgress`. The boot-gate
+      company still exists — it scopes INTEL, not the map.
     - ⚠️ The converter **refuses to guess**: a cell that is not a recognisable
       company is reported by name and skipped, never silently dropped, and the
       run always prints what it ignored. The sheet legitimately contains
@@ -421,13 +432,6 @@ assuming a page exists).
       companies reads as confusion. The zone percentage is ALWAYS unit-wide,
       in the company view too: three companies booked onto the ropes course
       means one through reads 33% wherever it is shown.
-    - **1ATF ground survives the per-company mask**, so an area two companies
-      were booked onto and both visited reads as taken on all six companies'
-      maps — including the four never sent there.
-    - ⚠️ A company board is **rebuilt from the plan, not just masked**
-      (`companyCells` in campFrames.js, keyed on each frame's own `day`).
-      Masking alone erased ground the visitor's company had covered whenever
-      another company got there first and painted it their colour.
     - **Held-ness reuses the grid's light/solid convention**: lowercase while
       some scheduled company still has to come, uppercase once all have. No new
       cell codes.
@@ -443,10 +447,6 @@ assuming a page exists).
       Map: Territory gives each row **Reveal** / **Visible ✓** plus **Reveal
       to here** (reveals up to that frame and re-hides the rest, so the public
       timeline never has a gap). The Ops Centre always works on the full set.
-    - **Company view masks the painted cells** (`maskToCompany`), so a cadet
-      sees their own company's ground, 1ATF's and RHQ's and nothing else — done at
-      render time rather than by generating per-company frames, which would put
-      six more copies in a shared collection. RHQ survives the mask on purpose.
   - A map may declare an **`artKey`** (+ `artKeyLabel`): what its own art
     carries under the territory hatch, rendered by
     [MapLegend.jsx](src/components/MapLegend.jsx) behind a `+ <artKeyLabel>`

@@ -75,6 +75,18 @@ keep entries short and focused on what a new collaborator needs to know.
 - **Legacy `DEFAULT_ZONES` deleted** — the Leaflet-era Australia polygons
   (Northern Approach, Red Centre, Meridian Salient…) predating the KML import.
   Unused by any code; the committed BIV26 zones are the only zone data now.
+- ⚠️ **The per-company map view is REMOVED** (reverses the per-company work
+  earlier the same day). There is one map and it is the unit's: no UNIT/COMPANY
+  toggle, no `maskToCompany`/`companyCells`, and no `company` argument on
+  `zoneProgress`/`overallProgress`. Six cuts of one camp is six things to keep
+  straight, and showing a cadet only their own ground worked against what the
+  1ATF stage says. The boot-gate company still scopes INTEL.
+- **LOCAL MODE now announces itself in the Ops Centre.** A build carrying
+  `VITE_FIREBASE_DISABLE` reads the browser only, yet sign-in still succeeds
+  (the bootstrap admin is accepted with any password in that mode) — so such a
+  deploy looks precisely like a live site whose content has vanished. That was
+  a real preview-vs-production mystery; the banner names the variable and the
+  fix.
 - **Firestore read failures are no longer silent.** `loadFirebase` swallowed
   every failed read and fell back to the seed, so a denied `content/territory`
   read drew the seeded map and looked exactly like the campaign progress having

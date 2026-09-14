@@ -10,7 +10,6 @@ import { mapById, territorySlice, campaignStartSlice, framesForMap, zoneVisibili
 import { visibleZones } from '../lib/mapZones'
 import { zoneProgress, hasCampPlan } from '../lib/campPlan'
 import { sortFrames, releasedFrames } from '../lib/campaign'
-import { companyCells } from '../lib/campFrames'
 import CampControls from '../components/CampControls'
 import useViewedMap from '../hooks/useViewedMap'
 
@@ -82,7 +81,6 @@ export default function Home() {
   // Camp progress: how far through, and whose. Both are this visitor's own
   // view of committed plan data — nothing here is stored or shared.
   const [day, setDay] = useState(0)
-  const [mode, setMode] = useState('unit')
   // Frames generated from the camp plan carry the day they represent. When
   // they exist the REPLAY owns the clock: whichever frame is on screen sets
   // the day the zone overlay reports, so the map and the percentages can never
@@ -96,39 +94,10 @@ export default function Home() {
     const d = frameDays[idx]
     if (typeof d === 'number') setDay(d)
   }, [frameDays])
-  const campMode = mode === 'company' && company ? 'company' : 'unit'
   const campProgress = useMemo(
-    () => (hasCampPlan(live.id) ? zoneProgress(live.id, day, campMode === 'company' ? company : null) : null),
-    [live.id, day, campMode, company],
+    () => (hasCampPlan(live.id) ? zoneProgress(live.id, day) : null),
+    [live.id, day],
   )
-  // In company view the PAINTED GROUND is rewritten to that company's own
-  // board: their ground, everything 1ATF has conquered, and RHQ. Done here at
-  // render time rather than by generating six sets of frames — it is the same
-  // plan either way, and per-company frames in a shared collection would be
-  // six more things to keep in step. Each generated frame is rebuilt against
-  // ITS OWN day (`f.day`), not the day on screen, so a company's progress
-  // grows through the replay instead of every frame showing the latest state.
-  const maskCells = campMode === 'company' && company
-  const viewTerritory = useMemo(
-    () => (maskCells
-      ? { ...territory, cells: companyCells(live.id, territory.cells, territory.cols, territory.rows, company, day) }
-      : territory),
-    [territory, maskCells, company, live.id, day],
-  )
-  const viewFrames = useMemo(
-    () => (maskCells
-      ? frames.map((f) => ({ ...f, cells: companyCells(live.id, f.cells, territory.cols, territory.rows, company, f.day) }))
-      : frames),
-    [frames, maskCells, company, live.id, territory.cols, territory.rows],
-  )
-
-  // In company view the map shows only the zones that company is sent to;
-  // the rest is not their camp. RHQ ground stays, so the board keeps its anchor.
-  const zones = useMemo(() => {
-    if (!campProgress || campMode !== 'company') return allZones
-    return allZones.filter((z) => campProgress.has(z.id) || z.kind === 'hq')
-  }, [allZones, campProgress, campMode])
-
   // First visit (or straight after switching company): record the current
   // intel as the baseline so the alert only ever fires on a real change.
   useEffect(() => {
@@ -170,11 +139,10 @@ export default function Home() {
 
       {/* Animated campaign-history replay; plain static map when no campaign
           start state has been recorded yet. */}
-      <CampaignReplayMap territory={viewTerritory} frames={viewFrames} zones={zones} zoneProgress={campProgress} defaultStartId={state[campaignStartSlice(live.id)]} onFrame={onFrame} />
+      <CampaignReplayMap territory={territory} frames={frames} zones={allZones} zoneProgress={campProgress} defaultStartId={state[campaignStartSlice(live.id)]} onFrame={onFrame} />
       {hasCampPlan(live.id) && (
         <CampControls
-          mapId={live.id} day={day} onDay={setDay} mode={campMode} onMode={setMode}
-          company={company} dayFromReplay={replayDrivesDay}
+          mapId={live.id} day={day} onDay={setDay} dayFromReplay={replayDrivesDay}
         />
       )}
       <MapSwitch live={live} defaultId={defaultMap.id} isOverride={isOverride} onView={viewMap} state={state} />
