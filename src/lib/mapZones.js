@@ -164,7 +164,7 @@ export function zoneInk(zone, p) {
  * Sub-cell ground (the eating areas) is skipped: it has no outline, and at
  * poster scale its name lands on top of RHQ's.
  */
-export function drawMapZones(ctx, zones, { cols, rows, w, h, scale = 1, progress = null, zoneScale = 1, printLabels = false } = {}) {
+export function drawMapZones(ctx, zones, { cols, rows, w, h, scale = 1, progress = null, zoneScale = 1, printLabels = false, safe = null } = {}) {
   if (!zones?.length || !cols || !rows) return
   const sx = w / cols
   const sy = h / rows
@@ -263,6 +263,12 @@ export function drawMapZones(ctx, zones, { cols, rows, w, h, scale = 1, progress
       let by = z.label[1] * sy
       const hits = (yy, xx) => placed.some((r) => Math.abs(r.x - xx) < (r.w + tw) / 2 + size * 0.3
         && Math.abs(r.y - yy) < (r.h + th) / 2 + size * 0.25)
+      // ⚠️ A label outside the PRINT SAFE AREA is a label the guillotine may
+      // take half of, so a position there counts as blocked and the search
+      // keeps looking. The map itself still bleeds past this box — it is only
+      // text that has to stay inside it.
+      const unsafe = (yy, xx) => !!safe && (xx - tw / 2 < safe.x0 || xx + tw / 2 > safe.x1
+        || yy - size < safe.y0 || yy + (th - size) > safe.y1)
       // ⚠️ THE SEARCH IS 2-D. Nudging only up and down cannot clear a cluster:
       // High Ropes, AA Lima, AA Mike, AA Juliet and NL Romeo all sit within a
       // few hundred metres of each other, and with vertical moves alone the
@@ -274,10 +280,24 @@ export function drawMapZones(ctx, zones, { cols, rows, w, h, scale = 1, progress
       let bxx = bx
       const cands = [[0, 0]]
       for (let r = 1; r <= 4; r++) for (const dx of [0, -1, 1, -2, 2]) cands.push([dx, -r], [dx, r])
+      let settled = false
       for (const [dx, dy] of cands) {
         bxx = bx + dx * stepX
         by = z.label[1] * sy + dy * stepY
-        if (!hits(by, bxx)) break
+        if (!hits(by, bxx) && !unsafe(by, bxx)) { settled = true; break }
+      }
+      // ⚠️ Nothing clear anywhere → go back to the area's OWN centre, not to
+      // wherever the search happened to stop. The last candidate is the
+      // furthest one tried, so falling out of the loop used to fling a label
+      // four rings away from the ground it names and then clamp it, which is
+      // how AA Oscar ended up labelled in the middle of the sheet.
+      if (!settled) { bxx = bx; by = z.label[1] * sy }
+      // Nothing clear anywhere: keep the name on the sheet even if it is tight.
+      // Losing an area's name is worse than a close fit, but a name half cut
+      // off the paper is worse than both, so the clamp is not optional.
+      if (safe) {
+        bxx = Math.min(Math.max(bxx, safe.x0 + tw / 2), safe.x1 - tw / 2)
+        by = Math.min(Math.max(by, safe.y0 + size), safe.y1 - (th - size))
       }
       placed.push({ x: bxx, y: by, w: tw, h: th })
       ctx.strokeStyle = 'rgba(4,8,16,0.9)'

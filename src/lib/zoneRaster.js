@@ -74,6 +74,10 @@ export function zoneCells(zone, cols, rows) {
  */
 const orderCache = new Map()
 
+// Radial order — nearest the origin first. Still the right shape for the AO
+// FRONT in campFrames.js, which really is one force pushing outward from RHQ
+// and should read as an expanding circle. Zones use orderByWedge instead; see
+// the note there for why.
 export function orderOutward(cells, cols, lx, ly) {
   return [...cells].sort((a, b) => {
     const ax = (a % cols) + 0.5, ay = Math.floor(a / cols) + 0.5
@@ -84,11 +88,45 @@ export function orderOutward(cells, cols, lx, ly) {
   })
 }
 
+/**
+ * Cells in WEDGE order: swept clockwise from due north around the zone's label
+ * point, like a clock hand.
+ *
+ * ⚠️ THIS REPLACED RADIAL ORDER (2026-09-15) — outward from the label point by
+ * distance — and the reason is the company colouring. Radial order gives each
+ * visit an ANNULUS, which was fine while every visit painted the same colour
+ * (ground simply grew from the middle) but became a bullseye the moment
+ * consecutive visits were different companies: NAVEX and AA Kilo came out
+ * looking like archery targets. In wedge order each visit's contiguous slice is
+ * a PIE SEGMENT, so an area fills the way a progress dial does and each
+ * company's share is one solid piece of ground rather than a ring around
+ * somebody else's.
+ *
+ * Ties (cells on the same ray) break by distance then by index, so the order is
+ * fully determined and identical on every render — which is what keeps the
+ * replay from flickering between frames.
+ */
+export function orderByWedge(cells, cols, lx, ly) {
+  const keyed = cells.map((i) => {
+    const x = (i % cols) + 0.5
+    const y = Math.floor(i / cols) + 0.5
+    const dx = x - lx
+    const dy = y - ly
+    // atan2(dx, -dy) is 0 at due north and increases clockwise, so the first
+    // wedge starts at 12 o'clock rather than at 3 o'clock.
+    let a = Math.atan2(dx, -dy)
+    if (a < 0) a += Math.PI * 2
+    return { i, a, d: dx * dx + dy * dy }
+  })
+  keyed.sort((p, q) => p.a - q.a || p.d - q.d || p.i - q.i)
+  return keyed.map((k) => k.i)
+}
+
 export function zoneCellsOrdered(zone, cols, rows) {
   const key = `${zone.id}:${cols}x${rows}`
   const hit = orderCache.get(key)
   if (hit) return hit
-  const ranked = orderOutward(zoneCells(zone, cols, rows), cols,
+  const ranked = orderByWedge(zoneCells(zone, cols, rows), cols,
     zone.label ? zone.label[0] : 0, zone.label ? zone.label[1] : 0)
   orderCache.set(key, ranked)
   return ranked

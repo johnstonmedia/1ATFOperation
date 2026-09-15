@@ -40,7 +40,14 @@ import { renderPrintBase } from './replayExport'
 // is just these two constants.
 const PAGE_W = 2480
 const PAGE_H = 1754
-const MARGIN = 46
+// ⚠️ PRINT SAFE AREA. An A3 sheet gets trimmed, and a borderless printer
+// over-scans by a few millimetres, so the outer edge of the page is not a place
+// anything can be relied on to survive. The IMAGE still bleeds corner to corner
+// on purpose — losing a few millimetres of paddock costs nothing and a white
+// border would cost the map its whole edge — but NOTHING THAT HAS TO BE READ
+// may sit inside this margin: not the title, not the sheet number, not the
+// band's rows, not an area's name. ~9.5 mm at 150 dpi.
+const SAFE = 56
 const JPEG_QUALITY = 0.93
 // The map panel is rendered at this multiple of its printed size and drawn
 // down. 150 dpi is fine for text, but satellite imagery on paper wants the
@@ -166,7 +173,11 @@ function textLine(ctx, s, x, y, { size = 20, font = 'Orbitron, sans-serif', colo
 // the map is drawn; hence a pure function both can call.
 const STRIP_ROW_H = 24
 const stripCols = () => Math.max(2, Math.round(PAGE_W / 600))
-const stripHeight = (n) => 30 + Math.ceil(n / stripCols()) * STRIP_ROW_H + 26
+// ⚠️ The trailing SAFE is dead space the band carries so its last row and its
+// footer line clear the trim. It is part of the band's HEIGHT because fitCrop
+// reserves that height off the map — leave it out and the rows sit in the part
+// of the page a guillotine takes.
+const stripHeight = (n) => 30 + Math.ceil(n / stripCols()) * STRIP_ROW_H + 26 + SAFE
 
 function drawStrip(ctx, listed, progress, showRHQ, map) {
   const COLS = stripCols()
@@ -183,7 +194,7 @@ function drawStrip(ctx, listed, progress, showRHQ, map) {
   ctx.restore()
 
   // Key: four swatches on one line, no prose.
-  let kx = 26
+  let kx = SAFE
   const ky = y0 + 26
   const chip = (draw, label, color) => {
     draw(kx, ky - 15, 34, 18)
@@ -209,16 +220,16 @@ function drawStrip(ctx, listed, progress, showRHQ, map) {
   for (const [, p] of progress) { done += p.done; total += p.total; if (p.complete) complete += 1 }
   if (total) {
     textLine(ctx, `${Math.round((done / total) * 100)}%  ·  ${done} of ${total} visits  ·  ${complete} of ${progress.size} areas complete`,
-      PAGE_W - 26, ky, { size: 19, font: 'JetBrains Mono, monospace', spacing: 0.8, color: '#fff', align: 'right' })
+      PAGE_W - SAFE, ky, { size: 19, font: 'JetBrains Mono, monospace', spacing: 0.8, color: '#fff', align: 'right' })
   }
 
   // Areas, three columns.
-  const colW = (PAGE_W - 52) / COLS
+  const colW = (PAGE_W - SAFE * 2) / COLS
   listed.forEach((z, k) => {
     const p = progress.get(z.id)
     if (!p) return
     const col = Math.floor(k / rows)
-    const rx = 26 + col * colW
+    const rx = SAFE + col * colW
     const ry = y0 + 30 + (k % rows) * rowH + 17
     // Same rule as the map: red until taken, blue once it is. A band glyph in
     // the zone's KIND colour would be the only thing on the sheet still saying
@@ -239,10 +250,10 @@ function drawStrip(ctx, listed, progress, showRHQ, map) {
   })
 
   if (map.tiles?.attribution) {
-    textLine(ctx, map.tiles.attribution, PAGE_W - 26, PAGE_H - 10,
+    textLine(ctx, map.tiles.attribution, PAGE_W - SAFE, PAGE_H - SAFE - 8,
       { size: 12, color: DIM, weight: 500, align: 'right', font: 'Rajdhani, sans-serif' })
   }
-  textLine(ctx, 'LUCET PER MINISTERIUM', 26, PAGE_H - 10,
+  textLine(ctx, 'LUCET PER MINISTERIUM', SAFE, PAGE_H - SAFE - 8,
     { size: 12, spacing: 2, color: DIM, font: 'JetBrains Mono, monospace' })
 }
 
@@ -352,6 +363,23 @@ export async function exportFramesPdf({ territory, frames: campaignFrames, zones
   const fullW = Math.round((drawW * SUPERSAMPLE * cols) / cropW)
   const fullH = Math.round((drawH * SUPERSAMPLE * rows) / cropH)
 
+  // The print safe area, expressed in the FULL RENDER's pixels — which is the
+  // space drawMapZones works in, while SAFE is a fact about the PAGE. The page
+  // shows the crop [f.x0,f.x1] x [f.y0,f.y1] stretched over PAGE_W x PAGE_H, so
+  // a page offset maps back through the crop. The bottom edge stops at the
+  // band rather than at the paper, since a name under the band is as lost as
+  // one over the trim. ⚠️ The TOP edge is only SAFE, not SAFE + the header
+  // scrim: the scrim is a gradient that fades to nothing, so a name under it
+  // still reads, and excluding all 150 px of it threw AA Oscar, AA Foxtrot and
+  // AA Mike — which genuinely live up there — into the middle of the sheet.
+  const bandH = stripHeight(listed.length)
+  const pageToFullX = (px) => ((f.x0 + (px / PAGE_W) * cropW) / cols) * fullW
+  const pageToFullY = (py) => ((f.y0 + (py / PAGE_H) * cropH) / rows) * fullH
+  const safeFull = {
+    x0: pageToFullX(SAFE), x1: pageToFullX(PAGE_W - SAFE),
+    y0: pageToFullY(SAFE), y1: pageToFullY(PAGE_H - bandH),
+  }
+
   const region = { x0: f.x0 / cols, x1: f.x1 / cols, y0: f.y0 / rows, y1: f.y1 / rows }
   // Reported back to the caller so the Ops Centre can say whether the print
   // actually got the satellite imagery — see the CORS note in replayExport.js.
@@ -376,7 +404,7 @@ export async function exportFramesPdf({ territory, frames: campaignFrames, zones
     // A frame may carry its own zone selection (frameHiddenZones); `zonesAt`
     // resolves it, falling back to the map's for any frame that hasn't got one.
     const pageZones = zonesAt?.(i) || zones
-    drawMapZones(fc, pageZones, { cols, rows, w: fullW, h: fullH, scale: fullW / map.pixelWidth, progress, zoneScale: 1.15, printLabels: true })
+    drawMapZones(fc, pageZones, { cols, rows, w: fullW, h: fullH, scale: fullW / map.pixelWidth, progress, zoneScale: 1.15, printLabels: true, safe: safeFull })
     const hatch = document.createElement('canvas')
     hatch.width = fullW; hatch.height = fullH
     renderTerritoryLayer(hatch.getContext('2d'), { cells: fr.cells, cols, rows, showRHQ, w: fullW, h: fullH })
@@ -415,18 +443,19 @@ export async function exportFramesPdf({ territory, frames: campaignFrames, zones
     // than in a band of its own: the top of this crop is open paddock on every
     // sheet, so the type costs the map nothing there, whereas a header band
     // costs it a strip whether that strip had anything in it or not.
-    const grad = ctx.createLinearGradient(0, 0, 0, 150)
+    // The SCRIM bleeds to the edge; the TYPE on it starts at SAFE.
+    const grad = ctx.createLinearGradient(0, 0, 0, SAFE + 150)
     grad.addColorStop(0, 'rgba(4,8,16,0.9)')
     grad.addColorStop(1, 'rgba(4,8,16,0)')
     ctx.fillStyle = grad
-    ctx.fillRect(0, 0, PAGE_W, 150)
-    textLine(ctx, '1ATF', 30, 56, { size: 46, spacing: 4 })
+    ctx.fillRect(0, 0, PAGE_W, SAFE + 150)
+    textLine(ctx, '1ATF', SAFE, SAFE + 40, { size: 46, spacing: 4 })
     const heading = (title || fr.label || `FRAME ${i + 1}`).toUpperCase()
-    textLine(ctx, heading, 200, 54, { size: 31, spacing: 3, color: ACCENT })
-    textLine(ctx, `SHEET ${i + 1} OF ${frames.length}`, PAGE_W - 30, 32,
+    textLine(ctx, heading, SAFE + 170, SAFE + 38, { size: 31, spacing: 3, color: ACCENT })
+    textLine(ctx, `SHEET ${i + 1} OF ${frames.length}`, PAGE_W - SAFE, SAFE + 16,
       { size: 17, spacing: 2, color: DIM, align: 'right', font: 'JetBrains Mono, monospace' })
     if (map.focus?.label) {
-      textLine(ctx, `${map.focus.label} — AREA OF OPERATIONS`, PAGE_W - 30, 58,
+      textLine(ctx, `${map.focus.label} — AREA OF OPERATIONS`, PAGE_W - SAFE, SAFE + 42,
         { size: 18, spacing: 1.8, color: BOUNDARY, align: 'right', font: 'JetBrains Mono, monospace' })
     }
 

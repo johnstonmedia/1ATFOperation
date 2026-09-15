@@ -541,11 +541,20 @@ assuming a page exists).
       picture. The interstitial front between areas stays 1ATF throughout: no
       company owns the connective ground, and RHQ can still hand-paint company
       ground anywhere else on the map.
-      ⚠️ Slices are annuli (`visitSlice` over `zoneCellsOrdered`, which ranks
-      by distance out from the label point). With one colour that read as
-      ground growing from the middle; with six it reads as concentric rings.
-      If that ever needs fixing, the change is the ALLOCATION ORDER — wedges
-      rather than rings — not the colouring.
+      ⚠️ **Slices are WEDGES, not rings** (2026-09-15 — `orderByWedge` replaced
+      `orderOutward` for zones; don't put radial order back on them). Radial
+      order gave each visit an ANNULUS, which was fine while every visit painted
+      the same colour but became a bullseye the moment consecutive visits were
+      different companies — NAVEX and AA Kilo came out looking like archery
+      targets. Cells are now swept CLOCKWISE FROM DUE NORTH around the label
+      point (`atan2(dx, -dy)`), so each visit's contiguous slice is a pie
+      segment, an area fills the way a progress dial does, and each company's
+      share is one solid piece of ground rather than a ring around somebody
+      else's. Ties break by distance then index, so the order is still fully
+      determined and identical on every render — which is what stops the replay
+      flickering. `orderOutward` stays for the AO FRONT in campFrames.js: that
+      really is one force pushing out from RHQ and should read as an expanding
+      circle.
     - ⚠️ **WHATEVER 1ATF DOESN'T HAVE, MERIDIAN HAS** (2026-09-15). The ground
       an area has not been taken back over is not `.` — it is `M`. Camp opens
       with the **whole area of operations** Meridian's and closes on Wednesday
@@ -930,6 +939,30 @@ assuming a page exists).
   **A3-LANDSCAPE** page per frame at 150 dpi, cropped to the map's own ground so
   print shows what the screen shows. These are WALL SHEETS read from across
   a room, which sets every decision below.
+  - ⚠️ **THE IMAGE BLEEDS, THE TEXT DOESN'T** (2026-09-15). An A3 sheet gets
+    trimmed and a borderless printer over-scans, so the outer few millimetres
+    are not a place anything can be relied on to survive. `SAFE` (56 px,
+    ~9.5 mm at 150 dpi) is the margin: the MAP still runs corner to corner —
+    losing a little paddock costs nothing, a white border would cost the map its
+    whole edge — but nothing that has to be READ may sit inside it. That covers
+    the title block, the sheet number, the AREA OF OPERATIONS tag, every row and
+    swatch in the bottom band, both footer lines, and the area names on the
+    ground. Verified on a rendered sheet: peak brightness in the top trim strip
+    93 and in the bottom trim strip 33 (background only — glyphs run 200+),
+    against 234/255 just inside the line, while the outer 8 px ring averages 36
+    with peaks at 249, i.e. live imagery rather than page ground.
+    ⚠️ The band carries `SAFE` as dead space in its own HEIGHT, because
+    `fitCrop` reserves that height off the map — leave it out and the last row
+    sits where the guillotine goes.
+    ⚠️ Area names are clamped into the safe box by `drawMapZones(..., { safe })`,
+    which takes the box in FULL-RENDER pixels (the space it draws in) while
+    `SAFE` is a fact about the PAGE — framesPdf maps one to the other through the
+    crop. Two things that box must NOT do: exclude the header scrim (it is a
+    gradient that fades out, and excluding all 150 px of it threw AA Oscar,
+    AA Foxtrot and AA Mike, which genuinely live up there, into the middle of the
+    sheet), and leave a label wherever the placement search gave up — an
+    unplaceable name goes back to its area's own centre and is clamped from
+    there, or it ends up labelling ground it has nothing to do with.
   - ⚠️ **THE MAP IS THE WHOLE SHEET.** Not bled to the edges with a header
     band above and a key column beside it — that arrangement still spent a
     quarter of an A3 on chrome, and chrome is exactly what the map competes

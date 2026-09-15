@@ -17,6 +17,40 @@ keep entries short and focused on what a new collaborator needs to know.
 
 ---
 
+## 2026-09-15 (j) — Wedges instead of rings, and a print safe area
+
+- ⚠️ **Zone cells are allocated in WEDGE order, not radial** (`orderByWedge`
+  replaces `orderOutward` for zones). Radial order gave each visit an annulus,
+  which was fine while every visit painted the same colour but became a bullseye
+  once consecutive visits were different companies — NAVEX and AA Kilo looked
+  like archery targets. Cells now sweep CLOCKWISE FROM DUE NORTH around the
+  label point, so each visit's slice is a pie segment and each company's share
+  is one solid piece of ground. Ties break by distance then index, so the order
+  stays fully determined and identical every render.
+- `orderOutward` **stays** for the AO front in campFrames.js — that really is one
+  force pushing out from RHQ and should read as an expanding circle.
+- **Print safe area (`SAFE`, 56 px ≈ 9.5 mm at 150 dpi).** The map still bleeds
+  corner to corner; nothing that has to be read sits within SAFE of the trim.
+  Covers the title block, sheet number, AREA OF OPERATIONS tag, every band row
+  and swatch, both footer lines, and the area names on the ground.
+- Verified on a rendered sheet: peak brightness in the top trim strip **93** and
+  the bottom trim strip **33** (background only; glyphs run 200+), against
+  234/255 just inside the line — while the outer 8 px ring averages 36 with
+  peaks at 249, i.e. live imagery, so the bleed is intact.
+- ⚠️ The band carries SAFE as dead space in its own HEIGHT, because `fitCrop`
+  reserves that height off the map.
+- **Two mistakes made and fixed while doing it.** Excluding the whole 150 px
+  header scrim from the safe box threw AA Oscar, AA Foxtrot and AA Mike — which
+  genuinely live up there — into the middle of the sheet; the scrim is a
+  gradient that fades out, so only the trim margin is excluded now. And a label
+  the placement search couldn't clear was being left at the LAST candidate tried
+  (four rings out) and then clamped, which is how AA Oscar ended up naming
+  ground it has nothing to do with; an unplaceable name now returns to its own
+  area's centre before clamping. Both bugs were introduced by this change and
+  caught in the rendered output.
+
+---
+
 ## 2026-09-15 (i) — Landscape sheets, stronger ink, zones coloured by who holds them
 
 - **The print sheets are A3 LANDSCAPE again** — `PAGE_W`/`PAGE_H` back to
