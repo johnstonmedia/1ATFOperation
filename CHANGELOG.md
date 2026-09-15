@@ -17,6 +17,29 @@ keep entries short and focused on what a new collaborator needs to know.
 
 ---
 
+## 2026-09-15 (b) — Six Maps everywhere: no more imagery seam
+
+- **The satellite imagery now reaches the frame edge.** `fixedTiles()` was
+  spending its budget on the map's `focus` box alone, so everything outside
+  Sector 8 fell back to the 10 m static art — and since the two don't match in
+  tone or sharpness, zooming out drew a hard-edged RECTANGLE across the map in
+  exactly the shape of the focus box. `focus` is a starting view, not a crop,
+  and everything anyone sees on this site is SIX Maps. Tiles now cover the
+  whole frame: `FIXED_MAX_TILES` 160 → 400, so Singleton still lands on **z16
+  (~2 m/px), now 352 tiles instead of 132**. 400 is the same cap the exporters
+  already use, which is what makes the page and the video ask for identical
+  ground. Verified against a local stand-in pyramid: 352 served, 0 missing,
+  coverage −4.5%→100.6% × −3.1%→104.7% of the frame, and the count is
+  **identical at the opening view and fully zoomed out** — the one-fixed-level
+  rule still holds.
+- ⚠️ `loading="lazy"` on the tiles was tried and **removed**: measured,
+  Chromium fetched all 352 at the opening view regardless (they sit inside a
+  transformed ancestor), so it bought nothing — and a browser that honoured it
+  would leave the static floor showing until a zoom-out finished, which is the
+  flicker the fixed-level design exists to avoid.
+
+---
+
 ## 2026-09-15 — Whatever 1ATF doesn't have, Meridian has
 
 - **Ground is always somebody's.** Camp opens with the **entire area of

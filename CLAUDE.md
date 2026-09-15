@@ -366,11 +366,22 @@ assuming a page exists).
     right, because the swapping should not have been happening. What the map
     needs is ONE swap — static art to real imagery — after which the browser
     scales it under PixelMap's transform exactly as the static image always
-    did. Don't reintroduce level-switching. Verified: z16, 132 tiles, identical
+    did. Don't reintroduce level-switching. Verified: z16, 352 tiles, identical
     before, during and after a zoom step, and a pan costs no requests at all.
-    The level is whatever `FIXED_MAX_TILES` (160) affords over the map's
-    `focus` region — Singleton lands on z16 over Sector 8, ~2 m/px against the
-    static image's ~12.
+    ⚠️ **The set covers the WHOLE FRAME, not the `focus` box** (2026-09-15).
+    It used to be the focus region only, on the reasoning that nobody looks
+    outside it — but `focus` is a STARTING VIEW and the zoom-out button is
+    right there, so what people actually saw was a hard-edged RECTANGLE of SIX
+    Maps imagery sitting on the 10 m static floor, in exactly that box's shape,
+    because the two don't match in tone or sharpness. `FIXED_MAX_TILES` is now
+    400 (352 at z16 over the whole frame; z17 would be 1333, so the budget only
+    has to sit in that gap) — the same number the exporters already use, which
+    is what makes page and video ask for identical ground. ~2 m/px against the
+    static image's ~12, everywhere. ⚠️ Don't add lazy loading to the tiles:
+    measured, Chromium fetches all 352 at the opening view anyway (they are
+    inside a transformed ancestor), and a browser that honoured it would leave
+    the static floor showing mid-zoom-out — the exact flicker this design
+    exists to avoid.
   - **Boundaries are VECTORS, not baked into the art**
     ([mapLines.js](src/lib/mapLines.js) + [MapLines.jsx](src/components/MapLines.jsx)):
     the Commonwealth land boundary and the Sector 8/9 line (both yellow),
