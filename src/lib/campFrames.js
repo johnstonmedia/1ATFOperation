@@ -20,11 +20,31 @@
 // zone's label), so ground grows from the middle instead of flickering about
 // between frames, and visit i owns a contiguous slice of that order.
 //
-//   PART TAKEN   each completed visit's slice is painted in LIGHT 1ATF —
-//                the grid's existing "newly gained / loosely held" variant.
+//   HELD BY THE  the WHOLE AREA OF OPERATIONS starts the camp as MERIDIAN
+//   THREAT       ground — not just the activity areas, every cell inside the
+//                Sector 8 boundary the map draws. WHATEVER 1ATF DOES NOT HAVE,
+//                MERIDIAN HAS: ground is not empty paddock waiting to be
+//                coloured in, it is ground somebody else is standing on. That
+//                is what makes a part-taken area read as contested rather than
+//                merely unfinished, and it is what the whole portal says the
+//                camp is for.
+//
+//   PART TAKEN   each completed visit's slice is painted in LIGHT 1ATF — the
+//                grid's existing "newly gained / loosely held" variant — over
+//                the Meridian fill, so the remainder of the zone is still
+//                visibly the threat's. 1ATF's share is the light variant and
+//                Meridian's is solid on purpose: we have just got there, they
+//                are dug in.
 //
 //   TAKEN        on the LAST scheduled visit the whole zone flips to solid
-//                1ATF.
+//                1ATF — the last of the red goes with it.
+//
+//   THE FRONT    the ground BETWEEN the areas is taken too, or Wednesday would
+//                end with a map still mostly red. It advances outward from RHQ
+//                in step with the camp as a whole (overallProgress — visits
+//                done over visits scheduled), so by the last visit on Day 4 it
+//                has reached the Sector 8 boundary and 1ATF HAS EVERYTHING.
+//                Same conquest order as a zone, same light/solid convention.
 //
 // ⚠️ NO COMPANY EVER OWNS AN ACTIVITY AREA. The ground is the task force's
 // from the first pixel: an area is a PERCENTAGE TAKEOVER, not a prize one
@@ -42,15 +62,33 @@
 // undercut the thing the 1ATF stage is there to say — the task force takes the
 // training area together.
 import { zonesFor } from './mapZones'
-import { campDays, planFor, zoneProgress } from './campPlan'
-import { zoneCellsOrdered, visitSlice } from './zoneRaster'
-import { TASKFORCE_CODE } from './territory'
+import { areaOfOperations } from './mapLines'
+import { campDays, overallProgress, planFor, zoneProgress } from './campPlan'
+import { zoneCellsOrdered, orderOutward, visitSlice } from './zoneRaster'
+import { TASKFORCE_CODE, MERIDIAN_CODE } from './territory'
 
 // RHQ is the one thing already on the board at the start, so the base keeps
-// whatever RHQ cells the live map has and blanks everything else. Camp starts
-// from an empty board.
+// whatever RHQ cells the live map has and blanks everything else. The board is
+// not empty for long: buildCampFrames lays Meridian across the whole area of
+// operations before 1ATF takes any of it back.
 export function baseCells(territory) {
   return (territory.cells || '').replace(/[^Rr]/g, '.')
+}
+
+// Where the advance starts: the middle of whatever RHQ holds on the live map
+// (Ex Admin Area). Taken off the cells rather than the zone list because RHQ is
+// the one thing on the board before the plan starts, and the ground should grow
+// out from where the task force actually is. Falls back to the centre of the
+// area of operations on a map with no RHQ painted.
+function originOf(base, ao, cols) {
+  let n = 0, sx = 0, sy = 0
+  for (let i = 0; i < base.length; i++) {
+    if (base[i] !== 'R' && base[i] !== 'r') continue
+    sx += (i % cols) + 0.5; sy += Math.floor(i / cols) + 0.5; n += 1
+  }
+  if (n) return [sx / n, sy / n]
+  for (const i of ao) { sx += (i % cols) + 0.5; sy += Math.floor(i / cols) + 0.5; n += 1 }
+  return n ? [sx / n, sy / n] : [0, 0]
 }
 
 export function campFrameLabel(day, days) {
@@ -73,27 +111,57 @@ export function buildCampFrames(mapId, territory) {
   const days = campDays(mapId)
   const base = baseCells(territory)
 
+  // ⚠️ THE AREA OF OPERATIONS, NOT THE WHOLE FRAME. "Everything" is the ground
+  // inside the Sector 8 boundary — the same yellow shape the map draws (see
+  // areaOfOperations in mapLines.js), so the picture and the claim cannot
+  // disagree. West of the Commonwealth boundary and east of the sector line is
+  // not ground this camp is contesting, and painting it would say it was.
+  const ao = areaOfOperations({ id: mapId, cols, rows })
+  const [ox, oy] = originOf(base, ao, cols)
+  const advance = orderOutward(ao, cols, ox, oy)
+
   return [0, ...days.map((d) => d.n)].map((day, i) => {
     const cells = base.split('')
     const progress = zoneProgress(mapId, day)
+    // RHQ ground is never overpainted — it is the one fixed thing on the
+    // board, and S COY NL sits right on top of it.
+    const paintCell = (idx, mark) => {
+      if (cells[idx] !== 'R' && cells[idx] !== 'r') cells[idx] = mark
+    }
+
+    // 1. The threat holds the whole area of operations...
+    for (const idx of ao) paintCell(idx, MERIDIAN_CODE)
+
+    // 2. ...1ATF's front pushes out from RHQ with the camp as a whole. Counted
+    // over every AO cell, zones included, so the front sits at an honest
+    // radius; the zones then repaint themselves on top at step 3, which is what
+    // leaves an unvisited area still red inside ground we have swept past.
+    const overall = overallProgress(mapId, day)
+    if (overall.total) {
+      const front = Math.floor((advance.length * overall.done) / overall.total)
+      const mark = overall.done === overall.total ? TASKFORCE_CODE : TASKFORCE_CODE.toLowerCase()
+      for (let k = 0; k < front; k++) paintCell(advance[k], mark)
+    }
+
+    // 3. Areas, a visit at a time.
     for (const [zoneId, p] of progress) {
-      if (!p.done) continue
       const zone = zones.get(zoneId)
       if (!zone) continue
       const ordered = zoneCellsOrdered(zone, cols, rows)
-      // RHQ ground is never overpainted — it is the one fixed thing on the
-      // board, and S COY NL sits right on top of it.
-      const paint = (idx, mark) => {
-        if (cells[idx] !== 'R' && cells[idx] !== 'r') cells[idx] = mark
-      }
+      const paint = paintCell
       if (p.complete) {
-        // The last scheduled visit finishes it: solid, fully held.
+        // The last scheduled visit finishes it: solid, fully held, no red left.
         for (const idx of ordered) paint(idx, TASKFORCE_CODE)
         continue
       }
-      // Otherwise the completed visits' share of the ground is taken but not
-      // yet consolidated — light 1ATF, the same "newly gained" variant the
-      // rest of the map uses.
+      // The threat holds the area until we take it off them — including where
+      // the front has already gone past it, which is the whole reason the zones
+      // paint last.
+      for (const idx of ordered) paint(idx, MERIDIAN_CODE)
+      if (!p.done) continue
+      // The completed visits' share of the ground is taken but not yet
+      // consolidated — light 1ATF, the same "newly gained" variant the rest of
+      // the map uses.
       const [, to] = visitSlice(ordered.length, p.done - 1, p.total)
       const mark = TASKFORCE_CODE.toLowerCase()
       for (let k = 0; k < to; k++) paint(ordered[k], mark)

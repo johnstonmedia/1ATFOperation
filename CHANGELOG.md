@@ -17,6 +17,51 @@ keep entries short and focused on what a new collaborator needs to know.
 
 ---
 
+## 2026-09-15 — Whatever 1ATF doesn't have, Meridian has
+
+- **Ground is always somebody's.** Camp opens with the **entire area of
+  operations** held by Meridian (`M`) and closes on Wednesday with all of it
+  1ATF's (`T`). Before this, un-taken ground was `.` — empty paddock waiting to
+  be coloured in — so a part-taken activity area read as *unfinished* rather
+  than *contested*, and the map never actually said what the portal says the
+  camp is for.
+- **"Everything" is the AREA OF OPERATIONS, not the map frame.** New
+  `areaOfOperations()` in [mapLines.js](src/lib/mapLines.js) fills the same
+  Sector 8 shape the yellow lines already DRAW: the two traced Defence
+  polylines close into a ring across the sheet edge (they are one boundary that
+  leaves the sheet and comes back), and the sector line is applied as a
+  per-cell eastern limit rather than as a second polygon. 28,690 of the map's
+  132,192 cells. Deriving it from the drawn lines is the point — the picture
+  and the claim cannot drift apart. Ground west of the Commonwealth boundary or
+  east of the sector line is deliberately untouched: it is not being contested.
+- **The ground BETWEEN the areas is taken too.** Otherwise Wednesday ended with
+  a map still mostly red. A front advances outward from RHQ (origin taken from
+  the live map's own `R` cells) in step with `overallProgress` — visits done
+  over visits scheduled — so it reaches the boundary on the last visit of Day
+  4. Same conquest order and same light/solid convention as a zone.
+- ⚠️ **Order of painting is load-bearing**: Meridian across the whole AO, then
+  the front, then the zones. Zones LAST is what leaves an unvisited area still
+  red *inside* ground the front has already swept past — which is the most
+  useful single thing the map says. Verified frame by frame:
+  `M:27769 / M:22703 t:5066 / M:11632 t:14253 T:1884 / M:6629 t:18941 T:2199 /
+  T:27769` — no Meridian left on Day 4.
+- **`drawGains` had to change with it.** A gain is ground taken OFF somebody,
+  not an empty cell filled in. The old test (`held now && '.' before`) found
+  nothing once zones started red, so every printed sheet would have come out
+  with no daily gains marked. Now `isHeld(now) && !isHeld(before)`, where held
+  excludes `M`.
+- **MERIDIAN is in the print key**, first, because on the early sheets it is
+  most of the ground on the page. `MERIDIAN_CODE`/`MERIDIAN_COLOR` are now
+  exported from territory.js rather than spelled `'M'` inline, since the code
+  is no longer only something RHQ paints by hand.
+- **Refactors, no behaviour change**: `polygonCells`/`orderOutward` split out of
+  `zoneCells`/`zoneCellsOrdered` in [zoneRaster.js](src/lib/zoneRaster.js) so
+  the AO can reuse them. Deleted `drawKey`/`drawSummary`/`drawAreaTable` from
+  framesPdf.js — dead since the side column became the bottom band, and exactly
+  the kind of leftover that invites the band to grow back.
+
+---
+
 ## 2026-09-14 (b) — 1ATF conquest, staged release, tiles in exports, no seeded Meridian
 
 - **A zone is conquered by 1ATF, not by a company.** New owner code `T`

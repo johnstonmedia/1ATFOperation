@@ -29,7 +29,7 @@ export const MAP_PIXEL_HEIGHT = PRIMARY.pixelHeight
 // can't be painted (see lib/unpaintableMask.js, which reads it per map).
 export const OCEAN_COLOR = PRIMARY.blockFill
 
-const MERIDIAN_COLOR = '#ff3b46'
+export const MERIDIAN_COLOR = '#ff3b46'
 const RHQ_COLOR = COMPANIES.find((c) => c.letter === 'R')?.accent || '#f39c12'
 
 // Colour and name for ground the WHOLE task force holds — deliberately NOT one
@@ -49,11 +49,16 @@ export const SCU_LABEL = '1ATF'
 // not.
 export const TASKFORCE_CODE = 'T'
 
+// The threat's owner code. Named rather than spelled 'M' inline because the
+// camp replay now SEEDS ground with it: anything 1ATF has not taken yet is
+// Meridian's, so this code is no longer only something RHQ paints by hand.
+export const MERIDIAN_CODE = 'M'
+
 // Paint palette on the recruit map = six companies + 1ATF + Meridian.
 export const PAINT = [
   ...COMPANIES.filter((c) => c.letter !== 'R').map((c) => ({ code: c.letter, label: c.name, color: c.accent })),
   { code: TASKFORCE_CODE, label: SCU_LABEL, color: ASSURE_BLUE },
-  { code: 'M', label: 'Meridian', color: MERIDIAN_COLOR },
+  { code: MERIDIAN_CODE, label: 'Meridian', color: MERIDIAN_COLOR },
 ]
 export const RHQ_PAINT = { code: 'R', label: 'RHQ', color: RHQ_COLOR }
 
@@ -82,7 +87,7 @@ export const isTaskforceCode = (code) => !!code && code.toUpperCase() === TASKFO
 // switches to) are declared with the palette above, since 1ATF-held ground now
 // paints in the same colour and must not be able to drift from it.
 
-export const isMeridianCode = (code) => !!code && code.toUpperCase() === 'M'
+export const isMeridianCode = (code) => !!code && code.toUpperCase() === MERIDIAN_CODE
 // Everything that isn't Meridian or empty belongs to SCU / 1ATF.
 export const isSCUCode = (code) => !!code && code !== '.' && !isMeridianCode(code)
 

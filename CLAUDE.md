@@ -487,6 +487,34 @@ assuming a page exists).
       visit counts come from it — but an area is a PERCENTAGE TAKEOVER by the
       task force, not a prize one company holds. RHQ can still hand-paint
       company ground anywhere else on the map.
+    - ⚠️ **WHATEVER 1ATF DOESN'T HAVE, MERIDIAN HAS** (2026-09-15). The ground
+      an area has not been taken back over is not `.` — it is `M`. Camp opens
+      with the **whole area of operations** Meridian's and closes on Wednesday
+      with all of it 1ATF's, so ground is always somebody's and a part-taken
+      area reads as CONTESTED rather than merely unfinished. Three consequences
+      that are easy to undo by accident:
+      - **"Everything" is the AREA OF OPERATIONS, not the map frame.**
+        `areaOfOperations()` in [mapLines.js](src/lib/mapLines.js) fills the
+        same Sector 8 shape the yellow lines DRAW (the two Defence polylines
+        close into a ring across the sheet edge; the sector line is applied as
+        a per-cell limit, not a second polygon), so the picture and the claim
+        cannot disagree. ~28.7k of the 132k cells. Ground west of the
+        Commonwealth boundary or east of the sector line is not being contested
+        and must not be painted as if it were.
+      - **The ground BETWEEN the areas is taken too**, or Wednesday would end
+        with a map still mostly red. A front advances outward from RHQ
+        (`orderOutward` in zoneRaster.js, origin = the live map's own `R`
+        cells) in step with `overallProgress` — visits done over visits
+        scheduled — so it reaches the boundary on the last visit of Day 4.
+      - **Order of painting is load-bearing**: Meridian over the whole AO, then
+        the front, then the zones. Zones LAST is what leaves an unvisited area
+        still red inside ground the front has already swept past, which is the
+        single most useful thing the map says.
+      - `MERIDIAN_CODE` is exported from territory.js for this. The PDF's
+        `drawGains` had to change with it: a gain is ground taken OFF somebody
+        (`isHeld` now, not `isHeld` before), never an empty cell filled in —
+        the old `'.'`-based test found nothing at all and every sheet came out
+        with no daily gains marked.
     - **The zone overlay therefore shows KIND, not progress** (`ZONE_TEXTURE`):
       teal activity / blue night location / amber headquarters, solid outline
       vs dashed for night locations, and a glyph on every name (▲ ☾ ◆) that
@@ -508,7 +536,8 @@ assuming a page exists).
     - **First company in owns it WHILE the rest are still to come; once every
       scheduled company has been, the zone is 1ATF's** — its own owner code
       `T` (`TASKFORCE_CODE` in territory.js, assure-blue, labelled `1ATF`),
-      not RHQ's `R`. Later companies pass through without the ground changing
+      not RHQ's `R`. Before the first visit it is `M`, not empty — see
+      "whatever 1ATF doesn't have" above. Later companies pass through without the ground changing
       hands between companies, because a map that churns between friendly
       companies reads as confusion. The zone percentage is ALWAYS unit-wide,
       in the company view too: three companies booked onto the ropes course

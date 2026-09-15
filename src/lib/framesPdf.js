@@ -17,10 +17,10 @@
 import { mapFor } from './maps'
 import { renderTerritoryLayer, renderHatchSwatch, imageFilterFor } from './terrainRender'
 import { drawMapLines } from './mapLines'
-import { drawMapZones, ZONE_STYLE, ZONE_TEXTURE, KIND_ORDER } from './mapZones'
+import { drawMapZones, ZONE_STYLE, ZONE_TEXTURE } from './mapZones'
 import { ASSURE_BLUE as TASKFORCE_COLOR } from './territory'
 import { sortFrames } from './campaign'
-import { TASKFORCE_CODE, SCU_LABEL } from './territory'
+import { TASKFORCE_CODE, MERIDIAN_CODE, MERIDIAN_COLOR, isMeridianCode } from './territory'
 import { COMPANIES } from '../firebase/seed'
 
 const COMPANY_COLOR = COMPANIES.reduce((a, c) => ({ ...a, [c.letter]: c.accent }), {})
@@ -135,141 +135,23 @@ function textLine(ctx, s, x, y, { size = 20, font = 'Orbitron, sans-serif', colo
   ctx.restore()
 }
 
-// The key, down the right-hand column: what the hatch means, what the zone
-// outlines mean, and the boundary lines. Printed on every page deliberately —
-// a sheet pulled off the wall on its own still has to be readable.
-function drawKey(ctx, x, y, w, { map, progress, showRHQ }) {
-  let cy = y
-  textLine(ctx, 'MAP KEY', x, cy, { size: 20, spacing: 3, color: ACCENT })
-  cy += 26
-
-  const swatch = (code, label, note) => {
-    const sw = 44, sh = 24
-    const cv = document.createElement('canvas')
-    cv.width = sw * 2; cv.height = sh * 2
-    renderHatchSwatch(cv.getContext('2d'), code, cv.width, cv.height)
-    ctx.drawImage(cv, x, cy - sh + 4, sw, sh)
-    textLine(ctx, label, x + sw + 12, cy, { size: 19, font: 'JetBrains Mono, monospace', spacing: 1 })
-    if (note) { cy += 17; textLine(ctx, note, x + sw + 12, cy, { size: 12, font: 'Rajdhani, sans-serif', color: DIM, weight: 500 }) }
-    cy += 30
-  }
-
-  swatch(TASKFORCE_CODE.toLowerCase(), `${SCU_LABEL} — TAKING`, 'part of the area taken so far')
-  swatch(TASKFORCE_CODE, `${SCU_LABEL} — TAKEN`, 'every scheduled visit complete')
-  if (showRHQ) swatch('R', 'RHQ', 'Ex Admin Area — held throughout')
-
-  // The one thing a sheet says that the sheet before it did not.
-  ctx.save()
-  ctx.strokeStyle = GAIN
-  ctx.lineWidth = 3
-  ctx.strokeRect(x + 1, cy - 20, 44, 24)
-  ctx.fillStyle = GAIN
-  ctx.globalAlpha = 0.22
-  ctx.fillRect(x + 1, cy - 20, 44, 24)
-  ctx.restore()
-  textLine(ctx, 'TAKEN TODAY', x + 58, cy, { size: 19, font: 'JetBrains Mono, monospace', spacing: 1, color: GAIN })
-  cy += 21
-  textLine(ctx, 'ground this day added to the map', x + 58, cy, { size: 15, font: 'Rajdhani, sans-serif', color: DIM, weight: 500 })
-  cy += 38
-
-  cy += 8
-  textLine(ctx, 'AREAS', x, cy, { size: 20, spacing: 3, color: ACCENT })
-  cy += 24
-  for (const kind of KIND_ORDER) {
-    const st = ZONE_STYLE[kind]
-    const tex = ZONE_TEXTURE[kind]
-    if (!st || !tex) continue
-    ctx.save()
-    ctx.strokeStyle = st.color
-    ctx.lineWidth = 2
-    ctx.setLineDash(tex.dash ? tex.dash.map((d) => d * 2.2) : [])
-    ctx.strokeRect(x + 1, cy - 18, 44, 22)
-    ctx.restore()
-    textLine(ctx, `${tex.glyph}  ${st.label.toUpperCase()}`, x + 58, cy, { size: 18, font: 'JetBrains Mono, monospace', spacing: 0.6, color: st.color })
-    cy += 34
-  }
-
-  if (progress) {
-    cy += 4
-    textLine(ctx, 'An area is taken a visit at a time. "2/13" means two of the',
-      x, cy, { size: 13, font: 'Rajdhani, sans-serif', color: DIM, weight: 500 }); cy += 18
-    textLine(ctx, 'thirteen visits the plan schedules there have happened — and',
-      x, cy, { size: 13, font: 'Rajdhani, sans-serif', color: DIM, weight: 500 }); cy += 18
-    textLine(ctx, 'two thirteenths of its ground is painted. No company holds an',
-      x, cy, { size: 13, font: 'Rajdhani, sans-serif', color: DIM, weight: 500 }); cy += 18
-    textLine(ctx, 'area: the ground is 1ATF’s from the first pixel.',
-      x, cy, { size: 13, font: 'Rajdhani, sans-serif', color: DIM, weight: 500 }); cy += 26
-  }
-
-  cy += 4
-  textLine(ctx, 'BOUNDARIES', x, cy, { size: 20, spacing: 3, color: ACCENT })
-  cy += 24
-  for (const line of map.artKey || []) {
-    ctx.save()
-    ctx.strokeStyle = line.color
-    ctx.lineWidth = 3
-    ctx.beginPath(); ctx.moveTo(x, cy - 7); ctx.lineTo(x + 44, cy - 7); ctx.stroke()
-    ctx.restore()
-    // Both boundary rows are "Area boundary — …", so the DISTINGUISHING half
-    // has to lead; heading them both with the common part made the key say the
-    // same thing twice.
-    const parts = String(line.label).split(' — ')
-    const head = (parts.length > 1 ? parts.slice(1).join(' — ') : parts[0]).toUpperCase()
-    textLine(ctx, head, x + 58, cy, { size: 17, font: 'JetBrains Mono, monospace', spacing: 0.5 })
-    cy += 20
-    textLine(ctx, parts.length > 1 ? parts[0] : '', x + 58, cy, { size: 15, font: 'Rajdhani, sans-serif', color: DIM, weight: 500 })
-    cy += 32
-  }
-  return cy
-}
-
-// How far through the plan this sheet is, totalled off the same per-zone
-// counts the map is drawn from — so the headline figure can't disagree with
-// the ground. Omitted entirely on a hand-painted frame, which has no plan
-// behind it to total.
-function drawSummary(ctx, x, y, w, progress) {
-  if (!progress || !progress.size) return y
-  let done = 0, total = 0, complete = 0
-  for (const [, p] of progress) { done += p.done; total += p.total; if (p.complete) complete += 1 }
-  if (!total) return y
-  const pct = Math.round((done / total) * 100)
-
-  textLine(ctx, 'PROGRESS', x, y, { size: 20, spacing: 3, color: ACCENT })
-  let cy = y + 54
-  textLine(ctx, `${pct}%`, x, cy, { size: 62, color: '#fff' })
-  textLine(ctx, `${done} of ${total} scheduled visits`, x + 190, cy - 26,
-    { size: 19, font: 'JetBrains Mono, monospace', spacing: 0.6 })
-  textLine(ctx, `${complete} of ${progress.size} areas fully taken`, x + 190, cy,
-    { size: 19, font: 'JetBrains Mono, monospace', spacing: 0.6, color: DIM })
-
-  // A plain bar of the same hatch the map uses, so the number and the ground
-  // are stated in one language.
-  cy += 40
-  const barH = 28
-  ctx.save()
-  ctx.strokeStyle = 'rgba(99,130,190,0.35)'
-  ctx.strokeRect(x + 0.5, cy + 0.5, w - 1, barH)
-  const filled = Math.round((w - 2) * (done / total))
-  if (filled > 0) {
-    const cv = document.createElement('canvas')
-    cv.width = Math.max(1, filled * 2); cv.height = barH * 2
-    renderHatchSwatch(cv.getContext('2d'), TASKFORCE_CODE, cv.width, cv.height)
-    ctx.drawImage(cv, x + 1, cy + 1, filled, barH - 1)
-  }
-  ctx.restore()
-  return cy + barH
-}
-
 // Outline every cell taken between two frames. Drawn as the OUTER EDGE of the
 // gained region rather than a fill: a fill would hide the hatch underneath and
 // the sheet would stop saying who holds the ground, which is the thing the
 // outline is annotating.
+//
+// ⚠️ A GAIN IS GROUND TAKEN OFF SOMEBODY, NOT AN EMPTY CELL FILLED IN. Every
+// zone the camp plan touches now starts the replay as Meridian ground, so the
+// day-to-day change inside an area is M -> t, never '.' -> t. The old test
+// (held now, empty before) found nothing at all once that landed, and every
+// sheet came out with no daily gains marked on it.
+const isHeld = (ch) => !!ch && ch !== '.' && !isMeridianCode(ch)
 function drawGains(ctx, prevCells, cells, cols, rows, w, h) {
   if (!prevCells || prevCells.length !== cells.length) return
   const cw = w / cols
   const ch = h / rows
   const gained = (i) => i >= 0 && i < cells.length
-    && cells[i] !== '.' && prevCells[i] === '.'
+    && isHeld(cells[i]) && !isHeld(prevCells[i])
   ctx.save()
   // A soft wash first so the region reads at a glance from across the room...
   ctx.fillStyle = GAIN
@@ -294,53 +176,6 @@ function drawGains(ctx, prevCells, cells, cols, rows, w, h) {
   }
   ctx.stroke()
   ctx.restore()
-}
-
-// The area table: the map's numbered badges spelled out. Number, name, visits
-// done of scheduled, and the letters of the companies through it so far.
-//
-// A row whose count moved SINCE THE PREVIOUS SHEET is marked, so a reader can
-// see what changed today without comparing two pages side by side — the same
-// question the gain outlines answer on the map.
-function drawAreaTable(ctx, x, y, w, listed, numbered, progress, prevProgress) {
-  if (!progress || !listed.length) return y
-  textLine(ctx, 'AREAS — VISITS DONE / SCHEDULED', x, y, { size: 20, spacing: 3, color: ACCENT })
-  let cy = y + 30
-  const rowH = 25
-  const colW = w / 2
-  listed.forEach((z, k) => {
-    const p = progress.get(z.id)
-    if (!p) return
-    const col = k < Math.ceil(listed.length / 2) ? 0 : 1
-    const row = col === 0 ? k : k - Math.ceil(listed.length / 2)
-    const rx = x + col * colW
-    const ry = cy + row * rowH
-    const st = ZONE_STYLE[z.kind] || ZONE_STYLE.activity
-    const prev = prevProgress?.get(z.id)
-    const moved = prev && p.done > prev.done
-
-    if (moved) {
-      ctx.save()
-      ctx.fillStyle = GAIN
-      ctx.globalAlpha = 0.16
-      ctx.fillRect(rx - 4, ry - 17, colW - 12, rowH - 3)
-      ctx.restore()
-    }
-    textLine(ctx, String(numbered.get(z.id)).padStart(2, ' '), rx, ry,
-      { size: 16, font: 'JetBrains Mono, monospace', color: st.color })
-    textLine(ctx, z.name.toUpperCase(), rx + 34, ry,
-      { size: 16, font: 'JetBrains Mono, monospace', spacing: 0.3, color: p.complete ? '#fff' : INK })
-    // Count and companies right-aligned, so the eye can run down them.
-    const who = (p.visited || [])
-    let tx = rx + colW - 22
-    for (let j = who.length - 1; j >= 0; j--) {
-      textLine(ctx, who[j], tx, ry, { size: 16, font: 'JetBrains Mono, monospace', color: COMPANY_COLOR[who[j]] || INK, align: 'right' })
-      tx -= 15
-    }
-    textLine(ctx, `${p.done}/${p.total}`, tx - 4, ry,
-      { size: 16, font: 'JetBrains Mono, monospace', color: p.complete ? TASKFORCE_COLOR : INK, align: 'right' })
-  })
-  return cy + Math.ceil(listed.length / 2) * rowH + 8
 }
 
 /**
@@ -389,6 +224,10 @@ function drawStrip(ctx, listed, progress, prevProgress, showRHQ, map) {
     renderHatchSwatch(cv.getContext('2d'), code, cv.width, cv.height)
     ctx.drawImage(cv, x, y, w2, h2)
   }
+  // MERIDIAN FIRST — it is the state every area starts in, and on the early
+  // sheets it is most of the ground on the page, so a key that opened with
+  // 1ATF's two shades left the dominant colour unnamed.
+  chip(hatchChip(MERIDIAN_CODE), 'MERIDIAN', MERIDIAN_COLOR)
   chip(hatchChip(TASKFORCE_CODE.toLowerCase()), 'TAKING', INK)
   chip(hatchChip(TASKFORCE_CODE), 'TAKEN', INK)
   if (showRHQ) chip(hatchChip('R'), 'RHQ', INK)

@@ -16,6 +16,7 @@
 // map (LINE_KEY, consumed as `artKey` in lib/maps.js). All three read this
 // file, so the key cannot end up describing a colour nothing draws.
 import singleton from '../data/singleton-boundaries.json'
+import { polygonCells } from './zoneRaster'
 
 // Grid-cell polylines per map id, with the grid they were TRACED IN. Traced
 // off the AUSPEC0196 sheet — see tools/map/trace-singleton-boundaries.py.
@@ -165,4 +166,44 @@ export function drawMapLines(ctx, map, W, H) {
     }
   }
   ctx.restore()
+}
+
+/* ----------------------------- area of operations ----------------------------- */
+
+// The AREA OF OPERATIONS as a list of grid cells: inside the Commonwealth land
+// boundary AND west of the sector line. That is the same shape the yellow lines
+// draw on the map, which is the point — "the ground this map is about" should
+// be the ground the map says it is about, not a second definition kept in step
+// by hand.
+//
+// The two traced Defence polylines are one boundary that leaves the sheet on
+// the east side and comes back (see LINE_KIND), so `defence_n` followed by
+// `defence_s` closes into a ring across the sheet edge with no stitching.
+// Clipping to Sector 8 is then just a per-cell test against sectorXAt rather
+// than a second polygon, which is why this does not reuse clipToSector: that
+// cuts POLYLINES for drawing, and a filled shape wants a predicate.
+const aoCache = new Map()
+
+export function areaOfOperations(map) {
+  const id = typeof map === 'string' ? map : map?.id
+  const entry = LINES[id]
+  const cols = typeof map === 'object' ? map?.cols : null
+  const rows = typeof map === 'object' ? map?.rows : null
+  if (!entry || !cols || !rows) return []
+  const key = `${id}:${cols}x${rows}`
+  const hit = aoCache.get(key)
+  if (hit) return hit
+
+  const sx = cols / entry.grid.cols
+  const sy = rows / entry.grid.rows
+  const scale = (pts) => pts.map(([x, y]) => [x * sx, y * sy])
+  const north = entry.lines.defence_n || []
+  const south = entry.lines.defence_s || []
+  const ring = scale([...north, ...south])
+  const sector = entry.lines.sector ? scale(entry.lines.sector) : null
+  const keep = sector ? (cx, cy) => cx <= sectorXAt(sector, cy) : null
+
+  const cells = polygonCells(ring, cols, rows, keep)
+  aoCache.set(key, cells)
+  return cells
 }
