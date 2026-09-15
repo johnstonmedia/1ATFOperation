@@ -155,15 +155,30 @@ export function drawMapZones(ctx, zones, { cols, rows, w, h, scale = 1, progress
   }
   ctx.globalAlpha = 1
 
-  // PRINT MODE: the area's NAME on the ground, nothing else.
+  // PRINT MODE: the area's NAME and WHO HAS BEEN THROUGH IT, on one line.
   //
   // Names were briefly replaced by numbered badges with a lookup table, and
   // that was the wrong trade: a map you have to cross-reference to read is not
   // a map of anywhere. What actually made names unreadable was printing the
-  // NAME, the visit count AND a row of company letters at each one — three
-  // lines per area over two dozen areas. The count and the letters live in the
-  // sheet's bottom band now, so the map carries one short line each and has
-  // room for it.
+  // NAME, the visit count AND a row of company letters at each one as THREE
+  // LINES over two dozen areas — it was the stacking that broke it, not the
+  // content.
+  //
+  // So the company letters are back on the ground (2026-09-15), in their own
+  // colours, on a SECOND LINE under the name. They earn the room: the painted
+  // pixels already say how much of an area is taken, so the fraction is
+  // readable off the map, but "has my company done the ropes course yet" is
+  // not — and that is the question these sheets actually get asked. The COUNT
+  // stays in the bottom band, where it is an exact figure instead of a third
+  // thing competing with the name.
+  //
+  // ⚠️ A SECOND LINE, NOT A LONGER ONE. Appending the letters to the name was
+  // tried first and was worse than either: "▲ HIGH ROPES A B C E S" is nearly
+  // twice the width of the name, and WIDTH is what the declutter cannot solve
+  // — it can only nudge vertically, so in a tight cluster AA MIKE ended up
+  // buried under HIGH ROPES. Stacked, the block is only as wide as the name
+  // (the letters are always narrower), so horizontal conflicts stay exactly as
+  // rare as they were with names alone.
   //
   // Placement is DECLUTTERED rather than trusted: labels are placed biggest
   // area first (the big ones have the strongest claim to their own centre) and
@@ -182,25 +197,69 @@ export function drawMapZones(ctx, zones, { cols, rows, w, h, scale = 1, progress
     // and on RHQ's. They have no outline to label anyway.
     const order = [...zones].filter((z) => z.cells?.length >= 3)
       .sort((a, b) => (b.cells?.length || 0) - (a.cells?.length || 0))
+    const NAME_FONT = `700 ${size}px Orbitron, sans-serif`
+    const COY_FONT = `700 ${size * 0.92}px "JetBrains Mono", monospace`
+    const gap = size * 0.42
+    const LINE2 = size * 0.95          // baseline drop to the company line
     for (const z of order) {
       const st = ZONE_STYLE[z.kind] || ZONE_STYLE.activity
       const tex = ZONE_TEXTURE[z.kind] || ZONE_TEXTURE.activity
-      const text = `${tex.glyph} ${z.name.toUpperCase()}`
-      const tw = ctx.measureText(text).width
+      const name = `${tex.glyph} ${z.name.toUpperCase()}`
+      // A letter per company through it so far. Attribution WITHOUT ownership:
+      // the ground is 1ATF's whoever walked it (an area is a percentage
+      // takeover, not a company's prize), but the letters say who did the
+      // walking. An area nobody has reached yet simply has no second line.
+      const who = progress?.get(z.id)?.visited || []
+      ctx.font = NAME_FONT
+      const nameW = ctx.measureText(name).width
+      ctx.font = COY_FONT
+      const coyW = who.length
+        ? who.reduce((a, k) => a + ctx.measureText(k).width, 0) + gap * (who.length - 1)
+        : 0
+      // The block is as wide as its widest line and as tall as it needs; the
+      // declutter works on the BLOCK, so a two-line label can't be treated as
+      // if it were one line tall.
+      const tw = Math.max(nameW, coyW)
+      const th = who.length ? size + LINE2 : size
       const bx = z.label[0] * sx
       let by = z.label[1] * sy
-      const hits = (yy) => placed.some((r) => Math.abs(r.x - bx) < (r.w + tw) / 2 + size * 0.3
-        && Math.abs(r.y - yy) < size * 1.25)
-      for (const dy of [0, -1.45, 1.45, -2.9, 2.9, -4.35, 4.35]) {
-        by = z.label[1] * sy + dy * size
-        if (!hits(by)) break
+      const hits = (yy, xx) => placed.some((r) => Math.abs(r.x - xx) < (r.w + tw) / 2 + size * 0.3
+        && Math.abs(r.y - yy) < (r.h + th) / 2 + size * 0.25)
+      // ⚠️ THE SEARCH IS 2-D. Nudging only up and down cannot clear a cluster:
+      // High Ropes, AA Lima, AA Mike, AA Juliet and NL Romeo all sit within a
+      // few hundred metres of each other, and with vertical moves alone the
+      // last one placed had nowhere left to go and landed on a neighbour.
+      // Candidates are ordered by ring, vertical-first within each ring, so a
+      // label only moves sideways when straight up or down is taken.
+      const stepY = th * 1.1
+      const stepX = size * 2.2
+      let bxx = bx
+      const cands = [[0, 0]]
+      for (let r = 1; r <= 4; r++) for (const dx of [0, -1, 1, -2, 2]) cands.push([dx, -r], [dx, r])
+      for (const [dx, dy] of cands) {
+        bxx = bx + dx * stepX
+        by = z.label[1] * sy + dy * stepY
+        if (!hits(by, bxx)) break
       }
-      placed.push({ x: bx, y: by, w: tw })
-      ctx.lineWidth = size * 0.26
+      placed.push({ x: bxx, y: by, w: tw, h: th })
       ctx.strokeStyle = 'rgba(4,8,16,0.9)'
-      ctx.strokeText(text, bx, by)
+      ctx.font = NAME_FONT
+      ctx.lineWidth = size * 0.26
+      ctx.strokeText(name, bxx, by)
       ctx.fillStyle = st.color
-      ctx.fillText(text, bx, by)
+      ctx.fillText(name, bxx, by)
+      if (!who.length) continue
+      ctx.font = COY_FONT
+      ctx.lineWidth = size * 0.24
+      ctx.textAlign = 'left'
+      let cx = bxx - coyW / 2
+      for (const k of who) {
+        ctx.strokeText(k, cx, by + LINE2)
+        ctx.fillStyle = COMPANY_COLOR[k] || '#d7e2f4'
+        ctx.fillText(k, cx, by + LINE2)
+        cx += ctx.measureText(k).width + gap
+      }
+      ctx.textAlign = 'center'
     }
     ctx.restore()
     return

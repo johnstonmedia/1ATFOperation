@@ -17,6 +17,37 @@ keep entries short and focused on what a new collaborator needs to know.
 
 ---
 
+## 2026-09-15 (c) — The print sheets name the companies on the ground
+
+- **Which COYs have been through each area is now on the map, not just in the
+  band.** Under each area's name, a letter per company that has been through it
+  so far, in that company's colour; an area nobody has reached has no second
+  line. Attribution WITHOUT ownership — the ground is 1ATF's whoever walked it
+  — but "has my company done the ropes course yet" is the question these sheets
+  actually get asked, and it was the one thing on the sheet you had to
+  cross-reference to answer.
+- The **visit count stays in the bottom band**: the painted pixels already say
+  how much of an area is taken, so the fraction reads off the map, and putting
+  it back at each area would be the third competing line that made names
+  unreadable the first time.
+- ⚠️ **A second line, not a longer one.** Appending the letters to the name was
+  tried first and was worse than either: `▲ HIGH ROPES A B C E S` is nearly
+  twice the name's width, and width is what the declutter cannot solve — it
+  could only nudge vertically, so AA MIKE ended up buried under HIGH ROPES.
+  Stacked, the block is only as wide as its name, so horizontal conflicts stay
+  as rare as they were with names alone.
+- ⚠️ **The declutter search is now 2-D.** Vertical-only nudging cannot clear a
+  five-label cluster (High Ropes, AA Lima, AA Mike, AA Juliet, NL Romeo sit
+  within a few hundred metres); candidates are ordered by ring, vertical-first
+  within each ring, so a label moves sideways only when up and down are taken.
+  Verified on the real A3 render: every area labelled, no overlaps.
+- **No change to the video or the weekly image** — checked first, and both
+  already named the companies via the non-print `drawMapZones` path
+  (`AA OSCAR 1/1 E`, `NAVEX 13/13 A B C D S`). Only the print path was missing
+  them.
+
+---
+
 ## 2026-09-15 (b) — Six Maps everywhere: no more imagery seam
 
 - **The satellite imagery now reaches the frame edge.** `fixedTiles()` was

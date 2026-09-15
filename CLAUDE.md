@@ -894,8 +894,23 @@ assuming a page exists).
     version existed briefly and was wrong: a map you have to cross-reference to
     read is not a map of anywhere. What actually made names unreadable was
     printing the NAME, the visit count AND a row of company letters at each
-    one — three lines per area across two dozen areas. Counts and letters live
-    in the bottom band, so the map carries one short line each.
+    one — three lines per area across two dozen areas.
+    ⚠️ **The COMPANY LETTERS are on the ground** (2026-09-15), on a second line
+    under the name, in their own colours; an area nobody has reached yet has no
+    second line. They earn the room: the painted pixels already say how much of
+    an area is taken, so the fraction reads off the map, but "has my company
+    done the ropes course yet" does not — and that is what these sheets get
+    asked. The COUNT stays in the bottom band, as an exact figure rather than a
+    third thing competing with the name. ⚠️ A SECOND LINE, NOT A LONGER ONE:
+    appending the letters to the name was tried and was worse than either
+    (`▲ HIGH ROPES A B C E S` is nearly twice the name's width, and WIDTH is
+    what the declutter cannot solve), which buried AA MIKE under HIGH ROPES.
+    Stacked, a block is only as wide as its name.
+    ⚠️ **The declutter search is 2-D.** Nudging only up and down cannot clear a
+    cluster — High Ropes, AA Lima, AA Mike, AA Juliet and NL Romeo sit within a
+    few hundred metres — so candidate positions are ordered by ring,
+    vertical-first within each ring, and a label moves sideways only when
+    straight up and down are taken.
     ⚠️ The area list is built from the UNION of every frame's progress, never
     from one frame's: asking only the LAST frame meant a single frame without a
     camp day (one RHQ added by hand, or any predating the `day` field) returned
