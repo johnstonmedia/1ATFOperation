@@ -128,7 +128,20 @@ keep entries short and focused on what a new collaborator needs to know.
   and the map panel renders at 2× and draws down: z15-whole-frame before,
   z16-over-the-region after — 132 tiles, ~2.0 m/px, twice the linear resolution
   for fewer requests.
-- ⚠️ **A print now always gets real satellite imagery.** The exporter needs
+- ✅ **SIX Maps sends the CORS header** — settled by a real export off the live
+  site, which came out on NSW Spatial Services imagery. The Esri print fallback
+  added on the assumption it might not is REMOVED: a hedge that can put
+  different ground on paper from what the screen showed is worse than the
+  failure it guards, and everything anyone sees is now one source.
+- 🐛 **Fixed: a real export had no area names and no list.** The area list was
+  derived from the LAST frame's progress alone, so one frame without a camp day
+  emptied it for every page while the totals still looked right. It is built
+  from the union of all frames now.
+- **The printed map zooms in further.** The bottom band's height is dead space
+  in the crop, so a shorter band lets the crop tighten — four columns at 24px
+  instead of three at 26 buys roughly 10% more camp on every sheet.
+- ⚠️ **A print now always gets real satellite imagery.**
+  *(Superseded — see the CORS finding above; the fallback is gone.)* The exporter needs
   CORS and the screen does not, so if SIX Maps won't send the header the print
   was dropping to the 12 m static base while the live map stayed perfect. No
   client code can make a service send a header, so there is now a second

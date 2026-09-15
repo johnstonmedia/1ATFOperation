@@ -84,7 +84,7 @@ export const MAPS = [
     // ⚠️ Shaped to the PAGE (1.414:1) and sized so the camp clears the sheet's
     // bottom band — an area whose name lands under the band has effectively
     // lost its label, which is what happened to AA Papa at a tighter crop.
-    printFocus: { x0: 0, y0: 30, x1: 354, y1: 280 },
+    printFocus: { x0: 0, y0: 41, x1: 320, y1: 267 },
     image: asset('singleton.webp'),
     pixelWidth: 1080,
     pixelHeight: 765,
@@ -136,27 +136,14 @@ export const MAPS = [
       minZoom: 12,
       maxZoom: 19,
       attribution: 'Imagery © NSW Spatial Services (Department of Customer Service)',
-      // ⚠️ PRINT FALLBACK — a SECOND satellite source, used only by the
-      // exporters and only if the first one cannot be read back off a canvas.
-      //
-      // Displaying a tile needs no permission; reading one out of a canvas to
-      // save it does, and that is `Access-Control-Allow-Origin`. If SIX Maps
-      // does not send it, the live map stays perfect and every export silently
-      // drops to the ~12 m Sentinel still — which is how a print ends up
-      // looking nothing like the screen it came from. There is no client-side
-      // way to make a service send a header, so the answer is to have a second
-      // source that already does: Esri's World Imagery is CORS-enabled, public,
-      // and sharper than 12 m over Singleton. A print then always carries real
-      // satellite imagery, whichever one supplied it.
-      //
-      // The attribution follows the source that was actually used — printing
-      // Esri's imagery under NSW Spatial Services' credit would be wrong.
-      printFallback: {
-        url: 'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-        minZoom: 12,
-        maxZoom: 19,
-        attribution: 'Imagery © Esri, Maxar, Earthstar Geographics and the GIS User Community',
-      },
+      // ⚠️ NO SECOND IMAGERY SOURCE, DELIBERATELY. A print fallback to Esri
+      // World Imagery was added on the theory that SIX Maps might refuse the
+      // CORS header the exporters need — and a real export off the live site
+      // settled it: SIX Maps DOES send it, prints come out on NSW Spatial
+      // Services imagery, and the fallback could only ever have made a sheet
+      // quietly show different ground from the screen. Everything anyone sees,
+      // on the page or on paper, is this one source. (`map.image` remains the
+      // offline floor — the same ground, not another provider's.)
     },
     // The key comes from the same module that draws the lines, so a colour
     // change can't leave the legend describing something nothing renders.

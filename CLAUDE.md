@@ -826,6 +826,11 @@ assuming a page exists).
     as `focus` widened to the PAGE's proportions, so the map fills the sheet
     without stretching and without cropping camp ground. A square-ish crop on a
     landscape page is what forced a side column in the first place.
+    ⚠️ It is as TIGHT as the bottom band allows, and those two numbers are
+    coupled: the band's height is dead space at the bottom of the crop, so a
+    taller band forces a taller crop, which on a fixed page aspect forces a
+    WIDER one — i.e. zooms the camp out. That is why the band runs four columns
+    at 24 px rather than three at 26. Shrink the band before widening the crop.
   - ⚠️ **The bottom band is deliberately SMALL, and shouldn't grow back.** It
     carries only what cannot be read off the ground — which area each number
     is, its visit count, which companies have been — plus four key swatches and
@@ -833,27 +838,30 @@ assuming a page exists).
     what the hatch means, what a fraction means, the boundary colours, a
     company colour legend, a large percentage numeral and bar) was removed: it
     is either obvious from the map or not worth the paper.
-  - ⚠️ **THE EXPORT NEEDS CORS AND THE SCREEN DOES NOT** — the one way a print
-    can come out worse than the page it came from. Displaying a cross-origin
-    tile needs no permission; READING one back out of a canvas does, which is
-    what `crossOrigin='anonymous'` asks for. A tile service that doesn't answer
-    with `Access-Control-Allow-Origin` fails the load in the exporter while
-    still displaying perfectly on the live map, so the print drops to the ~12 m
-    static base. No client-side code can make a service send a header (`fetch`
-    is blocked the same way; an opaque response has no readable bytes) — so the
-    answer is a SECOND source that already does. `map.tiles.printFallback`
-    (Esri World Imagery, CORS-enabled and far sharper than 12 m) is tried by
-    the exporters only, and only when the primary returns nothing readable, so
-    **a print always carries real satellite imagery whichever one supplied
-    it**. `onStatus` reports which was used and the page prints THAT source's
-    attribution — crediting NSW Spatial Services for Esri's imagery would be
-    wrong. The live map is untouched by any of this and always uses SIX Maps.
+  - ✅ **SIX MAPS SENDS THE CORS HEADER — settled 2026-09-15 by a real export
+    off the live site**, which came out on NSW Spatial Services imagery. The
+    exporter needs `Access-Control-Allow-Origin` where the screen does not
+    (displaying a cross-origin tile needs no permission; reading one back out
+    of a canvas does), and that had been an open question. It isn't any more.
+  - ⚠️ **ONE IMAGERY SOURCE, EVERYWHERE.** An Esri World Imagery print
+    fallback was briefly wired in as a hedge against the above; it is REMOVED
+    and should not come back. A hedge that can put different ground on paper
+    from what the screen showed is worse than the failure it guards against,
+    and everything anyone sees — page or paper — is SIX Maps. `map.image`
+    remains the offline floor: the same ground at lower resolution, not another
+    provider's.
   - ⚠️ **Areas are NAMED ON THE GROUND.** A numbered-badge-plus-lookup-table
     version existed briefly and was wrong: a map you have to cross-reference to
     read is not a map of anywhere. What actually made names unreadable was
     printing the NAME, the visit count AND a row of company letters at each
     one — three lines per area across two dozen areas. Counts and letters live
     in the bottom band, so the map carries one short line each.
+    ⚠️ The area list is built from the UNION of every frame's progress, never
+    from one frame's: asking only the LAST frame meant a single frame without a
+    camp day (one RHQ added by hand, or any predating the `day` field) returned
+    null and emptied the list for EVERY page — a real export came out with no
+    names on the map and no rows in the band while still showing correct
+    totals. A per-page fact must never be derived from one page.
     `drawMapZones(..., { printLabels })` DECLUTTERS placement: biggest area
     first (the big ones have the strongest claim to their own centre), each
     later label nudged vertically until clear, and drawn anyway if it can't be

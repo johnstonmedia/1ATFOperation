@@ -125,22 +125,15 @@ function loadTile(url) {
 // stops it running away.
 async function renderTileLayer(map, W, H, region = null, onStatus = null) {
   if (!map?.tiles) return null
-  // Try the map's own source first; if not one tile can be read back (see the
-  // CORS note above), try the print fallback before giving up on imagery
-  // altogether. `map.tiles.printFallback` is another satellite source that is
-  // known to send the header.
-  const first = await renderTileSource(map, map.tiles, W, H, region)
-  if (first?.canvas) { onStatus?.({ ...first.stat, source: 'primary', attribution: map.tiles.attribution }); return first.canvas }
-  const fb = map.tiles.printFallback
-  if (fb) {
-    const second = await renderTileSource(map, fb, W, H, region)
-    if (second?.canvas) {
-      onStatus?.({ ...second.stat, source: 'fallback', attribution: fb.attribution })
-      return second.canvas
-    }
-  }
-  onStatus?.({ tiled: false, drawn: 0, total: first?.stat?.total || 0, source: null })
-  return null
+  // ⚠️ ONE SOURCE. A second (Esri) was briefly wired in here as a hedge
+  // against SIX Maps refusing the CORS header the exporter needs; a real
+  // export off the live site proved SIX Maps sends it, and a hedge that can
+  // put DIFFERENT GROUND on paper from what the screen showed is worse than
+  // the failure it guards. If this ever returns nothing, the page falls back
+  // to `map.image` — the same ground at lower resolution — and says so.
+  const got = await renderTileSource(map, map.tiles, W, H, region)
+  onStatus?.({ ...(got?.stat || { tiled: false, drawn: 0, total: 0 }), attribution: map.tiles.attribution })
+  return got?.canvas || null
 }
 
 async function renderTileSource(map, src, W, H, region = null) {

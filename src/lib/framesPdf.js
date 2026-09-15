@@ -359,9 +359,13 @@ function drawAreaTable(ctx, x, y, w, listed, numbered, progress, prevProgress) {
  * the paper. Don't grow this back into a panel.
  */
 function drawStrip(ctx, listed, progress, prevProgress, showRHQ, map) {
-  const rows = Math.ceil(listed.length / 3)
-  const rowH = 26
-  const H = 34 + rows * rowH + 34
+  // FOUR columns, not three: the band's height is what forces the map's crop
+  // to be wider than the camp (a shorter band lets the sheet zoom in), so the
+  // list runs wide and shallow rather than tall.
+  const COLS = 4
+  const rows = Math.ceil(listed.length / COLS)
+  const rowH = 24
+  const H = 30 + rows * rowH + 26
   const y0 = PAGE_H - H
 
   ctx.save()
@@ -403,13 +407,13 @@ function drawStrip(ctx, listed, progress, prevProgress, showRHQ, map) {
   }
 
   // Areas, three columns.
-  const colW = (PAGE_W - 52) / 3
+  const colW = (PAGE_W - 52) / COLS
   listed.forEach((z, k) => {
     const p = progress.get(z.id)
     if (!p) return
     const col = Math.floor(k / rows)
     const rx = 26 + col * colW
-    const ry = y0 + 34 + (k % rows) * rowH + 18
+    const ry = y0 + 30 + (k % rows) * rowH + 17
     const st = ZONE_STYLE[z.kind] || ZONE_STYLE.activity
     if (prevProgress?.get(z.id) && p.done > prevProgress.get(z.id).done) {
       ctx.save(); ctx.fillStyle = GAIN; ctx.globalAlpha = 0.16
@@ -417,16 +421,16 @@ function drawStrip(ctx, listed, progress, prevProgress, showRHQ, map) {
     }
     const tex = ZONE_TEXTURE[z.kind] || ZONE_TEXTURE.activity
     textLine(ctx, tex.glyph, rx, ry, { size: 16, font: 'JetBrains Mono, monospace', color: st.color })
-    textLine(ctx, z.name.toUpperCase(), rx + 26, ry,
-      { size: 17, font: 'JetBrains Mono, monospace', spacing: 0.3, color: p.complete ? '#fff' : INK })
+    textLine(ctx, z.name.toUpperCase(), rx + 24, ry,
+      { size: 15, font: 'JetBrains Mono, monospace', spacing: 0.2, color: p.complete ? '#fff' : INK })
     let tx = rx + colW - 30
     const who = p.visited || []
     for (let j = who.length - 1; j >= 0; j--) {
-      textLine(ctx, who[j], tx, ry, { size: 17, font: 'JetBrains Mono, monospace', color: COMPANY_COLOR[who[j]] || INK, align: 'right' })
-      tx -= 16
+      textLine(ctx, who[j], tx, ry, { size: 15, font: 'JetBrains Mono, monospace', color: COMPANY_COLOR[who[j]] || INK, align: 'right' })
+      tx -= 14
     }
     textLine(ctx, `${p.done}/${p.total}`, tx - 4, ry,
-      { size: 17, font: 'JetBrains Mono, monospace', color: p.complete ? TASKFORCE_COLOR : INK, align: 'right' })
+      { size: 15, font: 'JetBrains Mono, monospace', color: p.complete ? TASKFORCE_COLOR : INK, align: 'right' })
   })
 
   if (map.tiles?.attribution) {
@@ -489,8 +493,22 @@ export async function exportFramesPdf({ territory, frames: campaignFrames, zones
   // print showing the 10 m Sentinel floor and showing real imagery.
   // The bottom band lists areas in reading order down the sheet, matching the
   // names printed on the ground itself.
+  //
+  // ⚠️ Built from the UNION of every frame's progress, not from one frame's.
+  // Asking only the LAST frame meant a single frame without a camp day — one
+  // RHQ added by hand, or any frame predating the `day` field — returned null
+  // and emptied the list for EVERY page, so a real export came out with no
+  // area names on the map and no rows in the band while still showing correct
+  // totals. A per-page fact must never be derived from one page.
+  const known = new Set()
+  if (progressFor) {
+    for (let k = 0; k < frames.length; k++) {
+      const p = progressFor(k)
+      if (p) for (const id of p.keys()) known.add(id)
+    }
+  }
   const listed = zones
-    .filter((z) => (progressFor ? progressFor(frames.length - 1)?.has(z.id) : true))
+    .filter((z) => (known.size ? known.has(z.id) : z.cells?.length >= 3))
     .sort((a, b) => (a.label[1] - b.label[1]) || (a.label[0] - b.label[0]))
 
   const region = { x0: f.x0 / cols, x1: f.x1 / cols, y0: f.y0 / rows, y1: f.y1 / rows }
