@@ -17,6 +17,27 @@ keep entries short and focused on what a new collaborator needs to know.
 
 ---
 
+## 2026-09-15 (f) — Ground taken today looks like ground taken any other day
+
+- **Removed the "TAKEN TODAY" marking from the print sheets** — `drawGains`
+  (gold outline over a light wash on the map), its key chip, and the gold tint
+  on the band rows whose count went up. Ground conquered on a sheet's own day
+  now renders identically to ground conquered on any earlier day.
+- **Why, beyond being asked:** the wash TINTED the company colours underneath,
+  so the very ground whose company you most wanted to read was the ground whose
+  colour had been altered — it was working against the per-company colouring
+  added an hour earlier.
+- **The problem it was built for no longer exists.** `drawGains` was added when
+  five cumulative sheets looked nearly alike. Since areas start Meridian and are
+  taken in company colours, Day 1 is mostly red and Day 4 entirely 1ATF blue;
+  the sheets tell each other apart without help.
+- `GAIN` is renamed `BOUNDARY`: its only remaining use is the sheet's AREA OF
+  OPERATIONS tag, and that yellow is the boundary line's, not a gain colour.
+  `isHeld` and the `isMeridianCode` import went with `drawGains`; `drawStrip`
+  lost its now-unused `prevProgress` argument.
+
+---
+
 ## 2026-09-15 (e) — Activity areas are coloured by the company taking them
 
 - ⚠️ **REVERSES "no company ever owns an activity area"** from entry (a) earlier

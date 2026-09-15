@@ -20,7 +20,7 @@ import { drawMapLines } from './mapLines'
 import { drawMapZones, ZONE_STYLE, ZONE_TEXTURE } from './mapZones'
 import { ASSURE_BLUE as TASKFORCE_COLOR } from './territory'
 import { sortFrames } from './campaign'
-import { TASKFORCE_CODE, MERIDIAN_CODE, MERIDIAN_COLOR, isMeridianCode } from './territory'
+import { TASKFORCE_CODE, MERIDIAN_CODE, MERIDIAN_COLOR } from './territory'
 import { COMPANIES } from '../firebase/seed'
 
 const COMPANY_COLOR = COMPANIES.reduce((a, c) => ({ ...a, [c.letter]: c.accent }), {})
@@ -52,8 +52,10 @@ const INK = '#d7e2f4'
 const DIM = '#8294b5'
 const ACCENT = '#36e0c0'
 const GROUND = '#070b14'
-// What was taken on THIS sheet's day, as opposed to ground already held.
-const GAIN = '#ffd23c'
+// The yellow the area boundary is drawn in (LINE_STYLE in mapLines.js), reused
+// for the sheet's AREA OF OPERATIONS tag so the words and the line that encloses
+// the ground they name are the same colour.
+const BOUNDARY = '#ffd23c'
 
 /* ------------------------------- PDF writer ------------------------------- */
 
@@ -142,49 +144,6 @@ function textLine(ctx, s, x, y, { size = 20, font = 'Orbitron, sans-serif', colo
   ctx.restore()
 }
 
-// Outline every cell taken between two frames. Drawn as the OUTER EDGE of the
-// gained region rather than a fill: a fill would hide the hatch underneath and
-// the sheet would stop saying who holds the ground, which is the thing the
-// outline is annotating.
-//
-// ⚠️ A GAIN IS GROUND TAKEN OFF SOMEBODY, NOT AN EMPTY CELL FILLED IN. Every
-// zone the camp plan touches now starts the replay as Meridian ground, so the
-// day-to-day change inside an area is M -> t, never '.' -> t. The old test
-// (held now, empty before) found nothing at all once that landed, and every
-// sheet came out with no daily gains marked on it.
-const isHeld = (ch) => !!ch && ch !== '.' && !isMeridianCode(ch)
-function drawGains(ctx, prevCells, cells, cols, rows, w, h) {
-  if (!prevCells || prevCells.length !== cells.length) return
-  const cw = w / cols
-  const ch = h / rows
-  const gained = (i) => i >= 0 && i < cells.length
-    && isHeld(cells[i]) && !isHeld(prevCells[i])
-  ctx.save()
-  // A soft wash first so the region reads at a glance from across the room...
-  ctx.fillStyle = GAIN
-  ctx.globalAlpha = 0.18
-  for (let i = 0; i < cells.length; i++) {
-    if (!gained(i)) continue
-    ctx.fillRect((i % cols) * cw, Math.floor(i / cols) * ch, cw + 0.5, ch + 0.5)
-  }
-  // ...then the edge, which is what actually delineates it in print.
-  ctx.globalAlpha = 1
-  ctx.strokeStyle = GAIN
-  ctx.lineWidth = Math.max(1.5, cw * 0.5)
-  ctx.beginPath()
-  for (let i = 0; i < cells.length; i++) {
-    if (!gained(i)) continue
-    const x = i % cols, y = Math.floor(i / cols)
-    const px = x * cw, py = y * ch
-    if (y === 0 || !gained(i - cols)) { ctx.moveTo(px, py); ctx.lineTo(px + cw, py) }
-    if (y === rows - 1 || !gained(i + cols)) { ctx.moveTo(px, py + ch); ctx.lineTo(px + cw, py + ch) }
-    if (x === 0 || !gained(i - 1)) { ctx.moveTo(px, py); ctx.lineTo(px, py + ch) }
-    if (x === cols - 1 || !gained(i + 1)) { ctx.moveTo(px + cw, py); ctx.lineTo(px + cw, py + ch) }
-  }
-  ctx.stroke()
-  ctx.restore()
-}
-
 /**
  * The whole annotation, as ONE THIN BAND along the bottom of the sheet.
  *
@@ -194,7 +153,7 @@ function drawGains(ctx, prevCells, cells, cols, rows, w, h) {
  * map, and every millimetre the annotation takes is a millimetre the progress
  * does not get. So the band carries exactly what cannot be read off the ground
  * — which area each number is, how many visits it has had, and which companies
- * have been through — plus a four-swatch key and one line of totals. Anything
+ * have been through — plus a short key and one line of totals. Anything
  * that merely EXPLAINS the map (what the hatch means in words, what a fraction
  * means, the boundary colours, a company colour legend, a large percentage
  * numeral) was removed: it is either obvious from the map or it is not worth
@@ -209,7 +168,7 @@ const STRIP_ROW_H = 24
 const stripCols = () => Math.max(2, Math.round(PAGE_W / 600))
 const stripHeight = (n) => 30 + Math.ceil(n / stripCols()) * STRIP_ROW_H + 26
 
-function drawStrip(ctx, listed, progress, prevProgress, showRHQ, map) {
+function drawStrip(ctx, listed, progress, showRHQ, map) {
   const COLS = stripCols()
   const rows = Math.ceil(listed.length / COLS)
   const rowH = STRIP_ROW_H
@@ -244,11 +203,6 @@ function drawStrip(ctx, listed, progress, prevProgress, showRHQ, map) {
   chip(hatchChip(TASKFORCE_CODE.toLowerCase()), 'TAKING', INK)
   chip(hatchChip(TASKFORCE_CODE), 'TAKEN', INK)
   if (showRHQ) chip(hatchChip('R'), 'RHQ', INK)
-  chip((x, y, w2, h2) => {
-    ctx.save(); ctx.strokeStyle = GAIN; ctx.lineWidth = 2.5
-    ctx.strokeRect(x, y, w2, h2)
-    ctx.globalAlpha = 0.22; ctx.fillStyle = GAIN; ctx.fillRect(x, y, w2, h2); ctx.restore()
-  }, 'TAKEN TODAY', GAIN)
 
   // Totals, right-aligned on the same line as the key.
   let done = 0, total = 0, complete = 0
@@ -267,10 +221,6 @@ function drawStrip(ctx, listed, progress, prevProgress, showRHQ, map) {
     const rx = 26 + col * colW
     const ry = y0 + 30 + (k % rows) * rowH + 17
     const st = ZONE_STYLE[z.kind] || ZONE_STYLE.activity
-    if (prevProgress?.get(z.id) && p.done > prevProgress.get(z.id).done) {
-      ctx.save(); ctx.fillStyle = GAIN; ctx.globalAlpha = 0.16
-      ctx.fillRect(rx - 5, ry - 17, colW - 16, rowH - 3); ctx.restore()
-    }
     const tex = ZONE_TEXTURE[z.kind] || ZONE_TEXTURE.activity
     textLine(ctx, tex.glyph, rx, ry, { size: 16, font: 'JetBrains Mono, monospace', color: st.color })
     textLine(ctx, z.name.toUpperCase(), rx + 24, ry,
@@ -426,12 +376,16 @@ export async function exportFramesPdf({ territory, frames: campaignFrames, zones
     renderTerritoryLayer(hatch.getContext('2d'), { cells: fr.cells, cols, rows, showRHQ, w: fullW, h: fullH })
     fc.drawImage(hatch, 0, 0)
 
-    // WHAT CHANGED TODAY. A sheet that only shows the cumulative position
-    // makes five pages that look nearly alike; the question a wall of them has
-    // to answer is "what did we take yesterday". Ground that is held on this
-    // frame and was not on the one before is outlined in the gain colour, over
-    // the ordinary hatch — so the sheet reads as position first, then progress.
-    if (i > 0) drawGains(fc, frames[i - 1].cells, fr.cells, cols, rows, fullW, fullH)
+    // ⚠️ NOTHING MARKS "TAKEN TODAY", DELIBERATELY (2026-09-15). Ground taken
+    // on this sheet's day used to carry a gold outline over a light wash. Two
+    // reasons it went: the wash TINTED the company colours underneath, so the
+    // very ground whose company you most wanted to read was the ground whose
+    // colour was altered; and the reason it existed — five cumulative sheets
+    // looking nearly alike — stopped being true once the areas started as
+    // Meridian and are taken in company colours. Day 1 is mostly red and Day 4
+    // is entirely 1ATF blue; the sheets no longer need help telling each other
+    // apart. Ground taken today looks exactly like ground taken on any other
+    // day, which is what it is.
 
     const page = document.createElement('canvas')
     page.width = PAGE_W; page.height = PAGE_H
@@ -467,10 +421,10 @@ export async function exportFramesPdf({ territory, frames: campaignFrames, zones
       { size: 17, spacing: 2, color: DIM, align: 'right', font: 'JetBrains Mono, monospace' })
     if (map.focus?.label) {
       textLine(ctx, `${map.focus.label} — AREA OF OPERATIONS`, PAGE_W - 30, 58,
-        { size: 18, spacing: 1.8, color: GAIN, align: 'right', font: 'JetBrains Mono, monospace' })
+        { size: 18, spacing: 1.8, color: BOUNDARY, align: 'right', font: 'JetBrains Mono, monospace' })
     }
 
-    drawStrip(ctx, listed, progress, i > 0 ? progressFor?.(i - 1) : null, showRHQ, map)
+    drawStrip(ctx, listed, progress, showRHQ, map)
 
 
 

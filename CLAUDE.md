@@ -532,11 +532,13 @@ assuming a page exists).
         the front, then the zones. Zones LAST is what leaves an unvisited area
         still red inside ground the front has already swept past, which is the
         single most useful thing the map says.
-      - `MERIDIAN_CODE` is exported from territory.js for this. The PDF's
-        `drawGains` had to change with it: a gain is ground taken OFF somebody
-        (`isHeld` now, not `isHeld` before), never an empty cell filled in —
-        the old `'.'`-based test found nothing at all and every sheet came out
-        with no daily gains marked.
+      - `MERIDIAN_CODE` is exported from territory.js for this. It also broke
+        the PDF's `drawGains` — its "gained" test was `held now && empty
+        before`, which finds nothing once areas start red — and that was fixed
+        before the whole day-gain marking was removed for other reasons (see
+        the PDF section). Kept here as the shape of the trap: once ground is
+        always somebody's, any test against `'.'` is dead code that fails
+        silently.
     - **The zone overlay therefore shows KIND, not progress** (`ZONE_TEXTURE`):
       teal activity / blue night location / amber headquarters, solid outline
       vs dashed for night locations, and a glyph on every name (▲ ☾ ◆) that
@@ -896,7 +898,7 @@ assuming a page exists).
     disagree about how tall it is.
   - ⚠️ **The bottom band is deliberately SMALL, and shouldn't grow back.** It
     carries only what cannot be read off the ground — which area each number
-    is, its visit count, which companies have been — plus four key swatches and
+    is, its visit count, which companies have been — plus a short key and
     one line of totals. Everything that merely EXPLAINS the map (prose about
     what the hatch means, what a fraction means, the boundary colours, a
     company colour legend, a large percentage numeral and bar) was removed: it
@@ -951,11 +953,17 @@ assuming a page exists).
     course yet" is the question these sheets get asked, so every row carries the
     letters of the companies through it so far in their own colours.
     Attribution without ownership.
-  - **Each sheet says what changed THAT DAY**: ground held on this frame and
-    not the one before is outlined in `GAIN` on the map (`drawGains`, an outline
-    over a light wash — a solid fill would hide the hatch and stop the sheet
-    saying who holds the ground), and its table row is highlighted. Without
-    this, five cumulative sheets look nearly alike.
+  - ⚠️ **NOTHING MARKS "TAKEN TODAY"** (2026-09-15 — this REMOVES `drawGains`
+    and the gold row highlight; don't reinstate either). Ground taken on a
+    sheet's own day used to carry a gold outline over a light wash, plus a
+    tinted band row. Two reasons it went. The wash TINTED THE COMPANY COLOURS
+    underneath, so the very ground whose company you most wanted to read was
+    the ground whose colour had been altered. And the problem it was built for
+    — five cumulative sheets looking nearly alike — stopped existing once areas
+    started as Meridian and are taken in company colours: Day 1 is mostly red,
+    Day 4 entirely 1ATF blue, and the sheets tell each other apart on their
+    own. Ground taken today looks exactly like ground taken any other day,
+    because that is what it is.
   - A progress block totals off the same per-zone counts the map is drawn from,
     so the headline can't disagree with the ground.
   - ⚠️ **Print tiles are fetched for the CROPPED REGION ONLY**, and that is
