@@ -377,7 +377,23 @@ assuming a page exists).
     400 (352 at z16 over the whole frame; z17 would be 1333, so the budget only
     has to sit in that gap) — the same number the exporters already use, which
     is what makes page and video ask for identical ground. ~2 m/px against the
-    static image's ~12, everywhere. ⚠️ Don't add lazy loading to the tiles:
+    static image's ~12, everywhere.
+    ⚠️ **AND IT REVEALS AS ONE LAYER, NOT 352 TILES** (2026-09-15). Each tile
+    used to un-hide itself in its own `onLoad`, so the map didn't swap from the
+    static art to the imagery once — it did it 352 times, in whatever order the
+    network answered, and what you saw was squares of satellite popping in
+    across the low-res base. Same defect as level-switching, different scale:
+    the fix is always FEWER swaps, never faster ones. Tiles are now always
+    visible and the CONTAINER fades in once, when every tile has settled (each
+    `<img>` fires exactly one of load/error, so the count always arrives), with
+    an 8 s timeout as the floor that only reveals if ≥60% actually loaded — a
+    half-tiled reveal would just be the patchwork again. Counts live in a ref
+    and flip `ready` once, because 352 tiles reporting into state would be 352
+    re-renders of the layer. Verified with responses staggered up to 2.5 s:
+    **zero samples where the layer was visible with an incomplete set**, first
+    visible at 2.4 s with 352/352; and with every tile 404ing the layer leaves
+    the DOM entirely and the static floor stays.
+    ⚠️ Don't add lazy loading to the tiles:
     measured, Chromium fetches all 352 at the opening view anyway (they are
     inside a transformed ancestor), and a browser that honoured it would leave
     the static floor showing mid-zoom-out — the exact flicker this design

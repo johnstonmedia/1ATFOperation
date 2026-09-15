@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { fixedTiles } from '../lib/maps'
 
 // Satellite imagery for a map that declares a `tiles` source.
@@ -44,14 +44,57 @@ import { fixedTiles } from '../lib/maps'
 // host that isn't answering.
 const FAIL_LIMIT = 8
 
+// ⚠️ THE LAYER REVEALS AS ONE THING, NOT 352 THINGS.
+//
+// Each tile used to un-hide itself in its own onLoad, which meant the map did
+// not swap from the static art to the imagery once — it did it 352 times, in
+// whatever order the network happened to answer. What you saw was the low-res
+// base, then squares of satellite popping in across it for a second or two.
+// That is the same defect the fixed-zoom rule was written for (see the header),
+// just at a different scale: the fix is always FEWER swaps, never faster ones.
+//
+// So the tiles are always visible and the CONTAINER is what fades, once, when
+// the set is done. "Done" is every tile settled — each <img> fires exactly one
+// of load/error, so the count always gets there — with a timeout as the floor
+// in case a request simply hangs, and that only reveals if most of the set
+// actually arrived. A half-tiled reveal would be the patchwork again.
+const REVEAL_TIMEOUT_MS = 8000
+const REVEAL_MIN_FRACTION = 0.6
+
 export default function TileBase({ map }) {
   const failed = useRef(new Set())
   const health = useRef({ ok: 0, bad: 0 })
   const [, bump] = useState(0)
+  const [ready, setReady] = useState(false)
 
   // Computed from the MAP ALONE — not from the view — so it is stable for the
   // life of the component and a pan or zoom can never invalidate it.
   const tiles = useMemo(() => fixedTiles(map), [map])
+  const total = tiles?.list.length || 0
+
+  // Reset when the map changes — a different map is a different tile set.
+  useEffect(() => {
+    failed.current = new Set()
+    health.current = { ok: 0, bad: 0 }
+    setReady(false)
+  }, [tiles])
+
+  // The floor. Without it a single request that never settles would hold the
+  // imagery back for the whole session.
+  useEffect(() => {
+    if (!total || ready) return undefined
+    const id = setTimeout(() => {
+      if (health.current.ok >= total * REVEAL_MIN_FRACTION) setReady(true)
+    }, REVEAL_TIMEOUT_MS)
+    return () => clearTimeout(id)
+  }, [total, ready])
+
+  // Counted in a ref and flipped ONCE, rather than held in state: 352 tiles
+  // reporting in would otherwise be 352 re-renders of the whole layer.
+  const settled = () => {
+    const { ok, bad } = health.current
+    if (ok + bad >= total && ok > 0) setReady(true)
+  }
 
   if (!tiles) return null
   if (health.current.bad >= FAIL_LIMIT && health.current.ok === 0) return null
@@ -59,7 +102,13 @@ export default function TileBase({ map }) {
   if (!list.length) return null
 
   return (
-    <div aria-hidden="true" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
+    <div aria-hidden="true" style={{
+      position: 'absolute',
+      inset: 0,
+      pointerEvents: 'none',
+      opacity: ready ? 1 : 0,
+      transition: 'opacity 420ms ease-out',
+    }}>
       {list.map((t) => (
         <img
           key={t.key}
@@ -73,10 +122,10 @@ export default function TileBase({ map }) {
           // zooming out, which is the flicker this whole file exists to avoid.
           // The set is fetched once, in full, and cached.
           decoding="async"
-          onLoad={(e) => {
+          onLoad={() => {
             health.current.ok += 1
             health.current.bad = 0
-            e.currentTarget.style.visibility = 'visible'
+            settled()
           }}
           onError={(e) => {
             // Hide it right here rather than re-rendering: a browser paints a
@@ -87,6 +136,7 @@ export default function TileBase({ map }) {
             failed.current.add(t.url)
             health.current.bad += 1
             if (health.current.bad === FAIL_LIMIT && health.current.ok === 0) bump((n) => n + 1)
+            settled()
           }}
           style={{
             position: 'absolute',
@@ -95,9 +145,6 @@ export default function TileBase({ map }) {
             width: `${t.width}%`,
             height: `${t.height}%`,
             userSelect: 'none',
-            // Shown only once it has actually decoded, so a slow tile never
-            // flashes a placeholder over the fallback imagery underneath.
-            visibility: 'hidden',
           }}
         />
       ))}

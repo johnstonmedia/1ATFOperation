@@ -17,6 +17,30 @@ keep entries short and focused on what a new collaborator needs to know.
 
 ---
 
+## 2026-09-15 (g) — The satellite layer arrives in one piece
+
+- **Fixed the tile-by-tile pop-in.** The map showed the 10 m static base and
+  then squares of SIX Maps imagery appearing across it for a second or two.
+  Cause: each of the 352 tiles un-hid itself in its own `onLoad`, so the map was
+  not swapping from static art to imagery ONCE — it was doing it 352 times, in
+  whatever order the network answered.
+- **The same defect as level-switching, at a different scale**, and the same
+  answer: fewer swaps, not faster ones. Tiles are now always visible and the
+  CONTAINER fades in once (420 ms) when the set is done.
+- **"Done" is every tile settled** — each `<img>` fires exactly one of
+  load/error, so the count always gets there — with an 8 s timeout as the floor
+  in case a request hangs, and that only reveals if ≥60% of the set actually
+  loaded. A half-tiled reveal would just be the patchwork again.
+- Counts stay in a ref and flip `ready` exactly once; 352 tiles reporting into
+  React state would be 352 re-renders of the whole layer.
+- Verified with the stand-in tile server delaying responses randomly up to
+  2.5 s: **0 samples where the layer was visible with an incomplete set**, first
+  visible at 2400 ms with 352/352 loaded. Failure path re-checked too — with
+  every tile 404ing, `FAIL_LIMIT` drops the layer from the DOM and the static
+  floor is all that shows, no torn-image boxes.
+
+---
+
 ## 2026-09-15 (f) — Ground taken today looks like ground taken any other day
 
 - **Removed the "TAKEN TODAY" marking from the print sheets** — `drawGains`
