@@ -75,16 +75,15 @@ export const MAPS = [
     // FULL sheet: this is where the map opens, not a crop, so a visitor can
     // still pan or zoom out to the rest.
     focus: { x0: 58, y0: 36, x1: 270, y1: 248, label: 'SECTOR 8' },
-    // Where the PRINT crops to. The screen's focus box is square-ish, which on
-    // a landscape sheet leaves a column of page the map cannot fill — and that
-    // column, plus a header band, is the "frame" that was taking the sheet
-    // away from the progress. `printFocus` is the same ground widened to the
-    // page's own proportions, so the map covers the WHOLE sheet and the key
-    // floats over a quiet corner of it instead of sitting beside it.
-    // ⚠️ Shaped to the PAGE (1.414:1) and sized so the camp clears the sheet's
-    // bottom band — an area whose name lands under the band has effectively
-    // lost its label, which is what happened to AA Papa at a tighter crop.
-    printFocus: { x0: 0, y0: 41, x1: 320, y1: 267 },
+    // The ground the PRINT has to show: the area of operations plus a little
+    // air. ⚠️ NOT A CROP RECTANGLE. It used to be one, shaped to a landscape
+    // A3 (1.414:1) by hand, which meant the sheet's orientation was encoded
+    // here as well as in framesPdf.js — turning the page silently cropped camp
+    // ground. `fitCrop` in framesPdf.js now GROWS this rect to whatever shape
+    // the page is and reserves the bottom band's height, so every cell named
+    // here is on the sheet and none of it hides under the band (which is what
+    // happened to AA Papa at a tighter crop). Declare ground, not proportions.
+    printFocus: { x0: 62, y0: 44, x1: 264, y1: 261 },
     image: asset('singleton.webp'),
     pixelWidth: 1080,
     pixelHeight: 765,

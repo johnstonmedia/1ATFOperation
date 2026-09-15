@@ -207,7 +207,7 @@ function PrintSheets({ territory, frames, zones, mapId }) {
         {busy ? 'BUILDING…' : `🖨 PRINT SHEETS — ${frames.length} PAGE${frames.length === 1 ? '' : 'S'} (PDF)`}
       </button>
       <span className="mono dim" style={{ fontSize: 10 }}>
-        A3 landscape, one page per recorded day
+        A3 portrait, one page per recorded day
       </span>
       {err && <span className="mono" style={{ fontSize: 10, color: 'var(--hostile)' }}>{err}</span>}
     </div>

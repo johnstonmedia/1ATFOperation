@@ -851,8 +851,8 @@ assuming a page exists).
   it prints exactly the frames the replay above already plays, because Home
   hands it the RELEASED set, so it can never leak a day RHQ has not revealed.
   One
-  **A3-landscape** page per frame at 150 dpi, cropped to the map's `focus` box
-  so print shows what the screen shows. These are WALL SHEETS read from across
+  **A3-PORTRAIT** page per frame at 150 dpi, cropped to the map's own ground so
+  print shows what the screen shows. These are WALL SHEETS read from across
   a room, which sets every decision below.
   - ⚠️ **THE MAP IS THE WHOLE SHEET.** Not bled to the edges with a header
     band above and a key column beside it — that arrangement still spent a
@@ -862,15 +862,27 @@ assuming a page exists).
     a gradient scrim, and everything else is ONE THIN BAND across the bottom
     (`drawStrip`). ⚠️ The title must be drawn AFTER the map — before it, it is
     simply painted over.
-  - **`printFocus`** on the map record is the print's own crop: the same ground
-    as `focus` widened to the PAGE's proportions, so the map fills the sheet
-    without stretching and without cropping camp ground. A square-ish crop on a
-    landscape page is what forced a side column in the first place.
-    ⚠️ It is as TIGHT as the bottom band allows, and those two numbers are
-    coupled: the band's height is dead space at the bottom of the crop, so a
-    taller band forces a taller crop, which on a fixed page aspect forces a
-    WIDER one — i.e. zooms the camp out. That is why the band runs four columns
-    at 24 px rather than three at 26. Shrink the band before widening the crop.
+  - ⚠️ **ORIENTATION IS `PAGE_W`/`PAGE_H` AND NOTHING ELSE** (2026-09-15, when
+    the sheets went PORTRAIT). It used not to be: `printFocus` in maps.js was a
+    CROP RECTANGLE, hand-shaped to a landscape A3's 1.414:1, so the page's
+    orientation was written down in two places and turning the sheet silently
+    cropped camp ground off the sides.
+  - **`printFocus`** now declares the GROUND that must appear — the area of
+    operations plus a little air — and `fitCrop` in framesPdf.js grows it to
+    whatever shape the page is. It only ever grows, so every cell the map
+    declares is on the sheet whichever way up it is printed, and the crop's
+    aspect equals the page's exactly, so nothing is stretched. It also reserves
+    the bottom band's height, because ground under the band is ground you
+    cannot read — an area whose name lands there has effectively lost its label,
+    which is what happened to AA Papa at a tighter crop. Verified on the
+    portrait sheets: crop aspect 0.70726 against a page aspect of 0.70726, AO
+    bbox inside the crop, AO bottom at row 256 against a band top at row 277.
+    ⚠️ Declare GROUND here, never proportions.
+  - The band's column count follows the page width (`stripCols`, ~600 px each):
+    **four across a landscape sheet, three across a portrait one**. `fitCrop`
+    has to know the band's height before the map is drawn, so `stripHeight` is
+    a pure function both it and `drawStrip` call — the crop and the band cannot
+    disagree about how tall it is.
   - ⚠️ **The bottom band is deliberately SMALL, and shouldn't grow back.** It
     carries only what cannot be read off the ground — which area each number
     is, its visit count, which companies have been — plus four key swatches and

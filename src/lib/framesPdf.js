@@ -26,13 +26,20 @@ import { COMPANIES } from '../firebase/seed'
 const COMPANY_COLOR = COMPANIES.reduce((a, c) => ({ ...a, [c.letter]: c.accent }), {})
 import { renderPrintBase } from './replayExport'
 
-// ⚠️ A3 LANDSCAPE at 150 dpi — these are wall sheets, read from across a room
+// ⚠️ A3 PORTRAIT at 150 dpi — these are wall sheets, read from across a room
 // at camp, not handouts. Everything below is sized for that: the map takes as
 // much of the page as its shape allows and the chrome is one header line plus
 // the key, because a page that spends its area on framing is a page whose map
 // is too small to read standing up.
-const PAGE_W = 2480
-const PAGE_H = 1754
+//
+// ⚠️ ORIENTATION IS THESE TWO NUMBERS AND NOTHING ELSE. Swapping them was a
+// hand-tuning exercise once, because the map's crop rectangle was written out
+// in maps.js already shaped to a landscape sheet. It isn't any more:
+// `printFocus` declares the GROUND that has to appear and `fitCrop` below
+// grows it to whatever shape the page is, so turning the sheet the other way
+// is just these two constants.
+const PAGE_W = 1754
+const PAGE_H = 2480
 const MARGIN = 46
 const JPEG_QUALITY = 0.93
 // The map panel is rendered at this multiple of its printed size and drawn
@@ -193,14 +200,20 @@ function drawGains(ctx, prevCells, cells, cols, rows, w, h) {
  * numeral) was removed: it is either obvious from the map or it is not worth
  * the paper. Don't grow this back into a panel.
  */
+// The band runs as many columns as the page is wide enough for — four across
+// an A3 landscape sheet, three across a portrait one — at roughly 600 px each,
+// which is what a long area name plus its count and letters needs. Its height
+// is dead ground at the bottom of the crop, so `fitCrop` has to know it before
+// the map is drawn; hence a pure function both can call.
+const STRIP_ROW_H = 24
+const stripCols = () => Math.max(2, Math.round(PAGE_W / 600))
+const stripHeight = (n) => 30 + Math.ceil(n / stripCols()) * STRIP_ROW_H + 26
+
 function drawStrip(ctx, listed, progress, prevProgress, showRHQ, map) {
-  // FOUR columns, not three: the band's height is what forces the map's crop
-  // to be wider than the camp (a shorter band lets the sheet zoom in), so the
-  // list runs wide and shallow rather than tall.
-  const COLS = 4
+  const COLS = stripCols()
   const rows = Math.ceil(listed.length / COLS)
-  const rowH = 24
-  const H = 30 + rows * rowH + 26
+  const rowH = STRIP_ROW_H
+  const H = stripHeight(listed.length)
   const y0 = PAGE_H - H
 
   ctx.save()
@@ -293,6 +306,39 @@ export function framesPdfSupported() {
  * counts are that frame's camp day, not today's), `zones` the visible zones,
  * and `title` an optional override for the document heading.
  */
+/**
+ * Grow the ground a map says must be printed into the rectangle the PAGE wants.
+ *
+ * `printFocus` names the ground — the area of operations plus a little air. It
+ * is deliberately NOT the crop: a crop has to match the sheet's proportions
+ * exactly or the map comes out stretched, and it has to leave the bottom band
+ * standing on ground nobody needs to read, since an area whose name lands under
+ * the band has effectively lost its label (which is what happened to AA Papa at
+ * a tighter crop). Both of those are page facts, not map facts, so they are
+ * worked out here and the map record stays orientation-agnostic.
+ *
+ * The rectangle only ever GROWS: whatever the page shape, every cell the map
+ * declared is still on the sheet.
+ */
+function fitCrop(f, cols, rows, bandH) {
+  const need = { w: Math.max(1, f.x1 - f.x0), h: Math.max(1, f.y1 - f.y0) }
+  const above = Math.max(1, PAGE_H - bandH)     // page height the map may use
+  // Tall enough that `need` clears the band, and wide enough to hold it.
+  let ch = Math.max(need.h * (PAGE_H / above), need.w * (PAGE_H / PAGE_W))
+  let cw = ch * (PAGE_W / PAGE_H)
+  // A crop bigger than the grid can't be filled, so cap it and let the other
+  // axis follow — the page keeps its shape, the map just shows more ground.
+  const cap = Math.min(cols / cw, rows / ch, 1)
+  cw *= cap; ch *= cap
+  // Centre horizontally on the ground; vertically, centre it in the part of
+  // the page the band is not covering.
+  let x0 = (f.x0 + f.x1) / 2 - cw / 2
+  let y0 = (f.y0 + f.y1) / 2 - (ch * (above / PAGE_H)) / 2
+  x0 = Math.min(Math.max(0, x0), Math.max(0, cols - cw))
+  y0 = Math.min(Math.max(0, y0), Math.max(0, rows - ch))
+  return { x0, y0, x1: x0 + cw, y1: y0 + ch }
+}
+
 export async function exportFramesPdf({ territory, frames: campaignFrames, zones = [], progressFor = null, title }) {
   const frames = sortFrames(campaignFrames || [])
   if (!frames.length) throw new Error('No campaign frames to print yet.')
@@ -303,26 +349,17 @@ export async function exportFramesPdf({ territory, frames: campaignFrames, zones
   // box is cropped to it here too, rather than printing ground the portal
   // deliberately frames out.
   // The print crops wider than the screen does — see `printFocus` in maps.js.
-  const f = map.printFocus || map.focus || { x0: 0, y0: 0, x1: cols, y1: rows }
-  const cropW = Math.max(1, f.x1 - f.x0)
-  const cropH = Math.max(1, f.y1 - f.y0)
+  const want = map.printFocus || map.focus || { x0: 0, y0: 0, x1: cols, y1: rows }
 
   // ⚠️ THE MAP IS THE WHOLE SHEET. Not bled to the edges with a header above
   // and a key beside it — that arrangement still spent a quarter of an A3 on
   // chrome, and chrome is what the map is competing with for the millimetres
   // that decide whether an area reads from across a room. The map now covers
   // the page corner to corner, the title sits ON it, and the key floats in a
-  // quiet corner OF it. `printFocus` is shaped to the page so this costs no
-  // stretching and crops no camp ground.
+  // quiet corner OF it. `fitCrop` shapes the crop to the page, so this costs
+  // no stretching and crops no camp ground.
   const drawW = PAGE_W
   const drawH = PAGE_H
-  const keyW = 720
-
-  // Render the whole map once at the resolution the crop needs, then take the
-  // focus rectangle out of it — the renderers all work in full-grid
-  // coordinates, so cropping at the end keeps every one of them unchanged.
-  const fullW = Math.round((drawW * SUPERSAMPLE * cols) / cropW)
-  const fullH = Math.round((drawH * SUPERSAMPLE * rows) / cropH)
   // ⚠️ Tiles are fetched for the FOCUS REGION ONLY. The page crops to that box,
   // so tiles covering the rest of the frame would be downloaded and then thrown
   // away — and, because the tile budget is what picks the zoom level, paying
@@ -349,6 +386,18 @@ export async function exportFramesPdf({ territory, frames: campaignFrames, zones
   const listed = zones
     .filter((z) => (known.size ? known.has(z.id) : z.cells?.length >= 3))
     .sort((a, b) => (a.label[1] - b.label[1]) || (a.label[0] - b.label[0]))
+
+  // The crop is derived LAST, because it depends on how tall the band turned
+  // out — which depends on how many areas there are to list.
+  const f = fitCrop(want, cols, rows, stripHeight(listed.length))
+  const cropW = Math.max(1, f.x1 - f.x0)
+  const cropH = Math.max(1, f.y1 - f.y0)
+
+  // Render the whole map once at the resolution the crop needs, then take the
+  // crop rectangle out of it — the renderers all work in full-grid
+  // coordinates, so cropping at the end keeps every one of them unchanged.
+  const fullW = Math.round((drawW * SUPERSAMPLE * cols) / cropW)
+  const fullH = Math.round((drawH * SUPERSAMPLE * rows) / cropH)
 
   const region = { x0: f.x0 / cols, x1: f.x1 / cols, y0: f.y0 / rows, y1: f.y1 / rows }
   // Reported back to the caller so the Ops Centre can say whether the print

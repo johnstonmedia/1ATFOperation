@@ -17,6 +17,34 @@ keep entries short and focused on what a new collaborator needs to know.
 
 ---
 
+## 2026-09-15 (d) — The print sheets are A3 PORTRAIT
+
+- **`PAGE_W`/`PAGE_H` swapped to 1754 x 2480.** The camp's area of operations is
+  190 x 207 cells — very slightly TALLER than it is wide — so portrait suits the
+  ground better than landscape ever did.
+- ⚠️ **Orientation was written down in two places, and that was the real work.**
+  `printFocus` in maps.js was a CROP RECTANGLE, hand-shaped to a landscape A3's
+  1.414:1 (`{x0:0, y0:41, x1:320, y1:267}` — note x0 at 0, chosen to fill a wide
+  page, not because the camp reaches the sheet edge). Turning the page over that
+  would have cropped camp ground off the sides. It now declares the GROUND that
+  must appear (`{x0:62, y0:44, x1:264, y1:261}` — the AO plus ~6 cells of air)
+  and new `fitCrop` in framesPdf.js grows it to whatever shape the page is.
+- **`fitCrop` only ever grows the rectangle**, so every declared cell is on the
+  sheet whichever way up it prints, and it reserves the bottom band's height —
+  ground under the band is ground you cannot read. Verified numerically: crop
+  aspect **0.70726 against a page aspect of 0.70726** (no stretch), AO bbox
+  68-258 x 49-256 inside the crop 62-264 x 20.4-306, AO bottom at row 256
+  against a band top at row 277.4.
+- **The band's columns follow the page width** (`stripCols`, ~600 px each): four
+  across landscape, three across portrait. `fitCrop` needs the band's height
+  before the map is drawn, so `stripHeight` is a pure function both it and
+  `drawStrip` call — the crop and the band can't disagree about it.
+- Home's caption now reads "A3 portrait". Dead `keyW` removed.
+- Turning the sheets back, or onto any other page shape, is now those two
+  constants and nothing else.
+
+---
+
 ## 2026-09-15 (c) — The print sheets name the companies on the ground
 
 - **Which COYs have been through each area is now on the map, not just in the
