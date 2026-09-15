@@ -76,6 +76,15 @@ export function visibleZones(map, slice) {
   return all.filter((z) => !hidden.has(z.id))
 }
 
+// One FRAME's zones. `hiddenIds` is that frame's own list (see
+// frameHiddenZones in campaign.js); anything other than an array means the
+// frame has no opinion and follows the map, which is the default.
+export function zonesForFrame(map, slice, hiddenIds) {
+  if (!Array.isArray(hiddenIds)) return visibleZones(map, slice)
+  const hidden = new Set(hiddenIds)
+  return zonesFor(map).filter((z) => !hidden.has(z.id))
+}
+
 export const zoneCount = (mapId) => zonesFor(mapId).length
 
 // Group for the ops list and the map key, in a stable order.

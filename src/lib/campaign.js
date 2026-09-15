@@ -58,6 +58,24 @@ export function frameUsesLabelOverrides(frames) {
 }
 
 /**
+ * Which camp zones each frame hides, in order — or `null` for "whatever the
+ * map is set to".
+ *
+ * ⚠️ `null` IS THE DEFAULT AND IT MEANS INHERIT, not "hide nothing". A frame
+ * with no `hiddenZones` field follows the map-level `zoneVisibility` slice,
+ * which is how every frame written before this existed keeps behaving exactly
+ * as it did. Only a frame RHQ has actually customised carries its own list,
+ * and that list REPLACES the map's rather than adding to it — the frame owns
+ * its selection outright, so what you tick on a frame is what that frame
+ * shows, whatever the map default later becomes.
+ *
+ * Aligned with frameCells()/frameCaptions()/frameUsesLabelOverrides().
+ */
+export function frameHiddenZones(frames) {
+  return sortFrames(frames).map((f) => (Array.isArray(f.hiddenZones) ? f.hiddenZones : null))
+}
+
+/**
  * The frames the PUBLIC replay may show: everything not held back.
  *
  * Camp is generated all at once — every day of it is painted and stored

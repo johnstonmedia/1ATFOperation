@@ -461,6 +461,27 @@ assuming a page exists).
       committing zones is enough to get them on the map; RHQ only touches the
       panel to take something off. Controlled in Ops Centre → Map: Territory →
       ZONES (per zone, per kind, or a master toggle).
+    - ⚠️ **A FRAME CAN OVERRIDE THAT** (2026-09-15). Each campaign frame may
+      carry its own `hiddenZones` array; **absent means INHERIT the map's
+      selection**, which is what every frame written before this did and why
+      nothing had to migrate. A frame's list REPLACES the map's rather than
+      adding to it — the frame owns its selection outright, so what is ticked
+      on a frame is what that frame shows whatever the map default later
+      becomes. `frameHiddenZones()` in campaign.js reads them in frame order;
+      `zonesForFrame(map, slice, ids)` in mapZones.js resolves one.
+      ⚠️ Storage is the HIDDEN list while the UI ticks what SHOWS — deliberate,
+      so a zone added to the repo later appears on every frame by default
+      instead of being silently absent from all of them.
+      Set per row in Map: Territory's Campaign replay panel (the **Zones**
+      button, which reads `Zones 26/28` once a frame is customised);
+      **Follow the map** clears the list and returns the frame to inheriting.
+      Consumers: `CampaignReplayMap` builds `zoneLists` aligned 1:1 with the
+      frames and resolves at the **committed** frame (not the one being
+      animated into, so the overlay can't describe a different frame from the
+      hatch); both exporters take a `zonesAt(i)` callback. ⚠️ The PDF's bottom
+      band filters to the page's own zones too — leaving it on the
+      whole-campaign list would name areas in the strip that the same page
+      deliberately took off its map.
     - The importer pairs each zone's polygon with its label point **by
       containment, not by name**, because Earth's two names often differ
       ("Regimental Headquarters" polygon vs "RHQ" point; "NightLoc Ropes" vs

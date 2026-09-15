@@ -11,7 +11,7 @@ import MapLegend from '../../components/MapLegend'
 import { PAINT, RHQ_PAINT, colorOf, coyLabelOf } from '../../lib/territory'
 import { useUnpaintableMask } from '../../lib/unpaintableMask'
 import { MAPS, mapById, mapFor, gridRefOf, territorySlice, campaignStartSlice, framesForMap, withMapFrames, zoneVisibilitySlice, mapReleaseSlice } from '../../lib/maps'
-import { visibleZones, zonesByKind, zoneCount } from '../../lib/mapZones'
+import { visibleZones, zonesForFrame, zonesByKind, zoneCount } from '../../lib/mapZones'
 import { zoneProgress } from '../../lib/campPlan'
 import { hasCampPlan, campDays } from '../../lib/campPlan'
 import { buildCampFrames } from '../../lib/campFrames'
@@ -328,6 +328,7 @@ export default function MapEditor() {
         terr={terr}
         territory={savedTerr}
         zones={editorZones}
+        zoneSliceValue={state[zoneSlice]}
         editing={editing}
         onStartEdit={startEdit}
         onForceClearEdit={() => setEditing(null)}
@@ -499,6 +500,7 @@ function PreviewMapModal({ territory, onClose }) {
 // everything after it".
 function CampaignPanel({
   mapId, allFrames, frames, startSlice, defaultStartId, terr, territory, zones = [],
+  zoneSliceValue,
   editing, onStartEdit, onForceClearEdit,
   draftFrameCells, onClearDraftFrame, onClearAllDraftFrames,
 }) {
@@ -524,6 +526,28 @@ function CampaignPanel({
   // day. Generated frames carry `day`; a hand-painted one doesn't, and gets no
   // readout rather than a made-up one.
   const progressAt = (f) => (typeof f?.day === 'number' ? zoneProgress(mapId, f.day) : null)
+
+  // PER-FRAME ZONES. A frame with no `hiddenZones` list follows the map-level
+  // selection above (the `zoneVisibility` slice) — that is the default and
+  // what every frame written before this did. Customising one gives it a list
+  // of its own, which REPLACES the map's for that frame only.
+  const zonesAt = (i) => zonesForFrame(mapById(mapId), zoneSliceValue, sorted[i]?.hiddenZones)
+
+  const setFrameZones = (i, hiddenZones) => {
+    const next = sorted.map((f, k) => {
+      if (k !== i) return f
+      const row = { ...f, updatedAt: Date.now() }
+      // Dropping the field is how a frame goes back to following the map —
+      // an empty ARRAY would mean "this frame shows everything", which is a
+      // different thing and would stop tracking the map's selection.
+      if (hiddenZones) row.hiddenZones = hiddenZones
+      else delete row.hiddenZones
+      return row
+    })
+    writeFrames(next)
+    audit(hiddenZones ? 'Set the zones shown on a campaign frame' : 'Reset a campaign frame to the map\'s zones',
+      `frame ${i + 1}`)
+  }
 
   const [exporting, setExporting] = useState(false)
   const [exportPct, setExportPct] = useState(0)
@@ -737,7 +761,7 @@ function CampaignPanel({
     setPdfBusy(true)
     try {
       const { blob, pages, tiles } = await exportFramesPdf({
-        territory, frames: sorted, zones, progressFor: (i) => progressAt(sorted[i]),
+        territory, frames: sorted, zones, zonesAt, progressFor: (i) => progressAt(sorted[i]),
       })
       downloadBlob(blob, `campaign-frames-${new Date().toISOString().slice(0, 10)}.pdf`)
       audit('Exported campaign frames as PDF', `${pages} pages`)
@@ -769,7 +793,7 @@ function CampaignPanel({
     // Export replays against the SAVED territory (what the public sees), not
     // unsaved editor strokes.
     job.current = exportCampaignReplay({
-      territory, frames: sorted, zones,
+      territory, frames: sorted, zones, zonesAt,
       // Each frame's zone readout is that frame's own camp day, so the export
       // tells the same story the page does rather than stamping today's
       // percentages onto every frame.
@@ -911,6 +935,9 @@ function CampaignPanel({
               onToggleLabelOverrides={() => toggleLabelOverrides(i)}
               onToggleHidden={() => toggleHidden(i)}
               onReleaseThrough={() => releaseThrough(i)}
+              mapId={mapId}
+              frameZones={zonesAt(i)}
+              onSetFrameZones={(ids) => setFrameZones(i, ids)}
             />
           ))}
         </div>
@@ -930,13 +957,16 @@ function CampaignPanel({
 // One frame row. Keeps its own local label text so typing doesn't fire a
 // Firestore write per keystroke — the label only commits (onRelabel) when
 // the field loses focus or Enter is pressed, and only if it actually changed.
-function FrameRow({ f, index, isFirst, isLast, isEditing, isDefaultStart, hasDraft, onMove, onEdit, onDuplicate, onDelete, onRelabel, onSetDefaultStart, onToggleLabelOverrides, onToggleHidden, onReleaseThrough }) {
+function FrameRow({ f, index, isFirst, isLast, isEditing, isDefaultStart, hasDraft, onMove, onEdit, onDuplicate, onDelete, onRelabel, onSetDefaultStart, onToggleLabelOverrides, onToggleHidden, onReleaseThrough, mapId, frameZones, onSetFrameZones }) {
   const [label, setLabel] = useState(f.label || '')
+  const [zonesOpen, setZonesOpen] = useState(false)
+  const custom = Array.isArray(f.hiddenZones)
   useEffect(() => { setLabel(f.label || '') }, [f.label])
   const commit = () => { if (label !== (f.label || '')) onRelabel(label) }
 
   return (
-    <div className="row center wrap" style={{ gap: 8, borderTop: '1px solid var(--line)', paddingTop: 6,
+    <div className="col" style={{ gap: 0, borderTop: '1px solid var(--line)' }}>
+    <div className="row center wrap" style={{ gap: 8, paddingTop: 6,
       background: isEditing ? 'rgba(54,224,192,0.08)' : undefined, opacity: f.hidden && !isEditing ? 0.62 : 1 }}>
       <span className="mono accent" style={{ fontSize: 11, flex: '0 0 auto' }}>{index === 0 ? 'START' : String(index + 1).padStart(2, '0')}</span>
       <input
@@ -956,6 +986,13 @@ function FrameRow({ f, index, isFirst, isLast, isEditing, isDefaultStart, hasDra
         <input type="checkbox" checked={!!f.useLabelOverrides} onChange={onToggleLabelOverrides} style={{ width: 'auto' }} />
         <span className="mono dim" style={{ fontSize: 10 }}>Manual labels</span>
       </label>
+      <button className={custom ? 'primary' : 'ghost'} style={{ padding: '3px 8px', flex: '0 0 auto' }}
+        onClick={() => setZonesOpen((v) => !v)}
+        title={custom
+          ? `This frame shows its own selection of areas (${frameZones.length} of ${zoneCount(mapId)}), not the map's`
+          : "This frame shows whatever the map's ZONES panel shows. Click to give it its own selection."}>
+        {custom ? `Zones ${frameZones.length}/${zoneCount(mapId)}` : 'Zones'}
+      </button>
       <span className="mono dim" style={{ fontSize: 10, flex: '0 0 auto' }}>{new Date(f.ts).toLocaleDateString()}</span>
       <div className="row" style={{ gap: 4, flex: '0 0 auto' }}>
         <button className="ghost" style={{ padding: '3px 8px' }} onClick={() => onMove(-1)} disabled={isFirst} title="Move earlier">↑</button>
@@ -983,6 +1020,86 @@ function FrameRow({ f, index, isFirst, isLast, isEditing, isDefaultStart, hasDra
         )}
         <button className="danger ghost" style={{ padding: '3px 8px' }} onClick={onDelete}>Delete</button>
       </div>
+    </div>
+    {zonesOpen && (
+      <FrameZonePicker
+        mapId={mapId}
+        shown={frameZones}
+        custom={custom}
+        onApply={onSetFrameZones}
+        onClose={() => setZonesOpen(false)}
+      />
+    )}
+    </div>
+  )
+}
+
+// WHICH AREAS THIS ONE FRAME SHOWS.
+//
+// The map has a selection of its own (ZonesPanel below) and that is what a
+// frame uses until RHQ gives it one — "Follow the map" is the default state,
+// not an empty selection, and clearing it here puts the frame back to
+// following rather than to showing nothing. The distinction matters: a frame
+// that follows keeps tracking later changes to the map's selection, a frame
+// with its own list does not.
+//
+// Ticks are what SHOWS, which is the opposite of how it is stored (`hiddenZones`
+// is the list left off). RHQ thinks in "show me these"; the storage is a
+// hidden-list so that a zone added to the repo later appears by default rather
+// than being silently absent from every frame.
+function FrameZonePicker({ mapId, shown, custom, onApply, onClose }) {
+  const groups = zonesByKind(mapId)
+  const shownIds = new Set(shown.map((z) => z.id))
+  const all = groups.flatMap((g) => g.zones)
+  const apply = (nextShown) => onApply(all.filter((z) => !nextShown.has(z.id)).map((z) => z.id))
+  const toggle = (id) => {
+    const next = new Set(shownIds)
+    if (next.has(id)) next.delete(id); else next.add(id)
+    apply(next)
+  }
+  const toggleKind = (zs) => {
+    const next = new Set(shownIds)
+    const anyShown = zs.some((z) => next.has(z.id))
+    zs.forEach((z) => (anyShown ? next.delete(z.id) : next.add(z.id)))
+    apply(next)
+  }
+  return (
+    <div className="col" style={{ gap: 6, padding: '8px 10px 10px 10px', margin: '4px 0 6px 0',
+      background: 'rgba(54,224,192,0.05)', border: '1px solid var(--line)', borderRadius: 4 }}>
+      <div className="row between center wrap" style={{ gap: 8 }}>
+        <span className="mono dim" style={{ fontSize: 10 }}>
+          {custom
+            ? `AREAS ON THIS FRAME — ${shown.length} of ${all.length}. This frame no longer follows the map's selection.`
+            : `AREAS ON THIS FRAME — following the map's selection (${shown.length} of ${all.length}). Untick one to give this frame its own.`}
+        </span>
+        <div className="row" style={{ gap: 6 }}>
+          <button className="ghost" style={{ padding: '2px 8px', fontSize: 10 }}
+            onClick={() => apply(new Set(all.map((z) => z.id)))}>Show all</button>
+          {custom && (
+            <button className="ghost" style={{ padding: '2px 8px', fontSize: 10 }} onClick={() => onApply(null)}
+              title="Go back to showing whatever the map's ZONES panel shows, now and in future">
+              Follow the map
+            </button>
+          )}
+          <button className="ghost" style={{ padding: '2px 8px', fontSize: 10 }} onClick={onClose}>Close</button>
+        </div>
+      </div>
+      {groups.map(({ kind, style, zones: zs }) => (
+        <div key={kind} className="col" style={{ gap: 3 }}>
+          <button className="ghost" style={{ padding: '1px 6px', fontSize: 9, alignSelf: 'flex-start', color: style.color }}
+            onClick={() => toggleKind(zs)}>
+            {style.label.toUpperCase()} — {zs.some((z) => shownIds.has(z.id)) ? 'hide all' : 'show all'}
+          </button>
+          <div className="row wrap" style={{ gap: 8 }}>
+            {zs.map((z) => (
+              <label key={z.id} className="row center" style={{ gap: 4, flex: '0 0 auto' }}>
+                <input type="checkbox" checked={shownIds.has(z.id)} onChange={() => toggle(z.id)} style={{ width: 'auto' }} />
+                <span className="mono" style={{ fontSize: 10, opacity: shownIds.has(z.id) ? 1 : 0.5 }}>{z.name}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+      ))}
     </div>
   )
 }

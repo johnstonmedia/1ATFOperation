@@ -17,6 +17,40 @@ keep entries short and focused on what a new collaborator needs to know.
 
 ---
 
+## 2026-09-15 (h) — Per-frame zone visibility
+
+- **Each campaign frame can now choose which camp areas it shows.** New
+  `hiddenZones` array on a frame doc; **absent means inherit the map-level
+  `zoneVisibility` selection**, so every existing frame behaves exactly as it
+  did and nothing migrates.
+- **A frame's list REPLACES the map's, it doesn't add to it.** The frame owns
+  its selection outright — what is ticked on a frame is what that frame shows,
+  whatever the map default later becomes. Clearing it ("Follow the map") is a
+  different state from ticking nothing, and the code deletes the field rather
+  than storing `[]` so the two can't be confused.
+- ⚠️ **Storage is the HIDDEN list while the UI ticks what SHOWS.** Deliberate:
+  a zone added to the repo later then appears on every frame by default,
+  instead of being silently absent from all of them.
+- New `frameHiddenZones()` (campaign.js) and `zonesForFrame()` (mapZones.js).
+  `CampaignReplayMap` builds `zoneLists` aligned 1:1 with frames and resolves at
+  the **committed** frame, not the one being animated into, so the zone overlay
+  can never describe a different frame from the hatch under it. Both exporters
+  take a `zonesAt(i)` callback.
+- ⚠️ The PDF's bottom band filters to the page's own zones as well — leaving it
+  on the whole-campaign list would have named areas in the strip that the same
+  page had deliberately taken off its map.
+- UI: a **Zones** button on each frame row in Map: Territory → Campaign replay,
+  opening a per-kind / per-zone picker (`FrameZonePicker`). It reads
+  `Zones 26/28` once customised, plain `Zones` while following the map.
+- Verified end to end: unticking NAVEX and AA Kilo on frame 3 stored
+  `hiddenZones: ["navex","aa-kilo"]` on that frame and `null` on the other
+  four; the public replay rendered **42 zone labels on frame 3 against 46 on
+  every other frame**, with AA Hotel still present on all five; and the printed
+  sheet 3 lost both areas from the map AND from the bottom band while sheet 1
+  still lists NAVEX 0/13.
+
+---
+
 ## 2026-09-15 (g) — The satellite layer arrives in one piece
 
 - **Fixed the tile-by-tile pop-in.** The map showed the 10 m static base and

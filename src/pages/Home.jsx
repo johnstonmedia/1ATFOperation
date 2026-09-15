@@ -7,7 +7,7 @@ import { useUnseen, useUnseenIntel, hasIntelBaseline, markIntelSeen } from '../h
 import { decryptProgress } from '../lib/intelProgress'
 import { COMPANIES, PHONETIC, smeacOf, movementsOf } from '../firebase/seed'
 import { mapById, territorySlice, campaignStartSlice, framesForMap, zoneVisibilitySlice, isMapPublic, publicMaps } from '../lib/maps'
-import { visibleZones } from '../lib/mapZones'
+import { visibleZones, zonesForFrame } from '../lib/mapZones'
 import { zoneProgress, hasCampPlan } from '../lib/campPlan'
 import { sortFrames, releasedFrames } from '../lib/campaign'
 import { exportFramesPdf, framesPdfSupported } from '../lib/framesPdf'
@@ -148,7 +148,7 @@ export default function Home() {
         />
       )}
       <MapSwitch live={live} defaultId={defaultMap.id} isOverride={isOverride} onView={viewMap} state={state} />
-      <PrintSheets territory={territory} frames={frames} zones={allZones} mapId={live.id} />
+      <PrintSheets territory={territory} frames={frames} zones={allZones} zoneSlice={state[zoneVisibilitySlice(live.id)]} mapId={live.id} />
 
       <div className="row wrap" style={{ marginTop: 20, gap: 16, alignItems: 'flex-start' }}>
         <div style={{ flex: '1 1 420px' }}>
@@ -174,7 +174,7 @@ export default function Home() {
 //
 // Hidden entirely when there is nothing to print, and the render is heavy
 // enough (five pages at print resolution, plus tiles) to need a busy state.
-function PrintSheets({ territory, frames, zones, mapId }) {
+function PrintSheets({ territory, frames, zones, zoneSlice, mapId }) {
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const plan = hasCampPlan(mapId)
@@ -189,6 +189,9 @@ function PrintSheets({ territory, frames, zones, mapId }) {
         territory,
         frames: sorted,
         zones,
+        // A frame may show its own selection of areas — same rule the replay
+        // above follows, so the sheets can't print areas the screen hid.
+        zonesAt: (i) => zonesForFrame(mapById(mapId), zoneSlice, sorted[i]?.hiddenZones),
         progressFor: plan
           ? (i) => (typeof sorted[i]?.day === 'number' ? zoneProgress(mapId, sorted[i].day) : null)
           : null,

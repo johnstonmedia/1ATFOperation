@@ -289,7 +289,7 @@ function fitCrop(f, cols, rows, bandH) {
   return { x0, y0, x1: x0 + cw, y1: y0 + ch }
 }
 
-export async function exportFramesPdf({ territory, frames: campaignFrames, zones = [], progressFor = null, title }) {
+export async function exportFramesPdf({ territory, frames: campaignFrames, zones = [], zonesAt = null, progressFor = null, title }) {
   const frames = sortFrames(campaignFrames || [])
   if (!frames.length) throw new Error('No campaign frames to print yet.')
   const map = mapFor(territory)
@@ -370,7 +370,10 @@ export async function exportFramesPdf({ territory, frames: campaignFrames, zones
     // beside a zone you can zoom into; on a wall sheet it has to be legible at
     // two metres with no zoom at all, and the default size — tuned for a
     // ~700px on-screen map — lands under 3 mm on A3.
-    drawMapZones(fc, zones, { cols, rows, w: fullW, h: fullH, scale: fullW / map.pixelWidth, progress, zoneScale: 1.15, printLabels: true })
+    // A frame may carry its own zone selection (frameHiddenZones); `zonesAt`
+    // resolves it, falling back to the map's for any frame that hasn't got one.
+    const pageZones = zonesAt?.(i) || zones
+    drawMapZones(fc, pageZones, { cols, rows, w: fullW, h: fullH, scale: fullW / map.pixelWidth, progress, zoneScale: 1.15, printLabels: true })
     const hatch = document.createElement('canvas')
     hatch.width = fullW; hatch.height = fullH
     renderTerritoryLayer(hatch.getContext('2d'), { cells: fr.cells, cols, rows, showRHQ, w: fullW, h: fullH })
@@ -424,7 +427,11 @@ export async function exportFramesPdf({ territory, frames: campaignFrames, zones
         { size: 18, spacing: 1.8, color: BOUNDARY, align: 'right', font: 'JetBrains Mono, monospace' })
     }
 
-    drawStrip(ctx, listed, progress, showRHQ, map)
+    // ⚠️ The band lists what the MAP shows on this page. Leaving it on the
+    // whole-campaign `listed` set would name areas in the strip that were
+    // deliberately taken off this frame's map.
+    const pageListed = zonesAt ? listed.filter((z) => pageZones.some((p) => p.id === z.id)) : listed
+    drawStrip(ctx, pageListed, progress, showRHQ, map)
 
 
 

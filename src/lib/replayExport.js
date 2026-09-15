@@ -377,7 +377,7 @@ function drawBanner(ctx, text, W, H, scale, { top = false } = {}) {
 // Render the campaign replay to a video Blob.
 // Returns { promise: Promise<{ blob, ext }>, cancel() }.
 // onProgress (0..1) reflects wall-clock progress through the recording.
-export function exportCampaignReplay({ territory, frames: campaignFrames, zones = [], progressFor = null, onProgress }) {
+export function exportCampaignReplay({ territory, frames: campaignFrames, zones = [], zonesAt = null, progressFor = null, onProgress }) {
   let cancelled = false
   let stopLoop = () => {}
 
@@ -422,7 +422,13 @@ export function exportCampaignReplay({ territory, frames: campaignFrames, zones 
     const commitHatch = (cells) => { hatch = renderHatch(cells, cols, rows, showRHQ, W, H) }
     // Zone percentages move with the committed frame, so the readout on a zone
     // is that frame's day rather than the whole campaign's end state.
-    const commitZones = (k) => { if (progressFor) zoneProgress = progressFor(k) }
+    // Zone PROGRESS and the zone SELECTION both follow the committed frame, so
+  // the overlay can never describe a frame other than the one on screen.
+  let frameZones = zones
+  const commitZones = (k) => {
+    if (progressFor) zoneProgress = progressFor(k)
+    frameZones = zonesAt?.(k) || zones
+  }
 
     // Everything painted onto the canvas for one instant of the replay. Split
     // out of the loop so the FIRST frame can be drawn before the recorder
@@ -444,10 +450,11 @@ export function exportCampaignReplay({ territory, frames: campaignFrames, zones 
     // Zone outlines sit UNDER the hatch, exactly as on the live map: a zone
     // says "this is the ropes course", the hatch says who holds it.
     let zoneProgress = progressFor ? progressFor(0) : null
+    frameZones = zonesAt?.(0) || zones
     const paintFrame = (cells, plan, waveT, caption) => {
       ctx.clearRect(0, 0, W, H)
       ctx.drawImage(base, 0, 0)
-      drawMapZones(ctx, zones, { cols, rows, w: W, h: H, scale: SCALE, progress: zoneProgress })
+      drawMapZones(ctx, frameZones, { cols, rows, w: W, h: H, scale: SCALE, progress: zoneProgress })
       ctx.drawImage(hatch, 0, 0)
       if (plan && waveT !== null) {
         renderWaveLayer(ctx, plan, waveT, { cols, rows, w: W, h: H })

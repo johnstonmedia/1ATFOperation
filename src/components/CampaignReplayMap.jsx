@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import PixelMap from './PixelMap'
 import MapLegend from './MapLegend'
-import { framesValid, frameCells, frameCaptions, frameUsesLabelOverrides, sortFrames, transitionPlan, transitionDuration } from '../lib/campaign'
+import { framesValid, frameCells, frameCaptions, frameUsesLabelOverrides, frameHiddenZones, sortFrames, transitionPlan, transitionDuration } from '../lib/campaign'
 import { renderWaveLayer } from '../lib/terrainRender'
 import { mapFor } from '../lib/maps'
+import { zonesFor } from '../lib/mapZones'
 
 // Campaign replay wrapper around PixelMap. On load it auto-plays the
 // campaign history — from RHQ's chosen default start frame (or the earliest
@@ -84,6 +85,19 @@ export default function CampaignReplayMap({ territory, frames: campaignFrames, z
     [campaignFrames, cols, rows],
   )
 
+  // Per-frame zone list, aligned 1:1 with `frames`. A frame that has never
+  // been customised carries no list and simply reuses the `zones` prop — the
+  // map-level selection — so this costs nothing until RHQ uses it.
+  const zoneLists = useMemo(() => {
+    if (!framesValid(campaignFrames, cols, rows)) return []
+    const all = zonesFor(mapFor(territory))
+    return frameHiddenZones(campaignFrames).map((ids) => {
+      if (!Array.isArray(ids)) return zones
+      const hidden = new Set(ids)
+      return all.filter((z) => !hidden.has(z.id))
+    })
+  }, [campaignFrames, cols, rows, territory, zones])
+
   // Per-frame id + label for the manual picker — includes frame 0's own
   // label (frameCaptions deliberately drops it, since it has no TRANSITION
   // caption). Index i here lines up 1:1 with frames[i].
@@ -120,13 +134,14 @@ export default function CampaignReplayMap({ territory, frames: campaignFrames, z
       captions={captions}
       frameMeta={frameMeta}
       labelFlags={labelFlags}
+      zoneLists={zoneLists}
       startIdx={startIdx}
       maxWidth={maxWidth}
     />
   )
 }
 
-function Replay({ territory, zones, zoneProgress, onFrame, frames, captions, frameMeta, labelFlags, startIdx, maxWidth }) {
+function Replay({ territory, zones, zoneProgress, onFrame, frames, captions, frameMeta, labelFlags, zoneLists, startIdx, maxWidth }) {
   const { cols, rows } = territory
   const transitions = frames.length - 1
   const perMs = useMemo(() => transitionDuration(transitions), [transitions])
@@ -299,6 +314,10 @@ function Replay({ territory, zones, zoneProgress, onFrame, frames, captions, fra
   // that explicitly opted in — every other frame places names automatically,
   // regardless of what's set for the live map / other frames.
   const activeLabelOverrides = labelFlags[committedIdx] ? (territory.labelOverrides || {}) : {}
+  // Zones follow the COMMITTED frame, not the one being animated into — the
+  // hatch layer commits once per frame and the zone overlay rides with it, so
+  // they can't disagree mid-wave.
+  const activeZones = zoneLists[committedIdx] || zones
 
   const caption = moveIdx >= 0 ? (captions[moveIdx] || '') : ''
   // At rest anywhere other than the live state, name the frame on screen so a
@@ -331,7 +350,7 @@ function Replay({ territory, zones, zoneProgress, onFrame, frames, captions, fra
         territory={{ ...territory, cells: frames[committedIdx], labelOverrides: activeLabelOverrides }}
         maxWidth={maxWidth}
         overlay={overlay}
-        zones={zones}
+        zones={activeZones}
         zoneProgress={zoneProgress}
         showCompanyLabels
       />
