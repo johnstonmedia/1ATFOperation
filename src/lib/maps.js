@@ -349,25 +349,32 @@ export function tilesFor(map, z, region = { x0: 0, y0: 0, x1: 1, y1: 1 }) {
  * the browser scale it with everything else under PixelMap's transform, exactly
  * as the static image always did. One fetch, one layer, nothing to re-settle.
  *
- * The level is whatever the budget affords over the region that matters: a map
- * with a `focus` box loads only that (the rest keeps the static art, which is
- * all anyone sees out there anyway), so the budget buys detail where people
- * look. Singleton lands on z16 over Sector 8 — ~2 m/px against the static
- * image's ~12 m/px, about 144 tiles fetched once and then cached.
+ * ⚠️ IT COVERS THE WHOLE FRAME, NOT THE FOCUS BOX (2026-09-15). It used to
+ * spend the budget on the `focus` region only, on the reasoning that nobody
+ * looks outside it. They do — `focus` is a STARTING VIEW, not a crop, and the
+ * zoom-out button is right there. What they saw was a hard-edged rectangle of
+ * SIX Maps imagery sitting on the 10 m static floor, in exactly the shape of
+ * the focus box, because the two do not match in tone or sharpness. Everything
+ * anyone sees on this site is SIX Maps, so the tile set has to reach the frame
+ * edge. Singleton: 352 tiles at z16, ~2 m/px against the static image's ~12 —
+ * the same level it had over Sector 8 before, now everywhere.
+ *
+ * `map.image` is still the floor underneath: what shows before the tiles land,
+ * and all that shows if the service is unreachable.
  */
-const FIXED_MAX_TILES = 160
+// 352 is what Singleton's whole frame costs at z16, and z17 would be 1333 —
+// there is no level between them, so the budget only has to sit in that gap.
+// Same number as the exporters' MAX_EXPORT_TILES, which already render the
+// whole frame at z16: page and video ask for identical ground.
+const FIXED_MAX_TILES = 400
 
 export function fixedTiles(map) {
   if (!map?.tiles) return null
-  const f = map.focus
-  const region = f
-    ? { x0: f.x0 / map.cols, x1: f.x1 / map.cols, y0: f.y0 / map.rows, y1: f.y1 / map.rows }
-    : undefined
   const minZ = map.tiles.minZoom ?? 0
   const maxZ = map.tiles.maxZoom ?? 19
   let best = null
   for (let z = minZ; z <= maxZ; z++) {
-    const list = tilesFor(map, z, region)
+    const list = tilesFor(map, z)
     if (!list.length) continue
     if (list.length > FIXED_MAX_TILES) break
     best = { z, list }

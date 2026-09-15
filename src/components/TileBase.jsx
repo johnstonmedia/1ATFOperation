@@ -29,10 +29,15 @@ import { fixedTiles } from '../lib/maps'
 // Tiles are positioned as PERCENTAGES of the frame, so they sit in the same
 // coordinate space as the cell grid with no conversion, and the static
 // `map.image` still renders underneath (PixelMap draws it first). That is the
-// floor: it shows before the tiles arrive, it covers any ground outside the
-// fetched region, and it is all that shows if the service is unreachable — no
-// signal on camp, or the endpoint moves. A dead tile URL degrades to the old
-// static map, never to a blank one.
+// floor: it shows before the tiles arrive, and it is all that shows if the
+// service is unreachable — no signal on camp, or the endpoint moves. A dead
+// tile URL degrades to the old static map, never to a blank one.
+//
+// ⚠️ The floor is a FALLBACK, never a neighbour. The tile set covers the whole
+// frame (see fixedTiles): when it only covered the map's `focus` box, the
+// static art showed everywhere else and the join between the two drew a
+// hard-edged rectangle across the map in the shape of that box. Don't narrow
+// the region again — everything anyone sees here is SIX Maps.
 
 // Give up after this many consecutive failures with nothing successful. The
 // static image is already showing, so there is nothing to gain by retrying a
@@ -61,6 +66,13 @@ export default function TileBase({ map }) {
           src={t.url}
           alt=""
           draggable={false}
+          // ⚠️ NOT loading="lazy". It was tried: Chromium fetched all 352 at
+          // the opening view regardless (they sit inside a transformed
+          // ancestor), so it bought nothing — and a browser that DID honour it
+          // would leave the static floor showing until the user finished
+          // zooming out, which is the flicker this whole file exists to avoid.
+          // The set is fetched once, in full, and cached.
+          decoding="async"
           onLoad={(e) => {
             health.current.ok += 1
             health.current.bad = 0
