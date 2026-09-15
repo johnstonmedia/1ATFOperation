@@ -576,11 +576,37 @@ assuming a page exists).
         the PDF section). Kept here as the shape of the trap: once ground is
         always somebody's, any test against `'.'` is dead code that fails
         silently.
-    - **The zone overlay therefore shows KIND, not progress** (`ZONE_TEXTURE`):
-      teal activity / blue night location / amber headquarters, solid outline
-      vs dashed for night locations, and a glyph on every name (▲ ☾ ◆) that
-      survives greyscale and colour-blindness. The only progress it prints is
-      the visit count (`2/13`), which is the same fact the painted cells show.
+    - ⚠️ **THE ZONE OVERLAY IS COLOURED BY WHO HOLDS IT** (2026-09-15 — this
+      REVERSES "the zone overlay shows KIND, not progress"; don't put the kind
+      palette back on the colour). `zoneInk(zone, p)` returns MERIDIAN RED until
+      every scheduled visit is done and 1ATF BLUE the moment it is, so the
+      outline agrees with the ground inside it. Before this, every activity area
+      wore the same pale teal from the first minute of camp to the last: an area
+      still entirely Meridian's looked exactly like one finished hours ago.
+      A zone with NO progress — no camp plan, or a permanent place like RHQ that
+      is never "taken" — keeps its kind colour from `ZONE_STYLE`; it is ours
+      throughout and painting it red would be a lie.
+      **KIND is still readable and deliberately not through colour**: the glyph
+      on every name (▲ ☾ ◆) and the dashed outline on night locations survive
+      greyscale, a bad projector and colour-blindness, which is why they carry
+      the distinction rather than the hue. The overlay also prints the visit
+      count (`2/13`), the same fact the painted cells show.
+      ⚠️ The PDF's bottom-band glyph uses `zoneInk` too — a band glyph still in
+      the kind colour would be the only thing on the sheet saying teal while the
+      ground says red.
+      ⚠️ **The zone WASH stayed low** (`ZONE_STYLE[kind].fill`, ~0.10). It was
+      raised to 0.22 alongside the hatch and put straight back: the wash now
+      says the same thing the hatch beneath it says, so stacking them doubled
+      the ink for no extra meaning and buried the satellite imagery. The
+      OUTLINE and NAME carry the state; the wash only hints at extent. HQ is the
+      exception at 0.16 — with no plan behind it, the wash is all it has.
+    - **Ink over imagery, not over pixel art** (2026-09-15): `HATCH_OPACITY` in
+      terrainRender.js is **0.66**, up from 0.48, and `lighten()`'s default in
+      territory.js is **0.3**, down from 0.5. Both were tuned when the map was
+      flat art; over satellite a half-transparent line vanishes into tree canopy
+      and shadow, and a 50% tint read as empty ground rather than as ground
+      loosely held. `MERIDIAN_COLOR` is `#d81826` and `ASSURE_BLUE` `#0b6fd8` —
+      deeper and more saturated than the originals for the same reason.
     - ⚠️ The converter **refuses to guess**: a cell that is not a recognisable
       company is reported by name and skipped, never silently dropped, and the
       run always prints what it ignored. The sheet legitimately contains
@@ -901,7 +927,7 @@ assuming a page exists).
   it prints exactly the frames the replay above already plays, because Home
   hands it the RELEASED set, so it can never leak a day RHQ has not revealed.
   One
-  **A3-PORTRAIT** page per frame at 150 dpi, cropped to the map's own ground so
+  **A3-LANDSCAPE** page per frame at 150 dpi, cropped to the map's own ground so
   print shows what the screen shows. These are WALL SHEETS read from across
   a room, which sets every decision below.
   - ⚠️ **THE MAP IS THE WHOLE SHEET.** Not bled to the edges with a header
@@ -912,11 +938,12 @@ assuming a page exists).
     a gradient scrim, and everything else is ONE THIN BAND across the bottom
     (`drawStrip`). ⚠️ The title must be drawn AFTER the map — before it, it is
     simply painted over.
-  - ⚠️ **ORIENTATION IS `PAGE_W`/`PAGE_H` AND NOTHING ELSE** (2026-09-15, when
-    the sheets went PORTRAIT). It used not to be: `printFocus` in maps.js was a
-    CROP RECTANGLE, hand-shaped to a landscape A3's 1.414:1, so the page's
-    orientation was written down in two places and turning the sheet silently
-    cropped camp ground off the sides.
+  - ⚠️ **ORIENTATION IS `PAGE_W`/`PAGE_H` AND NOTHING ELSE** (2026-09-15). It
+    used not to be: `printFocus` in maps.js was a CROP RECTANGLE, hand-shaped to
+    a landscape A3's 1.414:1, so the page's orientation was written down in two
+    places and turning the sheet silently cropped camp ground off the sides.
+    The sheets went portrait and then back to LANDSCAPE the same day, and the
+    second switch was a two-line change because of this — which is the point.
   - **`printFocus`** now declares the GROUND that must appear — the area of
     operations plus a little air — and `fitCrop` in framesPdf.js grows it to
     whatever shape the page is. It only ever grows, so every cell the map
@@ -925,9 +952,10 @@ assuming a page exists).
     the bottom band's height, because ground under the band is ground you
     cannot read — an area whose name lands there has effectively lost its label,
     which is what happened to AA Papa at a tighter crop. Verified on the
-    portrait sheets: crop aspect 0.70726 against a page aspect of 0.70726, AO
-    bbox inside the crop, AO bottom at row 256 against a band top at row 277.
-    ⚠️ Declare GROUND here, never proportions.
+    landscape sheets: crop aspect 1.41391 against a page aspect of 1.41391, crop
+    0–346.3 x 44–288.9 holding an AO bbox of 68–258 x 49–256, AO bottom at row
+    256 against a band top at row 261. (Portrait measured the same way:
+    0.70726 against 0.70726.) ⚠️ Declare GROUND here, never proportions.
   - The band's column count follows the page width (`stripCols`, ~600 px each):
     **four across a landscape sheet, three across a portrait one**. `fitCrop`
     has to know the band's height before the map is drawn, so `stripHeight` is

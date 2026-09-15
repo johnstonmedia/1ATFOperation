@@ -53,7 +53,7 @@ export default function MapZones({ map, zones, zoom = 1, progress = null }) {
         const base = ZONE_STYLE[z.kind] || ZONE_STYLE.activity
         const tex = ZONE_TEXTURE[z.kind] || ZONE_TEXTURE.activity
         const p = progress?.get(z.id)
-        const ink = zoneInk(z)
+        const ink = zoneInk(z, p)
         // The wash deepens as well as shifting hue, so progress is legible
         // even where two zones sit at similar points on the ramp.
         // A faint wash only; the hatch above is what says how much is held.
@@ -74,7 +74,7 @@ export default function MapZones({ map, zones, zoom = 1, progress = null }) {
       })}
       {zones.map((z) => {
         const tex = ZONE_TEXTURE[z.kind] || ZONE_TEXTURE.activity
-        const ink = zoneInk(z)
+        const ink = zoneInk(z, progress?.get(z.id))
         const tiny = !z.cells?.length
         return (
           <g key={`t-${z.id}`}>

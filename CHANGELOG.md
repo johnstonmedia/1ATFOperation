@@ -17,6 +17,43 @@ keep entries short and focused on what a new collaborator needs to know.
 
 ---
 
+## 2026-09-15 (i) — Landscape sheets, stronger ink, zones coloured by who holds them
+
+- **The print sheets are A3 LANDSCAPE again** — `PAGE_W`/`PAGE_H` back to
+  2480x1754. A two-line change this time, because orientation stopped being
+  written down in `printFocus` earlier today. Re-verified: crop aspect 1.41391
+  against a page aspect of 1.41391, crop 0–346.3 x 44–288.9 holding the AO bbox
+  68–258 x 49–256, AO bottom at row 256 against a band top at row 261.
+- ⚠️ **The zone overlay is now coloured by WHO HOLDS THE AREA, not by its kind**
+  (reverses "the zone overlay shows KIND, not progress"). `zoneInk(zone, p)`
+  returns Meridian red until every scheduled visit is done and 1ATF blue the
+  moment it is. Before this, every activity area wore the same pale teal from
+  the first minute of camp to the last — an area still entirely Meridian's
+  looked exactly like one finished hours ago.
+- **Kind is still readable, and deliberately not through colour**: the glyph on
+  every name (▲ ☾ ◆) and the dashed night-location outline survive greyscale and
+  colour-blindness, which is why they carry it. A zone with no progress behind
+  it (RHQ and the other permanent places) keeps its kind colour — it is ours
+  throughout, and painting it red would be a lie.
+- **Stronger ink over satellite imagery**: `HATCH_OPACITY` 0.48 → **0.66**,
+  `lighten()` default 0.5 → **0.3**, `MERIDIAN_COLOR` → `#d81826`, `ASSURE_BLUE`
+  → `#0b6fd8`. All four were tuned when the map was flat pixel art; over
+  imagery a half-transparent line disappears into tree canopy and a 50% tint
+  read as empty ground rather than ground loosely held.
+- ⚠️ **The zone wash went UP and came straight back down.** Raised to 0.22 with
+  the hatch, which buried the imagery: the wash now says the same thing the
+  hatch under it says, so stacking them doubled the ink for no extra meaning.
+  Back to ~0.10 (HQ 0.16, since it has no plan behind it and the wash is all it
+  has) with the outline and name carrying the state.
+- **Company labels now avoid zone names too.** `companyLabelPoints`' existing
+  `avoid` list took only `territory.places`; with companies owning ground again
+  there are six derived labels competing with two dozen zone names for the same
+  middles, which is how "AA HOTEL" ended up with "MERIDIAN" printed through it.
+  Fixed on the screen map and both exporters (the PDF draws no derived company
+  labels, so it needed nothing).
+
+---
+
 ## 2026-09-15 (h) — Per-frame zone visibility
 
 - **Each campaign frame can now choose which camp areas it shows.** New

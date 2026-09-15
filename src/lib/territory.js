@@ -29,14 +29,14 @@ export const MAP_PIXEL_HEIGHT = PRIMARY.pixelHeight
 // can't be painted (see lib/unpaintableMask.js, which reads it per map).
 export const OCEAN_COLOR = PRIMARY.blockFill
 
-export const MERIDIAN_COLOR = '#ff3b46'
+export const MERIDIAN_COLOR = '#d81826'
 const RHQ_COLOR = COMPANIES.find((c) => c.letter === 'R')?.accent || '#f39c12'
 
 // Colour and name for ground the WHOLE task force holds — deliberately NOT one
 // of the six company accents, so a unit-wide win reads as one at a glance.
 // Single source of truth: change these two values to restyle/relabel every
 // 1ATF-held cell, every recaptured stronghold beacon and the map key row.
-export const ASSURE_BLUE = '#1e9bff'
+export const ASSURE_BLUE = '#0b6fd8'
 export const SCU_LABEL = '1ATF'
 
 // The 1ATF owner code. An activity area is only CONQUERED once every company
@@ -65,7 +65,11 @@ export const RHQ_PAINT = { code: 'R', label: 'RHQ', color: RHQ_COLOR }
 const BASE_COLOR = {}
 ;[...PAINT, RHQ_PAINT].forEach((p) => { BASE_COLOR[p.code] = p.color })
 
-export function lighten(hex, amt = 0.5) {
+// ⚠️ The "light" variant is a TINT OF THE SAME COLOUR, not a pastel. At 0.5 it
+// washed out far enough that a part-taken area read as empty ground rather than
+// as ground somebody holds loosely — which matters more now the map is over
+// satellite imagery than it did over flat pixel art. 0.3 keeps the hue.
+export function lighten(hex, amt = 0.3) {
   const n = parseInt(hex.slice(1), 16)
   let r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255
   r = Math.round(r + (255 - r) * amt)

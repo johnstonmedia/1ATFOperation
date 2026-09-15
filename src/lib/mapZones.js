@@ -11,7 +11,7 @@
 // change once a year when the camp plan does, which is a repo change. Whether
 // a zone is SHOWN is RHQ's call at any moment, so that lives in a per-map
 // `zones` content slice instead (see zonesSlice() in lib/maps.js).
-import { ASSURE_BLUE as TASKFORCE_COLOR, SCU_LABEL } from './territory'
+import { ASSURE_BLUE as TASKFORCE_COLOR, MERIDIAN_COLOR, SCU_LABEL } from './territory'
 import { COMPANIES } from '../firebase/seed'
 import singleton from '../data/singleton-zones.json'
 
@@ -43,17 +43,23 @@ function scaledZones(mapId, cols, rows) {
   return out
 }
 
-// One style per kind. Deliberately outside the company palette: a zone is a
-// place, not an owner, and must never be mistaken for held ground. Company
-// colours arrive on top as territory hatch.
+// One style per kind — but `color` here is only the RESTING look, for a zone
+// with no camp plan behind it (a named place and nothing more) and for the
+// permanent ones like RHQ that are never "taken". Where there IS 
+// progress, the colour says STATE instead: see zoneInk below.
 //
-// `color` here is only the RESTING look — a map with no camp plan, where a
-// zone is just a named place. Where there IS a plan, the colour comes from the
-// progress ramp below instead and this palette steps back to texture only.
+// `fill` is the wash alpha, and it is deliberately LOW for the two kinds the
+// camp plan drives. ⚠️ It was raised to ~0.22 with the hatch and immediately
+// put back: the zone wash now says the same thing the territory hatch under it
+// says (red until taken, blue once taken), so stacking them doubled the ink for
+// no extra meaning and buried the satellite imagery the whole map is built on.
+// The OUTLINE and the NAME carry the state; the wash only has to hint at the
+// zone's extent. HQ is the exception — it has no plan behind it, so its wash is
+// the only thing marking it out.
 export const ZONE_STYLE = {
   activity: { color: '#36e0c0', fill: 0.10, label: 'Activity area' },
   nl:       { color: '#4ea8ff', fill: 0.09, label: 'Night location' },
-  hq:       { color: '#f39c12', fill: 0.12, label: 'Headquarters' },
+  hq:       { color: '#f39c12', fill: 0.16, label: 'Headquarters' },
 }
 
 export const KIND_ORDER = ['hq', 'activity', 'nl']
@@ -115,9 +121,31 @@ export const ZONE_TEXTURE = {
   hq:       { dash: null, glyph: '◆', width: 1.6 },
 }
 
-// A zone's outline/label colour: its kind, always. The territory hatch drawn
-// OVER it is what says how much of it has been taken.
-export function zoneInk(zone) {
+/**
+ * A zone's outline / wash / label colour: WHO HOLDS IT, where that is known.
+ *
+ * ⚠️ THIS USED TO BE THE ZONE'S KIND, ALWAYS (2026-09-15 changed it). Teal for
+ * an activity area, blue for a night location, amber for HQ — which meant every
+ * activity area wore the same pale teal from the first minute of camp to the
+ * last, saying only what sort of place it was and nothing about whether we had
+ * taken it. An area still entirely Meridian's looked exactly like one finished
+ * hours ago.
+ *
+ * Now: MERIDIAN RED until every scheduled visit is done, 1ATF BLUE the moment
+ * it is. The outline agrees with the ground inside it instead of arguing with
+ * it, and an unfinished area is red whether or not the front has swept past.
+ *
+ * KIND IS STILL READABLE, and deliberately not through colour: the glyph on
+ * every name (▲ ☾ ◆) and the dashed outline on night locations both survive
+ * greyscale, a bad projector and colour-blindness, which is why they carry the
+ * distinction rather than the hue.
+ *
+ * A zone with no progress — no camp plan, or one of the permanent places like
+ * RHQ that is never "taken" — keeps its kind colour. It is ours throughout;
+ * painting it red would be a lie.
+ */
+export function zoneInk(zone, p) {
+  if (p) return p.complete ? TASKFORCE_COLOR : MERIDIAN_COLOR
   return (ZONE_STYLE[zone.kind] || ZONE_STYLE.activity).color
 }
 
@@ -147,7 +175,7 @@ export function drawMapZones(ctx, zones, { cols, rows, w, h, scale = 1, progress
     const base = ZONE_STYLE[z.kind] || ZONE_STYLE.activity
     const tex = ZONE_TEXTURE[z.kind] || ZONE_TEXTURE.activity
     const p = progress?.get(z.id)
-    const ink = zoneInk(z)
+    const ink = zoneInk(z, p)
     ctx.beginPath()
     z.cells.forEach(([x, y], i) => (i ? ctx.lineTo(x * sx, y * sy) : ctx.moveTo(x * sx, y * sy)))
     ctx.closePath()
@@ -214,6 +242,7 @@ export function drawMapZones(ctx, zones, { cols, rows, w, h, scale = 1, progress
       const st = ZONE_STYLE[z.kind] || ZONE_STYLE.activity
       const tex = ZONE_TEXTURE[z.kind] || ZONE_TEXTURE.activity
       const name = `${tex.glyph} ${z.name.toUpperCase()}`
+      const ink = zoneInk(z, progress?.get(z.id))
       // A letter per company through it so far. Attribution WITHOUT ownership:
       // the ground is 1ATF's whoever walked it (an area is a percentage
       // takeover, not a company's prize), but the letters say who did the
@@ -255,7 +284,7 @@ export function drawMapZones(ctx, zones, { cols, rows, w, h, scale = 1, progress
       ctx.font = NAME_FONT
       ctx.lineWidth = size * 0.26
       ctx.strokeText(name, bxx, by)
-      ctx.fillStyle = st.color
+      ctx.fillStyle = ink
       ctx.fillText(name, bxx, by)
       if (!who.length) continue
       ctx.font = COY_FONT
@@ -285,7 +314,7 @@ export function drawMapZones(ctx, zones, { cols, rows, w, h, scale = 1, progress
     if (!(z.cells?.length >= 3)) continue
     const tex = ZONE_TEXTURE[z.kind] || ZONE_TEXTURE.activity
     const p = progress?.get(z.id)
-    const ink = zoneInk(z)
+    const ink = zoneInk(z, p)
     const [lx, ly] = z.label
     ctx.font = `700 ${size}px Orbitron, monospace`
     ctx.strokeStyle = 'rgba(4,8,16,0.85)'

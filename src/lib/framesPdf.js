@@ -17,7 +17,7 @@
 import { mapFor } from './maps'
 import { renderTerritoryLayer, renderHatchSwatch, imageFilterFor } from './terrainRender'
 import { drawMapLines } from './mapLines'
-import { drawMapZones, ZONE_STYLE, ZONE_TEXTURE } from './mapZones'
+import { drawMapZones, zoneInk, ZONE_TEXTURE } from './mapZones'
 import { ASSURE_BLUE as TASKFORCE_COLOR } from './territory'
 import { sortFrames } from './campaign'
 import { TASKFORCE_CODE, MERIDIAN_CODE, MERIDIAN_COLOR } from './territory'
@@ -26,7 +26,7 @@ import { COMPANIES } from '../firebase/seed'
 const COMPANY_COLOR = COMPANIES.reduce((a, c) => ({ ...a, [c.letter]: c.accent }), {})
 import { renderPrintBase } from './replayExport'
 
-// ⚠️ A3 PORTRAIT at 150 dpi — these are wall sheets, read from across a room
+// ⚠️ A3 LANDSCAPE at 150 dpi — these are wall sheets, read from across a room
 // at camp, not handouts. Everything below is sized for that: the map takes as
 // much of the page as its shape allows and the chrome is one header line plus
 // the key, because a page that spends its area on framing is a page whose map
@@ -38,8 +38,8 @@ import { renderPrintBase } from './replayExport'
 // `printFocus` declares the GROUND that has to appear and `fitCrop` below
 // grows it to whatever shape the page is, so turning the sheet the other way
 // is just these two constants.
-const PAGE_W = 1754
-const PAGE_H = 2480
+const PAGE_W = 2480
+const PAGE_H = 1754
 const MARGIN = 46
 const JPEG_QUALITY = 0.93
 // The map panel is rendered at this multiple of its printed size and drawn
@@ -220,7 +220,10 @@ function drawStrip(ctx, listed, progress, showRHQ, map) {
     const col = Math.floor(k / rows)
     const rx = 26 + col * colW
     const ry = y0 + 30 + (k % rows) * rowH + 17
-    const st = ZONE_STYLE[z.kind] || ZONE_STYLE.activity
+    // Same rule as the map: red until taken, blue once it is. A band glyph in
+    // the zone's KIND colour would be the only thing on the sheet still saying
+    // teal while the ground says red.
+    const st = { color: zoneInk(z, p) }
     const tex = ZONE_TEXTURE[z.kind] || ZONE_TEXTURE.activity
     textLine(ctx, tex.glyph, rx, ry, { size: 16, font: 'JetBrains Mono, monospace', color: st.color })
     textLine(ctx, z.name.toUpperCase(), rx + 24, ry,

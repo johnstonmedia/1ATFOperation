@@ -25,7 +25,11 @@ export const imageFilterFor = (map) => map?.imageFilter || IMAGE_FILTER
 const HATCH_ANGLE = 45 // degrees
 const HATCH_SPACING = 9.6 // px between lines at the target canvas resolution
 const HATCH_THICKNESS = 3.1 // px
-const HATCH_OPACITY = 0.48
+// ⚠️ Raised from 0.48 (2026-09-15). The hatch sits over SATELLITE IMAGERY now,
+// not flat pixel art: a half-transparent line that read clearly over a plain
+// tile disappears into tree canopy and shadow, and on paper it went further —
+// who holds an area was the hardest thing on the sheet to see.
+const HATCH_OPACITY = 0.66
 const HATCH_DASH = 0 // 0 = solid lines
 
 // Boundary border: one neutral colour for every edge regardless of which two

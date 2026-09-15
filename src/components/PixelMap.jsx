@@ -105,11 +105,19 @@ export default function PixelMap({
   // not free enough to redo on every pan/zoom re-render.
   // `avoid` keeps a company name off a named place: that place's beacon
   // already prints the same owner tag, so overlapping them just says it twice.
+  // ⚠️ ZONE NAMES COUNT TOO. The same argument applies to "AA KILO" as to a
+  // place beacon, and once companies own ground again there are six derived
+  // labels competing with two dozen zone names for the same middles — which
+  // is how "AA HOTEL" ended up with "MERIDIAN" printed through it.
   const labelOverrides = territory.labelOverrides || {}
+  const avoidPoints = useMemo(
+    () => [...(places || []), ...(zones || []).filter((z) => z.label).map((z) => ({ x: z.label[0], y: z.label[1] }))],
+    [places, zones],
+  )
   const companyLabels = useMemo(
-    () => (showCompanyLabels ? companyLabelPoints(cells, cols, rows, { showRHQ, avoid: places, overrides: labelOverrides }) : []),
+    () => (showCompanyLabels ? companyLabelPoints(cells, cols, rows, { showRHQ, avoid: avoidPoints, overrides: labelOverrides }) : []),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [showCompanyLabels, cells, cols, rows, showRHQ, places, labelOverrides],
+    [showCompanyLabels, cells, cols, rows, showRHQ, avoidPoints, labelOverrides],
   )
 
   const scale = view.scale
