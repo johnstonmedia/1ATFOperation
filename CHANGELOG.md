@@ -17,6 +17,35 @@ keep entries short and focused on what a new collaborator needs to know.
 
 ---
 
+## 2026-09-15 (e) — Activity areas are coloured by the company taking them
+
+- ⚠️ **REVERSES "no company ever owns an activity area"** from entry (a) earlier
+  the same day, at the unit's request. Each completed visit's slice is now
+  painted in the colour of the COMPANY that made it, light, over the Meridian
+  fill — so a part-taken area says who has been through it, not just how much of
+  it has gone.
+- **The ending is what keeps it honest.** On the final scheduled visit the whole
+  zone still flips to solid 1ATF (`T`), company colours and all, so the
+  patchwork is a transient state of ground still being taken and never the
+  finished picture — and Wednesday still ends with the task force holding
+  everything. The interstitial front between areas stays 1ATF throughout: no
+  company owns the connective ground.
+- Verified frame by frame: camp start `M:27769`, Day 1 `a:440 b:373 c:226
+  d:696 e:242 s:270 t:2819 M:22703`, Day 4 `T:27769` with no Meridian and no
+  company codes left. Totals conserve at 27769 on every frame.
+- **The cost is documented, not hidden.** A busy area becomes a patchwork, which
+  is exactly what got this removed the first time. There is also a new one:
+  `visitSlice` allocates over `zoneCellsOrdered`, which ranks cells by distance
+  out from the label point, so each visit's share is an ANNULUS. With one colour
+  that read as ground growing from the middle; with six it reads as concentric
+  rings — NAVEX and AA Kilo look like targets. If that needs fixing the change
+  is the allocation ORDER (wedges rather than rings), not the colouring.
+- Falls out for free: the replay's conquest flashes and the weekly image's gain
+  labels now name the companies rather than saying 1ATF everywhere, and derived
+  company labels reappear on the map.
+
+---
+
 ## 2026-09-15 (d) — The print sheets are A3 PORTRAIT
 
 - **`PAGE_W`/`PAGE_H` swapped to 1754 x 2480.** The camp's area of operations is

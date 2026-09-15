@@ -489,15 +489,26 @@ assuming a page exists).
       zone's label point), so ground grows from the middle and is identical
       every render instead of flickering between frames; `visitSlice()` gives
       visit *i* a contiguous slice, and the slices tile the zone exactly so the
-      last visit always finishes it. ⚠️ **No company ever OWNS an activity
-      area**: the taken share is painted light `t` (1ATF, "newly gained") and
-      the whole zone flips to solid `T` on the final visit. Painting each visit
-      in its own company's colour (which this did briefly) made a busy area a
-      patchwork that read as six companies competing for the same ground.
-      Companies still do the conquering — the plan says who is where and the
-      visit counts come from it — but an area is a PERCENTAGE TAKEOVER by the
-      task force, not a prize one company holds. RHQ can still hand-paint
-      company ground anywhere else on the map.
+      last visit always finishes it. ⚠️ **A PART-TAKEN AREA IS COLOURED BY
+      COMPANY; A FINISHED ONE IS 1ATF'S** (2026-09-15 — this REVERSES the "no
+      company ever owns an activity area" rule from earlier the same day, at
+      the unit's request; read both before changing it back). Each visit's
+      slice carries the colour of the company that made it, light (the grid's
+      "newly gained" variant), so the map says WHO has been where and not
+      merely how much has gone. The known cost is the one that removed it the
+      first time: a busy area becomes a patchwork, and six colours inside one
+      outline can read as six companies competing for the same ground. What
+      holds that in check is the ENDING — on the final scheduled visit the
+      whole zone flips to solid `T`, company colours and all, so the patchwork
+      is a transient state of ground still being taken and never the finished
+      picture. The interstitial front between areas stays 1ATF throughout: no
+      company owns the connective ground, and RHQ can still hand-paint company
+      ground anywhere else on the map.
+      ⚠️ Slices are annuli (`visitSlice` over `zoneCellsOrdered`, which ranks
+      by distance out from the label point). With one colour that read as
+      ground growing from the middle; with six it reads as concentric rings.
+      If that ever needs fixing, the change is the ALLOCATION ORDER — wedges
+      rather than rings — not the colouring.
     - ⚠️ **WHATEVER 1ATF DOESN'T HAVE, MERIDIAN HAS** (2026-09-15). The ground
       an area has not been taken back over is not `.` — it is `M`. Camp opens
       with the **whole area of operations** Meridian's and closes on Wednesday

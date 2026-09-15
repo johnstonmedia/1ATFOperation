@@ -29,15 +29,18 @@
 //                merely unfinished, and it is what the whole portal says the
 //                camp is for.
 //
-//   PART TAKEN   each completed visit's slice is painted in LIGHT 1ATF — the
-//                grid's existing "newly gained / loosely held" variant — over
-//                the Meridian fill, so the remainder of the zone is still
-//                visibly the threat's. 1ATF's share is the light variant and
-//                Meridian's is solid on purpose: we have just got there, they
-//                are dug in.
+//   PART TAKEN   each completed visit's slice is painted in THE COMPANY THAT
+//                MADE IT, light — the grid's "newly gained / loosely held"
+//                variant — over the Meridian fill, so the remainder of the
+//                zone is still visibly the threat's. A part-taken area
+//                therefore shows who has been through it in colour, not only
+//                how much of it has gone. The companies' share is the light
+//                variant and Meridian's is solid on purpose: we have just got
+//                there, they are dug in.
 //
 //   TAKEN        on the LAST scheduled visit the whole zone flips to solid
-//                1ATF — the last of the red goes with it.
+//                1ATF — the last of the red goes with it, and so do the
+//                company colours.
 //
 //   THE FRONT    the ground BETWEEN the areas is taken too, or Wednesday would
 //                end with a map still mostly red. It advances outward from RHQ
@@ -46,15 +49,22 @@
 //                has reached the Sector 8 boundary and 1ATF HAS EVERYTHING.
 //                Same conquest order as a zone, same light/solid convention.
 //
-// ⚠️ NO COMPANY EVER OWNS AN ACTIVITY AREA. The ground is the task force's
-// from the first pixel: an area is a PERCENTAGE TAKEOVER, not a prize one
-// company holds until another arrives. Painting each visit in its own
-// company's colour (which this did briefly) made a busy area a patchwork that
-// read as six companies competing for the same ground, and made "who holds
-// the ropes course" a question with a misleading answer. Companies still do
-// the conquering — the plan says who is where, the visit counts come from it,
-// and RHQ can still paint company ground by hand anywhere else on the map —
-// but what the area shows is how much of it 1ATF has taken.
+// ⚠️ A PART-TAKEN AREA IS COLOURED BY COMPANY; A FINISHED ONE IS 1ATF'S
+// (2026-09-15 — this REVERSES the "no company ever owns an activity area" rule
+// from earlier the same day, at the unit's request; read both before changing
+// it back). While an area is still being worked through, each visit's slice
+// carries the colour of the company that made it, so the map says WHO has been
+// where and not merely how much has gone. The known cost is the one that got
+// this removed the first time: a busy area becomes a patchwork, and six
+// companies' colours inside one outline can read as six companies competing
+// for the same ground.
+//
+// What keeps that in check is the ending. The moment every scheduled visit is
+// done the whole zone flips to SOLID 1ATF, company colours and all — so the
+// patchwork is a transient state of ground still being taken, never the
+// finished picture, and Wednesday still ends with the task force holding
+// everything. The interstitial front between the areas stays 1ATF throughout:
+// no company owns the connective ground.
 //
 // There is ONE map, and it is the unit's. A per-company cut of the board
 // existed briefly and was removed: six versions of the same camp is six things
@@ -158,13 +168,15 @@ export function buildCampFrames(mapId, territory) {
       // the front has already gone past it, which is the whole reason the zones
       // paint last.
       for (const idx of ordered) paint(idx, MERIDIAN_CODE)
-      if (!p.done) continue
-      // The completed visits' share of the ground is taken but not yet
-      // consolidated — light 1ATF, the same "newly gained" variant the rest of
-      // the map uses.
-      const [, to] = visitSlice(ordered.length, p.done - 1, p.total)
-      const mark = TASKFORCE_CODE.toLowerCase()
-      for (let k = 0; k < to; k++) paint(ordered[k], mark)
+      // Then a slice per completed visit, in that visit's own company colour,
+      // light: taken, not yet consolidated. Plan order is schedule order (see
+      // campPlan.js), so visits[i] for i < done are exactly the ones that have
+      // happened, and a company booked in twice simply paints two slices.
+      for (let i = 0; i < p.done; i++) {
+        const [from, to] = visitSlice(ordered.length, i, p.total)
+        const mark = (p.visits[i]?.company || TASKFORCE_CODE).toLowerCase()
+        for (let k = from; k < to; k++) paint(ordered[k], mark)
+      }
     }
     return { order: i, day, label: campFrameLabel(day, days), cells: cells.join('') }
   })
