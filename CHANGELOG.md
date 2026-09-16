@@ -17,6 +17,29 @@ keep entries short and focused on what a new collaborator needs to know.
 
 ---
 
+## 2026-09-16 — One wedge per company, not per visit
+
+- **The wedges still read as a starburst, and this is why.** Angular order was
+  right, but the slices carry equal CELL COUNTS, and over an irregular polygon
+  that makes their ANGULAR widths vary from about **21° to 108°** (measured on
+  NAVEX, AA Kilo and AA Juliet). Thirteen of those, several of them slivers, all
+  radiating from one point, is a starburst however the cells are sorted.
+- **Fixed by tallying the completed visits BY COMPANY** and giving each company
+  one contiguous wedge sized by its own share. NAVEX at 7 of 13 is now three
+  wedges (A, D, S) instead of seven slivers; AA Kilo at 2 of 5 is two; AA Juliet
+  at 4 of 8 is two.
+- ⚠️ **The painted total is unchanged.** The last boundary still lands at
+  `done/total` of the cells — verified 487 of 487 on AA Kilo and 355 of 355 on
+  AA Juliet — so "2 of 13 visits means 2/13 of the ground" survives exactly.
+  Frame cell counts conserve at 27,769 across all five frames as before.
+  Companies are sorted, so the picture is identical on every render.
+- **Ruled out first, so nobody re-tries it**: moving the sweep origin to the
+  zone's centroid. The label point is already within 0.03–0.06 of the zone's own
+  width of the centroid, and switching only narrows the spread from 21–108° to
+  22–85°. The origin was never the problem — the number of slices was.
+
+---
+
 ## 2026-09-15 (j) — Wedges instead of rings, and a print safe area
 
 - ⚠️ **Zone cells are allocated in WEDGE order, not radial** (`orderByWedge`

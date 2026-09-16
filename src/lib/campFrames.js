@@ -29,8 +29,9 @@
 //                merely unfinished, and it is what the whole portal says the
 //                camp is for.
 //
-//   PART TAKEN   each completed visit's slice is painted in THE COMPANY THAT
-//                MADE IT, light — the grid's "newly gained / loosely held"
+//   PART TAKEN   the taken share is painted in THE COLOURS OF THE COMPANIES
+//                THAT TOOK IT — one contiguous wedge each, light (the grid's
+//                "newly gained / loosely held"
 //                variant — over the Meridian fill, so the remainder of the
 //                zone is still visibly the threat's. A part-taken area
 //                therefore shows who has been through it in colour, not only
@@ -168,14 +169,32 @@ export function buildCampFrames(mapId, territory) {
       // the front has already gone past it, which is the whole reason the zones
       // paint last.
       for (const idx of ordered) paint(idx, MERIDIAN_CODE)
-      // Then a slice per completed visit, in that visit's own company colour,
-      // light: taken, not yet consolidated. Plan order is schedule order (see
-      // campPlan.js), so visits[i] for i < done are exactly the ones that have
-      // happened, and a company booked in twice simply paints two slices.
-      for (let i = 0; i < p.done; i++) {
-        const [from, to] = visitSlice(ordered.length, i, p.total)
-        const mark = (p.visits[i]?.company || TASKFORCE_CODE).toLowerCase()
+      // ⚠️ ONE WEDGE PER COMPANY, NOT PER VISIT. Painting a slice per visit was
+      // geometrically right and visually wrong: the slices carry equal CELL
+      // COUNTS, and over an irregular polygon that makes their angular widths
+      // vary from about 21° to 108° (measured on NAVEX, AA Kilo and AA Juliet).
+      // Thirteen of those, several of them slivers, radiating from one point
+      // reads as a starburst rather than a pie — which is what "still looks
+      // like a bullseye" meant.
+      //
+      // So the completed visits are TALLIED BY COMPANY first and each company
+      // gets ONE contiguous wedge sized by its own share. NAVEX at 7 of 13
+      // becomes three wedges (A, D, S) instead of seven slivers; AA Kilo at 2
+      // of 5 becomes two. The painted TOTAL is unchanged — the last boundary
+      // still lands at done/total of the cells — so "2 of 13 visits means 2/13
+      // of the ground" survives exactly. Companies are sorted so the picture is
+      // the same on every render.
+      const doneVisits = p.visits.slice(0, p.done)
+      const perCompany = new Map()
+      for (const v of doneVisits) perCompany.set(v.company, (perCompany.get(v.company) || 0) + 1)
+      let from = 0
+      let acc = 0
+      for (const company of [...perCompany.keys()].sort()) {
+        acc += perCompany.get(company)
+        const to = Math.floor((ordered.length * acc) / p.total)
+        const mark = (company || TASKFORCE_CODE).toLowerCase()
         for (let k = from; k < to; k++) paint(ordered[k], mark)
+        from = to
       }
     }
     return { order: i, day, label: campFrameLabel(day, days), cells: cells.join('') }

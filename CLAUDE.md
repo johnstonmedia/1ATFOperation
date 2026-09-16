@@ -547,14 +547,28 @@ assuming a page exists).
       the same colour but became a bullseye the moment consecutive visits were
       different companies — NAVEX and AA Kilo came out looking like archery
       targets. Cells are now swept CLOCKWISE FROM DUE NORTH around the label
-      point (`atan2(dx, -dy)`), so each visit's contiguous slice is a pie
-      segment, an area fills the way a progress dial does, and each company's
-      share is one solid piece of ground rather than a ring around somebody
-      else's. Ties break by distance then index, so the order is still fully
-      determined and identical on every render — which is what stops the replay
-      flickering. `orderOutward` stays for the AO FRONT in campFrames.js: that
-      really is one force pushing out from RHQ and should read as an expanding
-      circle.
+      point (`atan2(dx, -dy)`). Ties break by distance then index, so the order
+      is still fully determined and identical on every render — which is what
+      stops the replay flickering. `orderOutward` stays for the AO FRONT in
+      campFrames.js: that really is one force pushing out from RHQ and should
+      read as an expanding circle.
+      ⚠️ **ONE WEDGE PER COMPANY, NOT PER VISIT** (2026-09-16 — the second half
+      of the same fix; angular order alone was not enough). The slices carry
+      equal CELL COUNTS, and over an irregular polygon that makes their ANGULAR
+      widths vary from about **21° to 108°** — measured on NAVEX, AA Kilo and
+      AA Juliet. Thirteen of those, several of them slivers, radiating from one
+      point still reads as a starburst. So campFrames TALLIES the completed
+      visits BY COMPANY and gives each company ONE contiguous wedge sized by its
+      own share: NAVEX at 7 of 13 is three wedges (A, D, S) instead of seven
+      slivers, AA Kilo at 2 of 5 is two. ⚠️ The painted TOTAL is unchanged — the
+      last boundary still lands at `done/total` of the cells (verified: 487 of
+      487 on AA Kilo, 355 of 355 on AA Juliet) — so "2 of 13 visits means 2/13
+      of the ground" survives exactly. Companies are SORTED so the picture is
+      identical on every render.
+      ⚠️ Don't try to fix the starburst by moving the sweep origin to the zone's
+      centroid: measured, the label point is already within **0.03–0.06 of the
+      zone's own width** of the centroid, and it changes the spread from
+      21–108° to 22–85°. The origin was never the problem.
     - ⚠️ **WHATEVER 1ATF DOESN'T HAVE, MERIDIAN HAS** (2026-09-15). The ground
       an area has not been taken back over is not `.` — it is `M`. Camp opens
       with the **whole area of operations** Meridian's and closes on Wednesday
