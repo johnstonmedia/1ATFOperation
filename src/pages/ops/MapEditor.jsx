@@ -15,7 +15,7 @@ import { visibleZones, zonesForFrame, zonesByKind, zoneCount } from '../../lib/m
 import { zoneProgress } from '../../lib/campPlan'
 import { hasCampPlan, campDays } from '../../lib/campPlan'
 import { buildCampFrames } from '../../lib/campFrames'
-import { sortFrames, framesValid, renumberFrames } from '../../lib/campaign'
+import { sortFrames, framesValid, renumberFrames, frameEditDiff, applyFrameDiff } from '../../lib/campaign'
 import { exportCampaignReplay, exportProgressImage, exportSupported, downloadBlob, defaultProgressTitle } from '../../lib/replayExport'
 import { exportFramesPdf, framesPdfSupported } from '../../lib/framesPdf'
 
@@ -79,6 +79,11 @@ export default function MapEditor() {
   // unlike every other campaign action (relabel/reorder/duplicate/delete/
   // set-default-start), which still writes immediately, same as before.
   const [draftFrameCells, setDraftFrameCells] = useState({})
+  // Whether "Update Frame" also copies what was painted onto every LATER
+  // frame. On by default, because ground taken on Monday is still held on
+  // Wednesday — see commitFrameEdit. Off is the escape hatch for correcting
+  // one frame in isolation.
+  const [carryForward, setCarryForward] = useState(true)
   const [previewOpen, setPreviewOpen] = useState(false)
 
   const { cols, rows } = terr
@@ -212,10 +217,44 @@ export default function MapEditor() {
   // campaignFrames (and so not visible on the site) until RHQ clicks
   // "Publish frame changes" in the panel below. Re-opening "Edit" on this
   // frame later picks the staged cells back up (see CampaignPanel's onEdit).
+  //
+  // ⚠️ AND IT CARRIES FORWARD. Ground taken on Monday is still held on
+  // Wednesday, so what was painted here is copied onto every LATER frame too
+  // — only the CELLS THE EDIT CHANGED (frameEditDiff/applyFrameDiff in
+  // campaign.js), never the whole grid, so each later frame keeps everything
+  // else it says. The LAST frame takes it as solid 1ATF, because that is the
+  // frame camp ends on. Untick "Carry forward" to correct one frame alone.
+  //
+  // The carried frames are staged exactly like the edited one, so they show
+  // ● UNPUBLISHED, publish in the same single write, and can be thrown away
+  // together — a forward copy that went straight to the site would be the one
+  // thing here that edits the public replay without being asked to.
   const commitFrameEdit = () => {
     if (!editing) return
-    setDraftFrameCells((d) => ({ ...d, [editing.id]: editing.cells }))
-    toast.push(`Frame ${editing.order + 1} updated — not live yet. Click "Publish frame changes" below to push it to the site.`)
+    const diff = carryForward ? frameEditDiff(editing.original, editing.cells) : null
+    const ordered = sortFrames(mapFrames)
+    const at = ordered.findIndex((f) => f.id === editing.id)
+    const later = at >= 0 ? ordered.slice(at + 1) : []
+
+    const next = { ...draftFrameCells, [editing.id]: editing.cells }
+    if (diff?.size) {
+      later.forEach((f, k) => {
+        // Carry onto the staged version where there is one, so two edits in a
+        // row compound instead of the second undoing the first.
+        const val = applyFrameDiff(next[f.id] ?? f.cells, diff, { finalise: k === later.length - 1 })
+        // Staged means "differs from what is published". A carry that lands
+        // back on the published cells must therefore drop the draft, not keep
+        // an ● UNPUBLISHED tag on a frame that no longer has anything pending.
+        if (val === f.cells) delete next[f.id]
+        else next[f.id] = val
+      })
+    }
+    setDraftFrameCells(next)
+
+    const carried = later.filter((f) => f.id in next).length
+    toast.push(carried
+      ? `Frame ${editing.order + 1} updated and carried into ${carried} later frame${carried === 1 ? '' : 's'} — not live yet. Click "Publish frame changes" below.`
+      : `Frame ${editing.order + 1} updated — not live yet. Click "Publish frame changes" below to push it to the site.`)
     setEditing(null)
   }
   const clearDraftFrame = (id) => setDraftFrameCells((d) => {
@@ -260,7 +299,12 @@ export default function MapEditor() {
           <div className="mono accent" style={{ fontSize: 12 }}>
             EDITING {editing.order === 0 ? 'START FRAME' : `FRAME ${editing.order + 1}`} — painting here updates this historical frame, not the live map. "Update Frame" only saves your place in this editor — it stays off the site until you publish it below.
           </div>
-          <div className="row" style={{ gap: 8 }}>
+          <div className="row center" style={{ gap: 12, flexWrap: 'wrap' }}>
+            <label className="row center mono" style={{ gap: 6, fontSize: 11, cursor: 'pointer' }}
+              title="Ground taken on one day is still held on the next, so what you paint here is copied onto every later frame — only the cells you changed, and as solid 1ATF on the last frame. Untick to fix this frame alone.">
+              <input type="checkbox" checked={carryForward} onChange={(e) => setCarryForward(e.target.checked)} />
+              Carry forward to later frames
+            </label>
             <button className="ghost" onClick={() => startEdit(null)}>Cancel</button>
             <button className="primary" onClick={commitFrameEdit} title="Stores your painting so you can keep working — does not push it to the site">Update Frame</button>
           </div>

@@ -876,6 +876,34 @@ assuming a page exists).
   the whole replay also drops any of its pending staged cells. This mirrors
   how "Save map" already worked for the live territory — painting is local
   until an explicit publish action.
+  ⚠️ **AN EDIT CARRIES FORWARD** (2026-09-17). Ground taken on Monday is still
+  held on Wednesday, so "Update Frame" also copies what was painted onto every
+  LATER frame — otherwise correcting the map means repainting the same ground
+  once per remaining day, and missing one leaves the replay showing ground
+  taken and then quietly given back. A **Carry forward to later frames**
+  checkbox in the editing banner (on by default) turns it off for a
+  single-frame correction.
+  ⚠️ **THIS IS NOT THE OLD DIFF CHAIN and must not become it.** Frames stay
+  full independent snapshots; only the CELLS THE EDIT CHANGED are copied
+  (`frameEditDiff`/`applyFrameDiff` in campaign.js), once, at commit — handing
+  a later frame the whole grid would wipe every day after the one being
+  edited, which is exactly what v2.2 was replaced for. Three rules inside
+  `applyFrameDiff`: the **LAST frame takes it as solid `T`**, because that is
+  the frame camp ends on with 1ATF holding everything; an **ERASE stays an
+  erase** even there, since turning "nothing here" into held ground invents a
+  claim RHQ didn't make; and **RHQ's ground is never overpainted**, the same
+  rule campFrames.js paints by.
+  The carried frames are STAGED like the edited one — ● UNPUBLISHED, published
+  in the same single write, discarded together — so a forward copy can't reach
+  the public replay without being asked to. A carry that lands back on a
+  frame's published cells DROPS that frame's draft rather than leaving an
+  ● UNPUBLISHED tag on a frame with nothing pending (which is the common case
+  on the last frame: it is already all `T` inside the AO).
+  Verified end to end in LOCAL MODE: 49 cells painted on frame 2 outside the
+  area of operations (where frame 5 was empty) arrived on frames 3 and 4 in
+  the company's colour and on frame 5 as `T`, 49/49; frame 1 untouched; with
+  the box unticked only one frame was staged and the later frames were
+  identical.
   The Home map renders through
   [CampaignReplayMap](src/components/CampaignReplayMap.jsx): an auto-playing
   conquest animation (per-owner BFS wave on a cheap flat-tint overlay; the

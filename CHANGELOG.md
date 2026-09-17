@@ -17,6 +17,37 @@ keep entries short and focused on what a new collaborator needs to know.
 
 ---
 
+## 2026-09-17 — Frame edits carry forward
+
+- **"Update Frame" now copies what was painted onto every LATER frame.** Ground
+  taken on Monday is still held on Wednesday; before this, correcting the map
+  meant repainting the same ground once per remaining day of camp, and missing
+  one left the replay showing ground taken and then quietly given back. A
+  **Carry forward to later frames** checkbox in the editing banner (on by
+  default) turns it off for a single-frame fix.
+- ⚠️ **NOT a return to the v2.2 diff chain.** Frames remain full independent
+  snapshots. Only the CELLS THE EDIT CHANGED are copied, once, at commit
+  (`frameEditDiff`/`applyFrameDiff` in campaign.js) — handing a later frame the
+  whole grid would wipe every day after the one being edited, which is the
+  failure that got the chain replaced.
+- **The LAST frame takes it as solid `T`**, since that is the frame camp ends
+  on with 1ATF holding everything. An ERASE stays an erase even there — turning
+  "nothing here" into held ground would invent a claim RHQ didn't make — and
+  RHQ's own ground is never overpainted, the same rule campFrames.js paints by.
+- Carried frames are **staged** like the edited one: ● UNPUBLISHED, published
+  in the same single write, discarded together. A carry that lands back on a
+  frame's published cells drops that frame's draft instead of leaving a tag on
+  a frame with nothing pending — the common case on the last frame, which is
+  already all `T` inside the area of operations.
+- Verified end to end in LOCAL MODE against a generated 5-frame camp: 49 cells
+  painted on frame 2 OUTSIDE the AO (where frame 5 was empty) arrived on frames
+  3 and 4 in the company's colour and on frame 5 as `T`, 49/49, with frame 1
+  untouched; unticking the box staged one frame and left the later ones
+  identical. Unit-checked too: RHQ cells skipped, erases preserved through
+  finalise, mismatched lengths yielding an empty diff.
+
+---
+
 ## 2026-09-17 — A 2 cm print safe margin
 
 - **`SAFE` in framesPdf.js is now 2 cm**, derived from the dpi

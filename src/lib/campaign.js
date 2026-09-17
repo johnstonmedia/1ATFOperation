@@ -1,4 +1,4 @@
-import { PAINT, RHQ_PAINT, colorOf, coyLabelOf } from './territory'
+import { PAINT, RHQ_PAINT, TASKFORCE_CODE, colorOf, coyLabelOf } from './territory'
 
 // Campaign replay frames. The campaign is stored as its OWN Firestore
 // collection (`campaignFrames`), one document per frame:
@@ -11,6 +11,54 @@ import { PAINT, RHQ_PAINT, colorOf, coyLabelOf } from './territory'
 // it, reorder frames, duplicate one to insert a new step, or delete one, all
 // as plain per-document operations. `order` is kept as a contiguous 0..N-1
 // index (see renumberFrames) so "the sequence" is just "sort by order".
+
+/* ------------------------- carrying an edit forward ---------------------- */
+//
+// Ground taken on Monday is still held on Wednesday. So when RHQ repaints a
+// frame, what they painted should appear on every frame AFTER it too —
+// otherwise correcting the map means repainting the same ground once per
+// remaining day of camp, and forgetting one leaves the replay showing ground
+// being taken and then quietly given back.
+//
+// ⚠️ THIS IS NOT THE OLD DIFF CHAIN, and must not become it. Frames stay FULL
+// independent snapshots; this copies only the CELLS THE EDIT CHANGED onto the
+// later frames, once, at the moment RHQ commits the edit. Everything else
+// those frames say is untouched, which is the whole reason the collection
+// stopped being a chain (see the CHANGELOG for v2.2). Handing a later frame
+// the whole grid would wipe every day that came after the one being edited.
+
+// Index -> new character, for the cells an edit actually changed. An empty
+// map (including for mismatched lengths) means "nothing to carry".
+export function frameEditDiff(before, after) {
+  const diff = new Map()
+  if (typeof before !== 'string' || typeof after !== 'string') return diff
+  if (before.length !== after.length) return diff
+  for (let i = 0; i < after.length; i++) if (after[i] !== before[i]) diff.set(i, after[i])
+  return diff
+}
+
+const isRHQCell = (ch) => ch === 'R' || ch === 'r'
+
+/**
+ * Apply an edit's changed cells to another frame.
+ *
+ * `finalise` is for the LAST frame of the campaign, which is the one that has
+ * to end with 1ATF holding everything: ground carried into it arrives as the
+ * task force's own solid code rather than in the colour of whichever company
+ * took it. An ERASE stays an erase — turning "nothing here" into held ground
+ * would be inventing a claim RHQ didn't make — and RHQ's own ground is never
+ * overpainted, the same rule campFrames.js paints by.
+ */
+export function applyFrameDiff(cells, diff, { finalise = false } = {}) {
+  if (!diff?.size || typeof cells !== 'string') return cells
+  const arr = cells.split('')
+  for (const [i, ch] of diff) {
+    if (i >= arr.length) continue
+    if (isRHQCell(arr[i]) && !isRHQCell(ch)) continue
+    arr[i] = finalise && ch !== '.' && !isRHQCell(ch) ? TASKFORCE_CODE : ch
+  }
+  return arr.join('')
+}
 
 /* -------------------------------- ordering ------------------------------- */
 
