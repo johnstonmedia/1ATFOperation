@@ -17,6 +17,26 @@ keep entries short and focused on what a new collaborator needs to know.
 
 ---
 
+## 2026-09-17 — A 2 cm print safe margin
+
+- **`SAFE` in framesPdf.js is now 2 cm**, derived from the dpi
+  (`Math.round((2 / 2.54) * 150)` = 118 px) rather than the hand-picked 56 px
+  (~9.5 mm) it was — that turned out to be cutting it fine on the unit's
+  printer. Everything that has to be read moves in with it: the title block,
+  the sheet number, the AREA OF OPERATIONS tag, the bottom band's rows and
+  swatches, both footer lines, and the area names clamped onto the ground. The
+  MAP still bleeds corner to corner, unchanged.
+- ⚠️ **The old verification method was not sound and has been replaced in the
+  notes.** It measured peak brightness in the TOP and BOTTOM trim strips, which
+  read dark only because the scrim and the band cover them — it could never
+  have caught type running off the LEFT or RIGHT, where the map itself is
+  bright. The band's background is a flat dark fill, so the real test is the
+  bounding box of bright pixels inside it. Measured at 2 cm: band type spans
+  x:[120, 2360], bottom y 1630, against a safe box of x:[118, 2362] and a
+  bottom at 1636; right-aligned header type reaches x 2360. All inside.
+
+---
+
 ## 2026-09-17 — Critical Intel: the one thing that interrupts
 
 - **The popup counts down to the end of its alert window** (added after the

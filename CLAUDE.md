@@ -957,16 +957,28 @@ assuming a page exists).
   a room, which sets every decision below.
   - ⚠️ **THE IMAGE BLEEDS, THE TEXT DOESN'T** (2026-09-15). An A3 sheet gets
     trimmed and a borderless printer over-scans, so the outer few millimetres
-    are not a place anything can be relied on to survive. `SAFE` (56 px,
-    ~9.5 mm at 150 dpi) is the margin: the MAP still runs corner to corner —
+    are not a place anything can be relied on to survive. `SAFE` is the margin:
+    **2 cm, derived from the dpi** (`Math.round((2 / 2.54) * 150)` = 118 px —
+    2026-09-17, up from 56 px / ~9.5 mm, which was cutting it fine on the
+    unit's printer). ⚠️ It is a measurement of the PAPER, so derive it from DPI
+    if the page resolution changes rather than re-tuning it by eye. The MAP
+    still runs corner to corner —
     losing a little paddock costs nothing, a white border would cost the map its
     whole edge — but nothing that has to be READ may sit inside it. That covers
     the title block, the sheet number, the AREA OF OPERATIONS tag, every row and
     swatch in the bottom band, both footer lines, and the area names on the
-    ground. Verified on a rendered sheet: peak brightness in the top trim strip
-    93 and in the bottom trim strip 33 (background only — glyphs run 200+),
-    against 234/255 just inside the line, while the outer 8 px ring averages 36
-    with peaks at 249, i.e. live imagery rather than page ground.
+    ground.
+    ⚠️ Verify this by MEASURING THE TYPE'S EXTENT, not by brightness in the trim
+    strips. The original check only looked at the TOP and BOTTOM strips, which
+    read dark because the scrim and the band cover them — it could never have
+    caught type running off the LEFT or RIGHT, where the map itself is bright.
+    The band's background is a flat dark fill, so the honest test is the
+    bounding box of pixels over ~120 inside it. At 2 cm: band type spans
+    x:[120, 2360] and ends at y 1630, against a safe box of x:[118, 2362] with
+    its bottom at 1636; the right-aligned header (SHEET n OF m, the AREA OF
+    OPERATIONS tag) reaches x 2360. All inside, 2 px to spare — `textLine`
+    right-aligns glyph by glyph, tracking included, so it lands exactly where
+    it is told to.
     ⚠️ The band carries `SAFE` as dead space in its own HEIGHT, because
     `fitCrop` reserves that height off the map — leave it out and the last row
     sits where the guillotine goes.

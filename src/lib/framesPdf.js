@@ -46,8 +46,13 @@ const PAGE_H = 1754
 // on purpose — losing a few millimetres of paddock costs nothing and a white
 // border would cost the map its whole edge — but NOTHING THAT HAS TO BE READ
 // may sit inside this margin: not the title, not the sheet number, not the
-// band's rows, not an area's name. ~9.5 mm at 150 dpi.
-const SAFE = 56
+// band's rows, not an area's name.
+//
+// ⚠️ IT IS 2 cm, AND THAT IS A MEASUREMENT OF THE PAPER, not a look. 150 dpi
+// x 2/2.54 in = 118 px. It was ~9.5 mm and that turned out to be cutting it
+// fine on the unit's printer — derive this from DPI if the page resolution
+// ever changes rather than re-tuning it by eye.
+const SAFE = Math.round((2 / 2.54) * 150) // 2 cm at 150 dpi = 118 px
 const JPEG_QUALITY = 0.93
 // The map panel is rendered at this multiple of its printed size and drawn
 // down. 150 dpi is fine for text, but satellite imagery on paper wants the
