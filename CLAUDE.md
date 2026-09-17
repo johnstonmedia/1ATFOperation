@@ -1178,6 +1178,19 @@ by `/briefings` (its permanent home).
 - **Portalled to `document.body`** like the other overlays (see the modal rule
   above). Escape, the backdrop and ACKNOWLEDGE all dismiss — a notice, not a
   consent gate.
+- **The popup counts down to `alertUntil`** (`remainingMs`/`formatRemaining` in
+  criticalIntel.js, `Countdown` in the alert). A window given as an absolute
+  time makes the reader do the arithmetic; what they want to know is whether
+  this is urgent now. ⚠️ It measures the ALERT WINDOW, not the content — at
+  zero the header reads **ALERT ENDED**, never "expired", and **the dialog
+  stays open and dismissible**, because the item is still on the Briefings tab
+  and yanking it away from someone mid-read would say otherwise. Seconds are
+  dropped past a day and the tick drops to 30 s there, since a per-second
+  re-render for a string that cannot change reads as urgency the window
+  doesn't have. The tick is keyed on the **timestamp**, not the item object —
+  `state.criticalIntel || {}` is a fresh object when the slice is missing, and
+  an object dep would rebuild the interval on every tick. It lives in its own
+  component so one second's re-render doesn't touch the embedded player.
 - **Its own ops section, not a panel inside Briefings**: a section edits exactly
   one slice (Map: Territory is the one documented exception) and this is a
   different slice with a different publishing model. **End alert now** closes

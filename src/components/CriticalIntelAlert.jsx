@@ -4,7 +4,7 @@ import { useLocation } from 'react-router-dom'
 import { useData } from '../context/DataContext'
 import { useDialog } from '../hooks/useDialog'
 import VideoEmbed from './VideoEmbed'
-import { markCriticalSeen, shouldAlert } from '../lib/criticalIntel'
+import { formatRemaining, markCriticalSeen, remainingMs, shouldAlert } from '../lib/criticalIntel'
 
 // The one thing in the portal that interrupts: a full-screen CRITICAL INTEL
 // message over whatever public tab the visitor opened. See lib/criticalIntel.js
@@ -69,15 +69,18 @@ export default function CriticalIntelAlert() {
         }}
       >
         <div
-          className="row between center mono"
+          className="row between center mono wrap"
           style={{
-            padding: '10px 16px', background: 'rgba(255,59,70,0.14)',
+            padding: '10px 16px', gap: 8, background: 'rgba(255,59,70,0.14)',
             borderBottom: '1px solid var(--hostile)', color: 'var(--hostile)',
             fontSize: 11, fontWeight: 700, letterSpacing: 2,
           }}
         >
           <span>◤ PRIORITY TRANSMISSION</span>
-          <button className="ghost" onClick={close} aria-label="Dismiss" style={{ padding: '2px 10px' }}>✕</button>
+          <span className="row center" style={{ gap: 12 }}>
+            <Countdown item={ci} />
+            <button className="ghost" onClick={close} aria-label="Dismiss" style={{ padding: '2px 10px' }}>✕</button>
+          </span>
         </div>
 
         <div className="col panel-pad" style={{ gap: 14 }}>
@@ -91,15 +94,66 @@ export default function CriticalIntelAlert() {
             <p key={i} style={{ margin: 0, lineHeight: 1.6 }}>{p}</p>
           ))}
 
-          <div className="row between center" style={{ gap: 12, flexWrap: 'wrap' }}>
+          {/* The note sits on its own line and the button is right-aligned under
+              it: on one row the note is long enough to wrap the button to the
+              left, which is where nothing else on the dialog sits. */}
+          <div className="col" style={{ gap: 12 }}>
             <span className="mono dim" style={{ fontSize: 10, lineHeight: 1.6 }}>
-              Available afterwards on the Briefings tab.
+              The countdown is how long this stays a priority signal — it is on the
+              Briefings tab either way.
             </span>
-            <button className="primary" onClick={close}>ACKNOWLEDGE</button>
+            <div className="row" style={{ justifyContent: 'flex-end' }}>
+              <button className="primary" onClick={close}>ACKNOWLEDGE</button>
+            </div>
           </div>
         </div>
       </div>
     </div>,
     document.body,
+  )
+}
+
+// How long this stays a priority transmission. It counts down live, because a
+// window expressed as an absolute time ("until 17:30") makes the reader do the
+// arithmetic, and the thing they actually want to know is whether this is
+// urgent now.
+//
+// ⚠️ It measures the ALERT WINDOW, not the content. Past it the item is still
+// on the Briefings tab — so the expired state says the alert stood down, never
+// that the video is gone, which would be a lie the reader could act on.
+//
+// The tick lives here rather than in the dialog so one second's re-render
+// touches this line and not the embedded player: re-rendering an <iframe>'s
+// parent is cheap, but it is a needless thing to do 3,600 times to someone
+// watching a video.
+function Countdown({ item }) {
+  const until = item?.alertUntil || 0
+  const [left, setLeft] = useState(() => remainingMs(item))
+  // Seconds are dropped past a day (see formatRemaining), so the tick slows
+  // down there: a per-second interval would re-render for a string that cannot
+  // have changed.
+  const slow = left > 86400e3
+
+  useEffect(() => {
+    if (!until) return undefined
+    const tick = () => setLeft(Math.max(0, until - Date.now()))
+    tick()
+    const id = setInterval(tick, slow ? 30000 : 1000)
+    return () => clearInterval(id)
+    // Keyed on the TIMESTAMP, not the item object — `state.criticalIntel || {}`
+    // is a fresh object whenever the slice is missing, and an object dep would
+    // tear the interval down and rebuild it on every tick.
+  }, [until, slow])
+
+  if (!until) return null
+  const text = formatRemaining(left)
+  return (
+    <span
+      className="mono"
+      style={{ opacity: text ? 0.9 : 0.6 }}
+      title={`This stops interrupting at ${new Date(until).toLocaleString()}. It stays on the Briefings tab afterwards.`}
+    >
+      {text ? `EXPIRES IN ${text}` : 'ALERT ENDED'}
+    </span>
   )
 }

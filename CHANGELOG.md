@@ -19,6 +19,17 @@ keep entries short and focused on what a new collaborator needs to know.
 
 ## 2026-09-17 — Critical Intel: the one thing that interrupts
 
+- **The popup counts down to the end of its alert window** (added after the
+  first pass). An absolute end time makes the reader do the arithmetic; the
+  countdown answers the question they actually have. ⚠️ At zero it reads
+  **ALERT ENDED**, not "expired", and the dialog stays open and dismissible —
+  the item is still on the Briefings tab, and closing it mid-read would say
+  otherwise. Seconds are dropped past a day (and the tick slows to 30 s), the
+  tick is keyed on the timestamp rather than the item object, and it lives in
+  its own component so a per-second re-render never touches the embedded
+  player. Verified live: ticks at hours, drops seconds at days, expires while
+  open without closing, and the header wraps rather than overflowing at 360 px.
+
 - **New `criticalIntel` slice + Ops Centre section.** A video (link, embed code
   or Storage upload — the same `VideoDropZone`/`resolveVideo` path the briefing
   video uses) plus a headline and an optional message. Published as a

@@ -62,6 +62,35 @@ export function shouldAlert(ci, now = Date.now()) {
   return isCritical(ci, now) && seenStamp() !== ci.publishedAt
 }
 
+/* --------------------------------- countdown ---------------------------- */
+
+// Milliseconds left in the alert window, or 0 once it has closed.
+export function remainingMs(ci, now = Date.now()) {
+  if (!isPublished(ci) || !ci.alertUntil) return 0
+  return Math.max(0, ci.alertUntil - now)
+}
+
+// "2d 04h 13m" / "4h 13m 22s" / "13m 22s" / "22s".
+//
+// The largest unit is UNPADDED and the ones under it are padded, so the string
+// keeps a steady width as it counts down instead of jittering at every
+// rollover. SECONDS ARE DROPPED once there are days left: a number that churns
+// every second while the real answer is "not for two days" reads as urgency the
+// window does not have, and it is the only case where the tick says nothing.
+export function formatRemaining(ms) {
+  if (!(ms > 0)) return null
+  const total = Math.floor(ms / 1000)
+  const d = Math.floor(total / 86400)
+  const h = Math.floor((total % 86400) / 3600)
+  const m = Math.floor((total % 3600) / 60)
+  const s = total % 60
+  const pad = (n) => String(n).padStart(2, '0')
+  if (d) return `${d}d ${pad(h)}h ${pad(m)}m`
+  if (h) return `${h}h ${pad(m)}m ${pad(s)}s`
+  if (m) return `${m}m ${pad(s)}s`
+  return `${s}s`
+}
+
 /* ------------------------------- for the editor ------------------------- */
 
 // One line describing where a stored item stands, for the Ops Centre panel.
