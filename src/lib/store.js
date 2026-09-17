@@ -13,6 +13,7 @@ import {
   DEFAULT_INTEL,
   DEFAULT_INTEL_INTRO,
   DEFAULT_BRIEFINGS,
+  DEFAULT_CRITICAL_INTEL,
   DEFAULT_STAFF_ACCESS,
   DEFAULT_TERRITORY,
   DEFAULT_SINGLETON_TERRITORY,
@@ -28,7 +29,7 @@ const LS_AUTHIDX = '1atf-authindex'
 // lib/maps.js) — the primary map's keep the original unsuffixed names, so
 // existing Firestore documents are untouched by there being a second map.
 // They are plain `content/*` docs, already covered by the existing rules.
-const SINGLE_SLICES = ['narrative', 'classified', 'branding', 'companyPages', 'video', 'intel', 'intelIntro', 'briefings', 'staffAccess', 'activeMap', ...mapSlices()]
+const SINGLE_SLICES = ['narrative', 'classified', 'branding', 'companyPages', 'video', 'intel', 'intelIntro', 'briefings', 'criticalIntel', 'staffAccess', 'activeMap', ...mapSlices()]
 const COLLECTION_SLICES = ['roster', 'tasks', 'activity', 'support', 'resetRequests', 'audit', 'campaignFrames']
 
 export const isContentSlice = (slice) => SINGLE_SLICES.includes(slice)
@@ -80,6 +81,7 @@ const DEFAULT_STATE = {
   intel: DEFAULT_INTEL,
   intelIntro: DEFAULT_INTEL_INTRO,
   briefings: DEFAULT_BRIEFINGS,
+  criticalIntel: DEFAULT_CRITICAL_INTEL,
   staffAccess: DEFAULT_STAFF_ACCESS,
   roster: FIREBASE_ENABLED ? [] : DEMO_ROSTER,
   tasks: [],

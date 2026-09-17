@@ -2,13 +2,19 @@ rules_version = '2';
 
 // Cloud Storage rules for the 1ATF portal.
 //
-// Storage is used for exactly ONE thing: briefing videos dragged into the
+// Storage is used for exactly one KIND of thing: videos dragged into the
 // Operations Centre (src/lib/videoUpload.js). Every other asset — the unit
 // logo, the map art — is a repo file under public/. If that stops being true,
 // add a named prefix below rather than loosening the catch-all.
 //
-//  - briefings/*: world-readable (the Briefings tab has no login), written and
-//    deleted only by RHQ, capped at 512 MB and pinned to video content types.
+//  - briefings/*:      the ordinary Briefings-tab video.
+//  - critical-intel/*: the priority transmission that pops over the portal
+//    (Ops Centre → Critical Intel). Its own prefix rather than a share of
+//    briefings/ so that "what is this object" is answerable from its path —
+//    the policy either way is identical, which is what the shared functions
+//    below say.
+//  Both: world-readable (neither tab has a login), written and deleted only by
+//  RHQ, capped at 512 MB and pinned to video content types.
 //  - everything else: denied.
 //
 // "RHQ" is read from the caller's own Firestore user profile, exactly as in
@@ -35,6 +41,12 @@ service firebase.storage {
     }
 
     match /briefings/{file} {
+      allow read: if true;
+      allow create, update: if isRHQ() && isVideoUnder512MB();
+      allow delete: if isRHQ();
+    }
+
+    match /critical-intel/{file} {
       allow read: if true;
       allow create, update: if isRHQ() && isVideoUnder512MB();
       allow delete: if isRHQ();

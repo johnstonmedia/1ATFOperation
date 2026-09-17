@@ -47,8 +47,10 @@ cannot be saved live.
 
 ### While you're in there: Storage (added 2026-08-04)
 
-The Briefings editor now takes a **dragged-in video file**, which is the app's
-only use of Cloud Storage. It needs its own two console actions:
+The Briefings editor now takes a **dragged-in video file**, which — with the
+**Critical Intel** editor added 2026-09-17 (`critical-intel/*`, a prefix in
+[storage.rules](storage.rules) mirroring `briefings/*`) — is the app's only use
+of Cloud Storage. It needs its own two console actions:
 
 1. **Storage → enable the default bucket.** Firebase requires the **Blaze**
    plan for this on projects created after Oct 2024, and the bucket name in
@@ -60,7 +62,9 @@ only use of Cloud Storage. It needs its own two console actions:
 
 Failure mode until both are done: `storage/unauthorized`, surfaced in the drop
 zone as "Firebase Storage may not be enabled… paste a video link instead".
-Nothing else on the site is affected.
+Nothing else on the site is affected — including Critical Intel, whose alert,
+schedule and Briefings-tab panel all work off a pasted link with no Storage at
+all.
 
 **Verify after publishing**, in this order:
 1. Sign in as RHQ (`190990`), Ops Centre → Map: Territory → add a campaign

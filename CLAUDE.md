@@ -88,7 +88,9 @@ routes — see [src/App.jsx](src/App.jsx):
 - `/briefings` **Briefings** — a video embed + free text, admin-edited. The
   video is a link, a **pasted `<iframe>` embed code**, or a file **dragged into
   the ops editor** and uploaded to Firebase Storage — see "Briefing video
-  upload" and "Video resolution" below.
+  upload" and "Video resolution" below. It also carries the **Critical
+  Intel** item permanently once published, above the ordinary video — see
+  "Critical Intel" below.
 - `/privacy` **Privacy Notice** — small static member-facing privacy policy
   ([src/pages/Privacy.jsx](src/pages/Privacy.jsx)), linked from the footer in
   [Layout.jsx](src/components/Layout.jsx). Deliberately repo-versioned, not an
@@ -217,7 +219,7 @@ assuming a page exists).
 ## Data model
 - Firestore single-value docs under `content/{slice}`: `narrative`,
   `classified`, `branding`, `companyPages`, `video`, `intel`, `intelIntro`,
-  `briefings`, `staffAccess`, `activeMap`, plus **per map** a `territory` and a
+  `briefings`, `criticalIntel`, `staffAccess`, `activeMap`, plus **per map** a `territory` and a
   `campaignDefaultStart` doc (public read, RHQ write) — see `SINGLE_SLICES` in
   [src/lib/store.js](src/lib/store.js), which builds that list from the map
   registry. `activeMap` names the one map the public portal shows;
@@ -1108,8 +1110,8 @@ assuming a page exists).
 ## Operations Centre (`/operations-centre`, RHQ-only)
 Side-rail sections (see `SECTIONS` in [OperationsCentre.jsx](src/pages/ops/OperationsCentre.jsx)):
 Map: Narrative, Map: Territory, Intercepted Intelligence, **Approvals (COY
-intel)**, Briefings, Welcome Page (Classified), Branding & Assets, Users, Help,
-**Backups**, Audit Log. Every section edits exactly one data slice (or the
+intel)**, Briefings, **Critical Intel**, Welcome Page (Classified), Branding &
+Assets, Users, Help, **Backups**, Audit Log. Every section edits exactly one data slice (or the
 roster/support/`intelSubmissions` collections) via `updateSlice`/`replaceRoster`,
 and most log an audit entry via `useAudit()`. **Approvals** is the RHQ side of
 the Company Commander workflow (see "Company Commander & intel approval" above).
@@ -1147,15 +1149,56 @@ map at a time and writes that map's own slices — see "Maps" above.
   panel's list read fails (it says so, naming HANDOVER §0); writes fail silently
   by design, so nothing else breaks.
 
+### Critical Intel — the one thing that interrupts (2026-09-17)
+`criticalIntel` slice + [src/lib/criticalIntel.js](src/lib/criticalIntel.js),
+edited in Ops Centre → **Critical Intel**
+([CriticalIntelEditor.jsx](src/pages/ops/CriticalIntelEditor.jsx)), shown by
+[CriticalIntelAlert.jsx](src/components/CriticalIntelAlert.jsx) (the popup) and
+by `/briefings` (its permanent home).
+
+- **Three states**, and the difference between them is the whole feature:
+  **DRAFT** (no `publishedAt` — nothing anywhere), **CRITICAL**
+  (`now < alertUntil` — a full-screen message over whatever public tab the
+  visitor opened), **ARCHIVED** (past `alertUntil` — still on the Briefings tab,
+  never interrupts again). RHQ picks the end of the window at publish time via
+  the existing `SchedulePicker`.
+- ⚠️ **SAVE AND PUBLISH ARE DIFFERENT ACTIONS.** Dismissal is keyed on
+  **`publishedAt`**, NOT on the slice's `updatedAt` the way `useUnseen` is.
+  Only Publish moves `publishedAt`, so fixing a typo with **Save** does not
+  re-alert a hundred cadets who already watched it, while **Re-publish**
+  deliberately does — including devices that dismissed the last one. Keying
+  this on `updatedAt` would turn every correction into a fresh interruption.
+- ⚠️ **The popup never fires on `/briefings`**, and opening that tab marks the
+  item seen. That tab already shows it; popping the same video over the page
+  displaying it is noise, and a cadet who went straight there has seen it.
+- Dismissal is device-local (`1atf-critical-intel-seen`), no auth, the same
+  shape as `useUnseen` — it stores the `publishedAt` stamp rather than a
+  boolean, which is what makes a re-publish re-alert and keeps the comparison
+  immune to clock skew.
+- **Portalled to `document.body`** like the other overlays (see the modal rule
+  above). Escape, the backdrop and ACKNOWLEDGE all dismiss — a notice, not a
+  consent gate.
+- **Its own ops section, not a panel inside Briefings**: a section edits exactly
+  one slice (Map: Territory is the one documented exception) and this is a
+  different slice with a different publishing model. **End alert now** closes
+  the window while keeping the item on the tab; **Remove** deletes it.
+- Video field is the shared `VideoDropZone`/`resolveVideo` path. Uploads go to
+  the **`critical-intel/`** Storage prefix, which mirrors `briefings/*` in
+  [storage.rules](storage.rules) and rides the same pending Storage republish;
+  a pasted link needs no Storage at all.
+- `content/criticalIntel` needs **no Firestore rules change** — it is an
+  ordinary `SINGLE_SLICES` entry under the generic `content/*` rule.
+
 ### Briefing video upload (Firebase Storage)
 The Briefings editor's video field is a **drag-and-drop zone**
 ([VideoDropZone.jsx](src/components/VideoDropZone.jsx)) sitting above the
 link input — drag a file in, click to browse, or drop/paste a URL. Files upload
 to Firebase Storage via [src/lib/videoUpload.js](src/lib/videoUpload.js).
 
-- This is the **only** thing in the app that uses Storage; everything else
-  (logo, map art) is a repo file under `public/`. Don't broaden that without
-  adding a named prefix to [storage.rules](storage.rules).
+- This and **Critical Intel** are the only things in the app that use Storage;
+  everything else (logo, map art) is a repo file under `public/`. Don't broaden
+  that without adding a named prefix to [storage.rules](storage.rules) — which
+  is exactly what `critical-intel/*` is.
 - Path `briefings/<timestamp>-<filename>`, 512 MB cap (`MAX_VIDEO_BYTES`,
   mirrored in the rules — change both). Non-MP4/WebM warns but uploads.
 - **Keep the link field.** Uploads need Storage enabled + rules published, and

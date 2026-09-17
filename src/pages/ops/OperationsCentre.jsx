@@ -9,6 +9,7 @@ import LastUpdated from '../../components/LastUpdated'
 import NarrativeEditor from './NarrativeEditor'
 import MapEditor from './MapEditor'
 import BriefingsEditor from './BriefingsEditor'
+import CriticalIntelEditor from './CriticalIntelEditor'
 import ClassifiedEditor from './ClassifiedEditor'
 import BrandingEditor from './BrandingEditor'
 import IntelEditor from './IntelEditor'
@@ -25,6 +26,7 @@ const SECTIONS = [
   { id: 'intel', label: 'Intercepted Intelligence', group: 'CONTENT' },
   { id: 'approvals', label: 'Approvals (COY intel)', group: 'CONTENT' },
   { id: 'briefings', label: 'Briefings', group: 'CONTENT' },
+  { id: 'criticalIntel', label: 'Critical Intel', group: 'CONTENT' },
   { id: 'classified', label: 'Welcome Page', group: 'CONTENT' },
   { id: 'branding', label: 'Branding & Assets', group: 'CONTENT' },
   { id: 'users', label: 'Users', group: 'ADMIN' },
@@ -115,6 +117,7 @@ export default function OperationsCentre() {
         {section === 'narrative' && <NarrativeEditor />}
         {section === 'map' && <MapEditor />}
         {section === 'briefings' && <BriefingsEditor />}
+        {section === 'criticalIntel' && <CriticalIntelEditor />}
         {section === 'classified' && <ClassifiedEditor />}
         {section === 'branding' && <BrandingEditor />}
         {section === 'intel' && <IntelEditor />}

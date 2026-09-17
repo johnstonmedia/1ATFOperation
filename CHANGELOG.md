@@ -17,6 +17,55 @@ keep entries short and focused on what a new collaborator needs to know.
 
 ---
 
+## 2026-09-17 — Critical Intel: the one thing that interrupts
+
+- **New `criticalIntel` slice + Ops Centre section.** A video (link, embed code
+  or Storage upload — the same `VideoDropZone`/`resolveVideo` path the briefing
+  video uses) plus a headline and an optional message. Published as a
+  **full-screen alert over whatever public tab the visitor opened**, once per
+  device; afterwards it lives permanently on the **Briefings** tab beside the
+  ordinary briefing video, which is the half of it the popup can't do.
+- **Three states, and the difference between them is the feature**
+  ([src/lib/criticalIntel.js](src/lib/criticalIntel.js)): DRAFT (no
+  `publishedAt` — nothing anywhere), CRITICAL (`now < alertUntil` — it
+  interrupts), ARCHIVED (past `alertUntil` — on the Briefings tab and nothing
+  else). RHQ sets the end of the window at publish time through the existing
+  `SchedulePicker`.
+- ⚠️ **SAVE AND PUBLISH ARE DIFFERENT ACTIONS, deliberately.** Dismissal is
+  keyed on **`publishedAt`**, not on the slice's `updatedAt` the way
+  `useUnseen` is — so RHQ fixing a typo with **Save** does not re-alert a
+  hundred cadets who already watched it, while **Re-publish** does, including
+  devices that dismissed the previous one. Anything keyed on `updatedAt` here
+  would turn every correction into a fresh interruption.
+- ⚠️ **The popup never fires on `/briefings`**, and opening that tab marks the
+  item seen. The tab already shows it in its permanent home; popping the same
+  video over the page displaying it is noise, and a cadet who came straight
+  there has seen the thing.
+- Dismissal is device-local localStorage (`1atf-critical-intel-seen`), the same
+  no-auth shape as `useUnseen` — it stores the `publishedAt` stamp, not a
+  boolean, which is what makes a re-publish re-alert and keeps the comparison
+  immune to clock skew.
+- The alert is **portalled to `document.body`** like LoginModal/ConfirmDialog,
+  for the documented stacking-context reason. Escape, the backdrop and
+  ACKNOWLEDGE all dismiss: this is a notice, not a consent gate.
+- **Its own Ops Centre section, not a second panel in Briefings** — a section
+  edits exactly one slice (Map: Territory is the one documented exception) and
+  this is a different slice with a different publishing model. Also **End alert
+  now** (stop interrupting, keep it on the tab) and **Remove**.
+- `content/criticalIntel` needs **no Firestore rules change** (generic
+  `content/*`). `storage.rules` gained a **`critical-intel/*`** prefix mirroring
+  `briefings/*` exactly — it rides the same still-pending Storage republish, and
+  a pasted link needs no Storage at all.
+- Verified with Playwright in LOCAL MODE, both sides: popup fires on Home and
+  is portalled; ACKNOWLEDGE persists across reloads and routes; `/briefings`
+  shows the panel and fires no popup; a new `publishedAt` re-alerts a device
+  that had dismissed the last one; an expired window shows nothing but keeps
+  the Briefings panel; a draft shows nothing anywhere. Editor side: publish
+  writes both stamps, Save leaves `publishedAt` untouched while updating the
+  body, End alert now closes the window and keeps the video.
+
+---
+
 ## 2026-09-16 — One wedge per company, not per visit
 
 - **The wedges still read as a starburst, and this is why.** Angular order was

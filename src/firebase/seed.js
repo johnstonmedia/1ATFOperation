@@ -153,6 +153,39 @@ export const DEFAULT_BRIEFINGS = {
   closingQuote: 'One unit, one culture — everyone belongs, everyone contributes, and together we succeed.',
 }
 
+// CRITICAL INTEL — the one thing in the portal that interrupts.
+//
+// An ordinary briefing waits on the Briefings tab for whoever opens it. This
+// does not: while its alert window is open it is a full-screen message over
+// whatever public tab the visitor landed on. That is the whole point, and it
+// is also why it is deliberately awkward to leave running — see alertUntil.
+//
+//   video/videoPath  the same field shape as the briefing video (a link, a
+//                    pasted embed code, or a Storage upload — see
+//                    VideoDropZone/resolveVideo). videoPath is only set when
+//                    the file was uploaded here.
+//   title/body       the words around it. A critical message with no video is
+//                    still a critical message, so neither the video nor the
+//                    body is required — but one of them has to be there or
+//                    there is nothing to show.
+//   publishedAt      ⚠️ THE ALERT'S IDENTITY, and what a device records when it
+//                    dismisses one. Only PUBLISH stamps it, so RHQ can fix a
+//                    typo with Save without re-alerting every cadet who has
+//                    already watched it; re-publishing deliberately DOES
+//                    re-alert, including devices that dismissed the last one.
+//   alertUntil       when it stops interrupting (ms epoch). Past it the popup
+//                    never fires again on any device, but the item stays on
+//                    the Briefings tab — "critical for a while, available
+//                    afterwards". null = never published.
+export const DEFAULT_CRITICAL_INTEL = {
+  video: '',
+  videoPath: '',
+  title: 'CRITICAL INTEL',
+  body: '',
+  publishedAt: null,
+  alertUntil: null,
+}
+
 // Pixel-grid territory over the NSW map. cells is a cols*rows string of colour
 // codes (see lib/territory.js). Default territory sits on the three camp areas.
 // 216x112 = one cell per exact 3x3 block of the 648x336 source image.

@@ -4,6 +4,7 @@ import TopBar from './TopBar'
 import Sidebar, { NavContent } from './Sidebar'
 import Logo from './Logo'
 import LoginModal from './LoginModal'
+import CriticalIntelAlert from './CriticalIntelAlert'
 import { useAuth } from '../context/AuthContext'
 
 // App shell. Navigation is responsive: desktop/tablet (≥768px) gets a
@@ -45,6 +46,9 @@ export default function Layout() {
       </div>
       <Sidebar open={menuOpen} onClose={() => setMenuOpen(false)} onAuth={() => setAuthOpen(true)} />
       {authOpen && <LoginModal onClose={() => setAuthOpen(false)} />}
+      {/* Interrupts every public tab but /briefings while its alert window is
+          open — see CriticalIntelAlert / lib/criticalIntel.js. */}
+      <CriticalIntelAlert />
     </div>
   )
 }
