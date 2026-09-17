@@ -152,8 +152,8 @@ routes — see [src/App.jsx](src/App.jsx):
   three things — read/write `intelSubmissions`, write **`content/intel` only**
   (an extra `match /content/intel` block; overlapping matches are OR'd, so every
   other `content/*` doc stays RHQ-write-only), and **create-only** on `audit`
-  (it logs what it approved but can't read the log back). ⚠️ Needs the pending
-  rules republish — until then RHQ Staff approvals fail live.
+  (it logs what it approved but can't read the log back). ✅ Live since the
+  2026-09-17 rules publish — RHQ Staff approvals work against the real project.
 
 ## Company Commander & intel approval (v2.1)
 - **Company Commander** is a role (now the **default** at user creation), bound
@@ -1221,9 +1221,10 @@ map at a time and writes that map's own slices — see "Maps" above.
 - "Download everything" writes a single JSON of all current slices +
   `campaignFrames` (`buildFullExport`) — the off-platform copy, for when the
   Firebase project itself is the thing that's gone.
-- ⚠️ The `backups` rules block needs the pending republish. Until then the
-  panel's list read fails (it says so, naming HANDOVER §0); writes fail silently
-  by design, so nothing else breaks.
+- ✅ The `backups` rules block went live with the 2026-09-17 publish, so the
+  panel lists history against the real project. (Its read used to fail with a
+  notice naming HANDOVER §0; writes fail silently by design either way, so a
+  future rules problem here degrades quietly rather than blocking a save.)
 
 ### Critical Intel — the one thing that interrupts (2026-09-17)
 `criticalIntel` slice + [src/lib/criticalIntel.js](src/lib/criticalIntel.js),
@@ -1382,18 +1383,15 @@ styles — there is no CSS-in-JS or component library.
 1. Authentication → enable **Email/Password**. Add the custom domain under
    **Settings → Authorized domains** or sign-ins fail there.
 2. Firestore → create DB → publish [firestore.rules](firestore.rules).
-   ⚠️ **STILL PENDING (user action):** the rules in the repo are current, but
-   must be **re-published in the Firebase Console** to take effect live.
-   Five changes are waiting on that republish: the `intelSubmissions` block
-   (COY-intel approval workflow), the roster read lockdown (RHQ + own-record
-   only), the `campaignFrames` collection block, the `intelStats` block (both
-   2026-08-04 — see below), `isRHQStaff()` (2026-08-05 — without it RHQ
-   Staff accounts cannot approve anything live), and the `backups` block
-   (2026-08-05 — without it the Backups panel cannot list history). Until then, live Firebase still runs the
-   older rules, so against the live project RHQ can't write campaign frames at
-   all and every anonymous decrypt count is silently rejected (by design the
-   write failure is swallowed, so the puzzle still works — the counts just
-   stay at zero).
+   ✅ **PUBLISHED 2026-09-17** (reported by RHQ; not verifiable from a dev
+   sandbox, which cannot reach the project). This cleared a blocker that had
+   stood since July and had six changes stacked behind it: `intelSubmissions`
+   (the COY-intel approval workflow), the roster read lockdown (RHQ +
+   own-record only), the `campaignFrames` collection block, `intelStats`,
+   `isRHQStaff()` and `backups`. ⚠️ **Re-publish after ANY edit to
+   firestore.rules** — the repo file is not the live ruleset, it is a copy of
+   what someone last pasted into the console, and nothing in the build or the
+   deploy notices the difference.
 3. Storage → **enable the default bucket**, then publish
    [storage.rules](storage.rules) (Storage → Rules). ⚠️ **STILL PENDING (user
    action)** — needed only for the Briefings drag-and-drop video upload; until
@@ -1434,8 +1432,7 @@ stale.
 - ✅ **Fixed 2026-07-23**: `roster` reads are now RHQ **or own-record only**
   (via an `isOwnId()` email-pattern check in `firestore.rules`, no app changes
   needed); `tasks`/`activity` reads are now RHQ-only. See CHANGELOG for the
-  emulator-verified test coverage. ⚠️ Still needs a **rules re-publish** in
-  the Firebase Console to take effect live.
+  emulator-verified test coverage. ✅ Live since the 2026-09-17 rules publish.
 - ⚠️ Residual, deliberately unsolved by the above: an *unregistered* member who
   knows their own ID can still register and then read their own record's
   plain-text `tempPassword` via the same own-record path — inherent to storing

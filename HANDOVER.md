@@ -10,40 +10,37 @@ into a list of things that were already done.
 
 ---
 
-## 0. Read this first — the one thing that blocks everything
+## 0. ✅ The rules blocker is CLEARED (2026-09-17)
 
-**`firestore.rules` in the repo has NEVER been republished to the Firebase
-Console.** The live project is still running an older ruleset. This is a manual
-console action nobody has done, and it is the single highest-value task here.
+**`firestore.rules` was published to the Firebase Console on 2026-09-17**, by
+RHQ. It had never been republished since July, and it was the single
+highest-value item in this brief. Six changes were stacked behind it and are
+now live: `campaignFrames` (the whole replay-authoring flow), `intelStats`
+(anonymous decrypt counts), `intelSubmissions` (the COY-intel approval
+workflow), the `roster` read lockdown, `backups` (version-history listing) and
+`isRHQStaff()` (RHQ Staff approvals).
 
-Six separate changes are stuck behind it:
+⚠️ **Reported, not verified.** A dev sandbox cannot reach the project, so
+nothing here has been exercised against live Firebase. The first things to try
+on the real site, because each one was dead before and each fails visibly:
+**Build N Frames from Camp Plan** and **Publish frame changes** in Map:
+Territory, the **Backups** panel's history list, and an RHQ Staff approval.
 
-| Block | Consequence of not republishing |
-|---|---|
-| `campaignFrames` | **RHQ cannot write campaign frames at all** against live Firebase. The whole replay-authoring flow is dead in production. |
-| `intelStats` | Every anonymous decrypt count is rejected. Writes are deliberately swallowed, so the puzzles still work — the Ops Centre "Decrypts" panel just reads zero forever, which looks like "nobody is playing" rather than "this is broken". |
-| `intelSubmissions` | The COY-intel approval workflow doesn't work live. |
-| `roster` read lockdown | Roster reads are still on the old, looser rule (RHQ + own-record only is what the repo has). |
-| `backups` (2026-08-05) | The **Backups** panel cannot list version history — the read is denied. Capture still runs on every save (writes are swallowed on failure), so nothing is lost meanwhile; the panel just shows its "could not read" notice. |
-| `isRHQStaff` (2026-08-05) | **RHQ Staff accounts cannot approve anything live.** The role exists, the UI works, but publishing an approved fragment writes `content/intel` and clears `intelSubmissions` — both denied for that role until the republish. |
+⚠️ **The repo file is not the live ruleset.** It is a copy of what someone last
+pasted into the console — nothing in the build or the deploy compares them, and
+they drifted for two months without a single symptom at build time. **Any edit
+to `firestore.rules` needs a fresh publish**: Firebase Console → Firestore →
+Rules → paste → Publish.
 
-**How to do it:** Firebase Console → Firestore → Rules → paste
-[firestore.rules](firestore.rules) → Publish. No code change needed.
-
-**Not on that list, and deliberately so:** the second map (2026-09-12) added
-`activeMap` and a per-map `territory_*` / `campaignDefaultStart_*` document,
-and put every map's replay frames in the existing `campaignFrames` collection
-under a `map` field. All of those are covered by rules blocks already in the
-file, so maps add nothing new to publish — but they inherit the
-`campaignFrames` blocker above, for every map rather than one.
-
-The same goes for 2026-09-14: **map distribution** stores a per-map
-`mapRelease` / `mapRelease_<id>` document, and **staged frame release** adds a
-`hidden` field to a `campaignFrames` document. `content/{slice}` is a wildcard
-match with no field validation and `campaignFrames` is `read: true` /
-`write: isRHQ()` with none either, so neither needs a new block. Both inherit
-the same `campaignFrames` blocker: until the republish, revealing a frame
-cannot be saved live.
+**Nothing since has needed a new block**, deliberately. The second map
+(2026-09-12) added `activeMap` and per-map `territory_*` /
+`campaignDefaultStart_*` documents; **map distribution** (2026-09-14) stores a
+per-map `mapRelease` document; **staged frame release** adds a `hidden` field
+to a `campaignFrames` document; **per-frame zones** adds `hiddenZones` and
+**carry-forward** only rewrites `cells`; **Critical Intel** (2026-09-17) added
+`content/criticalIntel`. `content/{slice}` is a wildcard match with no field
+validation and `campaignFrames` is `read: true` / `write: isRHQ()` with none
+either, so all of them were already covered.
 
 ### While you're in there: Storage (added 2026-08-04)
 
@@ -223,7 +220,7 @@ QA pass available.
   paste-to-spread, Enter to submit) — **test the paste and focus behaviour on a
   phone**, that's where it's least certain.
 - "Preview as recruit" in both editors.
-- Telemetry end-to-end (blocked on §0).
+- Telemetry end-to-end (was blocked on §0; unblocked 2026-09-17).
 
 ### Backups / version history (2026-08-05)
 [backups.js](src/lib/backups.js) + [BackupsPanel.jsx](src/pages/ops/BackupsPanel.jsx).
@@ -231,8 +228,9 @@ The pure logic is harness-verified (28 checks: change summaries per slice shape,
 size formatting, the roster exclusion in the full export, and a LOCAL MODE
 round trip covering pruning at the cap, newest-first ordering, per-slice
 isolation, duplicate detection, and the three skip paths — undefined, oversized,
-circular). **The Firestore path is not verified at all** and can't be until §0.
-Worth driving:
+circular). **The Firestore path is not verified at all.** It could not be until
+§0, which cleared on 2026-09-17 — so this is now simply untested rather than
+untestable, and it is the first thing worth driving:
 - capture actually fires on a real save, and the entry names the right person
 - Restore puts content back AND leaves a restore point for the version it
   replaced (the undo-of-undo property the panel promises)
@@ -243,8 +241,9 @@ Worth driving:
 
 ### Staff roles & RHQ Staff approvals (2026-08-05)
 [ApprovalsQueue.jsx](src/components/ApprovalsQueue.jsx), the two new roles, and
-the `staffAccess` password slice. Untested in a browser; the approval path can't
-be tested against live Firebase until §0 is done. Worth driving:
+the `staffAccess` password slice. Untested in a browser; the approval path was
+blocked on §0, which cleared on 2026-09-17, so it can be driven live now. Worth
+driving:
 - an RHQ Staff account **cannot** reach `/operations-centre` or
   `/company-command` (both should show the clearance-denied screen)
 - a non-190990 RHQ opening an existing staff user: role select shows the current
@@ -264,7 +263,8 @@ be tested against live Firebase until §0 is done. Worth driving:
 [videoUpload.js](src/lib/videoUpload.js). Only `resolveVideo()` was checked
 with a throwaway harness (Storage/blob/YouTube/Vimeo/extension cases). Untested
 in a browser, and the upload path cannot be tested at all until Storage is
-enabled (§0). Specifically worth driving:
+enabled — the one part of §0 still outstanding (the Firestore half cleared
+2026-09-17). Specifically worth driving:
 - drag enter/leave counting — nested children fire `dragleave`, hence the depth
   counter; check the highlight doesn't flicker
 - dropping a **link** rather than a file (drag a YouTube tab's address bar)

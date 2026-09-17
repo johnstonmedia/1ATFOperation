@@ -17,6 +17,33 @@ keep entries short and focused on what a new collaborator needs to know.
 
 ---
 
+## 2026-09-17 — firestore.rules published; the standing blocker is cleared
+
+- **RHQ published `firestore.rules` to the Firebase Console.** It had never
+  been republished since July and was the single highest-value item in
+  HANDOVER §0. Six changes were stacked behind it and are now live:
+  `campaignFrames` (the whole replay-authoring flow), `intelStats` (anonymous
+  decrypt counts), `intelSubmissions` (COY-intel approvals), the `roster` read
+  lockdown, `backups` (version-history listing) and `isRHQStaff()`.
+- Docs updated to match: HANDOVER §0 rewritten from "the one thing that blocks
+  everything" to a cleared item plus what to exercise, the four §0
+  cross-references corrected, and the four "STILL PENDING" notes in CLAUDE.md
+  turned over. Only the **Storage** half of §0 is still outstanding (bucket not
+  enabled, `storage.rules` not published) — that one blocks video uploads only,
+  and a pasted link needs no Storage at all.
+- ⚠️ **Reported, not verified.** A dev sandbox cannot reach the project, so
+  nothing has been exercised against live Firebase. First things to try, each
+  of which was dead before and fails visibly: **Build N Frames from Camp Plan**
+  and **Publish frame changes**, the Backups panel's history list, an RHQ Staff
+  approval.
+- ⚠️ Recorded in both files because it is the trap this repo actually fell
+  into: **the repo file is not the live ruleset.** It is a copy of what someone
+  last pasted into the console, nothing in the build or the deploy compares
+  them, and they drifted for two months with no symptom at build time. Any edit
+  to `firestore.rules` needs a fresh publish.
+
+---
+
 ## 2026-09-17 — Reveal the satellite layer twice as fast; make a missing base map say so
 
 - **The tile reveal waited on all 352 tiles**, so it paid the latency of the
