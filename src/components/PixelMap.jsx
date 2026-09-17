@@ -375,6 +375,23 @@ export default function PixelMap({
               palette instead of jumping when the tiles land. */}
           <div style={{ position: 'absolute', inset: 0, filter: imageFilterFor(map) }}>
             <img src={map.image} alt={`${map.name} operational map`} draggable={false}
+              // ⚠️ THE FLOOR FAILS SILENTLY OTHERWISE, and it fails badly: with
+              // no base art the territory hatch is left floating on the page
+              // background, which reads as "the map is gone" rather than as a
+              // missing file — there is nothing on screen to say which. A
+              // browser never retries a failed <img> on its own, so one blip on
+              // a 34 KB PNG costs the visitor the whole map for that visit.
+              // Retry ONCE with a cache-buster (a failed response can itself be
+              // cached), then say so where a developer will find it.
+              onError={(e) => {
+                const el = e.currentTarget
+                if (el.dataset.retried) {
+                  console.warn(`[1atf] map art failed to load: ${map.image} — the territory will draw over an empty background.`)
+                  return
+                }
+                el.dataset.retried = '1'
+                el.src = `${map.image}${map.image.includes('?') ? '&' : '?'}retry=1`
+              }}
               style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', imageRendering: 'pixelated', userSelect: 'none' }} />
             <TileBase map={map} />
           </div>

@@ -400,6 +400,42 @@ assuming a page exists).
     inside a transformed ancestor), and a browser that honoured it would leave
     the static floor showing mid-zoom-out — the exact flicker this design
     exists to avoid.
+    ⚠️ **THE REVEAL WAITS ON THE TILES ON SCREEN, NOT ALL 352** (2026-09-17).
+    Waiting for the whole set meant paying the latency of the SLOWEST of 352
+    requests before showing any imagery — two to three seconds of the low-res
+    floor while most tiles sat finished. The set still covers the whole frame
+    and is still fetched in full; only the GATE narrowed, to the tiles inside
+    the map's `focus` box (`opening`/`openingCount` from `fixedTiles`). A tile
+    the viewer cannot see cannot visibly swap, and not being seen is the whole
+    property the one-layer reveal protects.
+    ⚠️ **What makes it work is DOM ORDER, not `fetchpriority`.** The opening
+    tiles are hoisted to the front of `best.list` (stable sort, so row-major
+    survives within each group; tiles never overlap, so paint order is
+    irrelevant). A browser has a handful of connections per host and issues
+    requests in document order — row-major scatters the opening tiles through
+    all 352, so the last one the reveal waits on could be queued near the end.
+    `fetchpriority` is set too but is only a hint, and measured through a
+    request interceptor it changed nothing.
+    ⚠️ **A harness that serves every request in parallel CANNOT measure this** —
+    the first attempt reported no gain at all, because the max of 132 uniform
+    latencies is near enough the max of 352. Model the connection limit: 6 in
+    flight, FIFO, served in issue order. Under that, measured on the same
+    deterministic latencies: **first visible 4240 ms → 2003 ms**, revealing
+    with 150/352 of the whole set loaded and 132/132 of the on-screen ones, and
+    zero samples showing the layer with an incomplete on-screen set. The known
+    cost: someone zooming out inside the first second or so can catch the outer
+    tiles arriving — onto the static floor, not blank space.
+    The tile host is also in a `<link rel="preconnect">` in `index.html`, so the
+    DNS and TLS handshake isn't sitting in front of the first tile. `tiles.url`
+    in maps.js stays the source of truth; a stale hint costs one idle socket.
+  - ⚠️ **`map.image` FAILING IS SILENT AND LOOKS LIKE DATA LOSS.** With no base
+    art the territory hatch is left floating on the page background, which
+    reads as "the map is gone" rather than "a file 404'd" — and nothing on
+    screen distinguishes them. A browser never retries a failed `<img>`, so one
+    blip on a 34 KB PNG costs that visitor the whole map for the visit.
+    `PixelMap` retries ONCE with a cache-buster (a failed response can itself be
+    cached) and then `console.warn`s the URL. If someone reports a map with
+    territory but no terrain, that warning is the first thing to look for.
   - **Boundaries are VECTORS, not baked into the art**
     ([mapLines.js](src/lib/mapLines.js) + [MapLines.jsx](src/components/MapLines.jsx)):
     the Commonwealth land boundary and the Sector 8/9 line (both yellow),

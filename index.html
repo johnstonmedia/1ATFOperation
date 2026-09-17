@@ -28,6 +28,15 @@
     <title>1ATF // OPERATIONAL PORTAL</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- Satellite tiles for the Regional map. The connection (DNS + TLS) is
+         what the first tile would otherwise wait on, and 350-odd requests all
+         queue behind it, so opening it here rather than when the map mounts is
+         worth a few hundred milliseconds of staring at the low-res floor.
+         ⚠️ The host is also in `tiles.url` in src/lib/maps.js, which is the
+         source of truth — if that ever changes, this hint is dead weight
+         rather than wrong (a preconnect to an unused host just costs one idle
+         socket), but update it. -->
+    <link rel="preconnect" href="https://maps.six.nsw.gov.au" crossorigin />
     <link
       href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&family=Rajdhani:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap"
       rel="stylesheet"

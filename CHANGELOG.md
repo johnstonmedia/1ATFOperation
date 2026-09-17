@@ -17,6 +17,42 @@ keep entries short and focused on what a new collaborator needs to know.
 
 ---
 
+## 2026-09-17 — Reveal the satellite layer twice as fast; make a missing base map say so
+
+- **The tile reveal waited on all 352 tiles**, so it paid the latency of the
+  slowest request in the set before showing any imagery — the two to three
+  seconds of low-res base map the unit reported. It now waits on the tiles
+  inside the map's `focus` box only. The set still covers the whole frame and
+  is still fetched in full; a tile the viewer cannot see cannot visibly swap,
+  which is the property the one-layer reveal exists to protect.
+- ⚠️ **DOM order is what actually fixed it, not `fetchpriority`.** Opening
+  tiles are hoisted to the front of the list (stable sort; tiles never overlap
+  so paint order doesn't matter). Browsers issue requests in document order
+  with a few connections per host, and row-major order scattered the opening
+  tiles through all 352 — so the last tile the reveal waited on could be queued
+  near the end. `fetchpriority` is set as well, but it is a hint and through a
+  request interceptor it measured as nothing.
+- ⚠️ **The first harness measured no gain, and that was the harness's fault** —
+  it served every request in parallel, where the max of 132 uniform latencies
+  is near enough the max of 352. Re-measured with the connection limit modelled
+  (6 in flight, FIFO, issue order) on identical deterministic latencies:
+  **first visible 4240 ms → 2003 ms**, revealing with 132/132 on-screen tiles
+  and 150/352 of the whole set, and zero samples showing the layer with an
+  incomplete on-screen set. Cost: zooming out within the first second or so can
+  catch outer tiles arriving, onto the static floor rather than blank space.
+- Added a `preconnect` for the tile host in `index.html` so the handshake is
+  not in front of the first tile.
+- **A missing `map.image` no longer fails silently.** The unit saw the NSW map
+  as territory hatch on an empty background, which is exactly what a 404 on the
+  base art looks like — and nothing said so. ⚠️ **Not reproduced here**: the
+  art loads and renders correctly in dev and in a production build, with and
+  without replay frames, so this is a fix for the failure mode rather than a
+  diagnosed cause. `PixelMap` now retries once with a cache-buster (a browser
+  never retries a failed `<img>`, and a failed response can itself be cached)
+  and then warns with the URL, so the next report is diagnosable in one line.
+
+---
+
 ## 2026-09-17 — Frame edits carry forward
 
 - **"Update Frame" now copies what was painted onto every LATER frame.** Ground

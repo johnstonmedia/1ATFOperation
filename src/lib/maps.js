@@ -378,7 +378,47 @@ export function fixedTiles(map) {
     if (list.length > FIXED_MAX_TILES) break
     best = { z, list }
   }
+  if (best) markOpening(map, best)
   return best
+}
+
+// Which tiles are actually ON SCREEN when the map opens — inside its `focus`
+// box, or the whole frame for a map that declares none.
+//
+// ⚠️ This does NOT narrow what gets fetched. The set still covers the whole
+// frame (that rule is in TileBase's header, and breaking it drew a hard-edged
+// rectangle across the map). It marks which tiles the viewer can SEE at the
+// opening view, so TileBase can reveal on those and fetch them first. A tile
+// outside the view cannot visibly swap, so it cannot cause the patchwork the
+// one-layer reveal exists to prevent — and waiting on it means paying the
+// slowest request in the whole set before showing any imagery at all.
+function markOpening(map, best) {
+  const f = map.focus
+  if (!f) {
+    for (const t of best.list) t.opening = true
+    best.openingCount = best.list.length
+    return
+  }
+  // Tile geometry is in PERCENTAGES of the frame; focus is in CELLS.
+  const x0 = (f.x0 / map.cols) * 100, x1 = (f.x1 / map.cols) * 100
+  const y0 = (f.y0 / map.rows) * 100, y1 = (f.y1 / map.rows) * 100
+  let n = 0
+  for (const t of best.list) {
+    t.opening = t.left < x1 && t.left + t.width > x0 && t.top < y1 && t.top + t.height > y0
+    if (t.opening) n += 1
+  }
+  best.openingCount = n
+  // ⚠️ ON-SCREEN TILES GO FIRST IN THE LIST, and that is the part that
+  // actually works. `fetchpriority` is a HINT — a browser may ignore it, and
+  // measured through a request interceptor it changes nothing — but DOM ORDER
+  // decides the order requests are issued, and a browser only has a handful of
+  // connections to one host. Row-major order scatters the opening tiles
+  // through all 352, so the last one the reveal waits on could be issued near
+  // the end of the queue; hoisted, they are the first 132 requests made.
+  // The sort is stable, so row-major order survives inside each group and the
+  // tiles still paint in a sane sequence. They cannot overlap — every tile is
+  // absolutely positioned by percentage — so DOM order has no visual effect.
+  best.list.sort((a, b) => (b.opening ? 1 : 0) - (a.opening ? 1 : 0))
 }
 
 /* ---------------------------- campaign frames ---------------------------- */

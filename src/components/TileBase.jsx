@@ -54,16 +54,34 @@ const FAIL_LIMIT = 8
 // just at a different scale: the fix is always FEWER swaps, never faster ones.
 //
 // So the tiles are always visible and the CONTAINER is what fades, once, when
-// the set is done. "Done" is every tile settled — each <img> fires exactly one
-// of load/error, so the count always gets there — with a timeout as the floor
-// in case a request simply hangs, and that only reveals if most of the set
-// actually arrived. A half-tiled reveal would be the patchwork again.
+// the set is done — with a timeout as the floor in case a request simply hangs,
+// and that only reveals if most of the set actually arrived. A half-tiled
+// reveal would be the patchwork again.
+//
+// ⚠️ "DONE" IS THE TILES ON SCREEN, NOT ALL 352 (2026-09-17). It used to be
+// every tile in the set, which meant the reveal paid the latency of the SLOWEST
+// request out of 352 before showing any imagery at all — two to three seconds
+// of staring at the low-res floor while 340-odd tiles sat finished. The set
+// still covers the whole frame and is still fetched in full; what changed is
+// that the reveal waits only on the tiles inside the map's opening view
+// (`opening` from fixedTiles), because a tile the viewer cannot see cannot
+// visibly swap, and not being seen is the entire property the one-layer reveal
+// is protecting. Those tiles are also fetched FIRST, so the browser's handful
+// of parallel connections goes to the ones the reveal is waiting on.
+//
+// The known cost, stated plainly: someone who zooms out within the first second
+// or so can catch the outer tiles still arriving. They land on the static
+// floor, not on blank space, and the opening view is where everyone starts —
+// against two to three seconds of wrong-looking map for every single visitor,
+// every time.
 const REVEAL_TIMEOUT_MS = 8000
 const REVEAL_MIN_FRACTION = 0.6
 
 export default function TileBase({ map }) {
   const failed = useRef(new Set())
-  const health = useRef({ ok: 0, bad: 0 })
+  // `ok`/`bad` are the whole set (they decide whether the host is answering at
+  // all); `seenOpening` is the on-screen subset the reveal actually waits on.
+  const health = useRef({ ok: 0, bad: 0, seenOpening: 0, okOpening: 0 })
   const [, bump] = useState(0)
   const [ready, setReady] = useState(false)
 
@@ -71,29 +89,30 @@ export default function TileBase({ map }) {
   // life of the component and a pan or zoom can never invalidate it.
   const tiles = useMemo(() => fixedTiles(map), [map])
   const total = tiles?.list.length || 0
+  const openingTotal = tiles?.openingCount || 0
 
   // Reset when the map changes — a different map is a different tile set.
   useEffect(() => {
     failed.current = new Set()
-    health.current = { ok: 0, bad: 0 }
+    health.current = { ok: 0, bad: 0, seenOpening: 0, okOpening: 0 }
     setReady(false)
   }, [tiles])
 
   // The floor. Without it a single request that never settles would hold the
   // imagery back for the whole session.
   useEffect(() => {
-    if (!total || ready) return undefined
+    if (!openingTotal || ready) return undefined
     const id = setTimeout(() => {
-      if (health.current.ok >= total * REVEAL_MIN_FRACTION) setReady(true)
+      if (health.current.okOpening >= openingTotal * REVEAL_MIN_FRACTION) setReady(true)
     }, REVEAL_TIMEOUT_MS)
     return () => clearTimeout(id)
-  }, [total, ready])
+  }, [openingTotal, ready])
 
   // Counted in a ref and flipped ONCE, rather than held in state: 352 tiles
   // reporting in would otherwise be 352 re-renders of the whole layer.
   const settled = () => {
-    const { ok, bad } = health.current
-    if (ok + bad >= total && ok > 0) setReady(true)
+    const h = health.current
+    if (h.seenOpening >= openingTotal && h.okOpening > 0) setReady(true)
   }
 
   if (!tiles) return null
@@ -122,9 +141,16 @@ export default function TileBase({ map }) {
           // zooming out, which is the flicker this whole file exists to avoid.
           // The set is fetched once, in full, and cached.
           decoding="async"
+          // Lowercase on purpose: React 18 passes an unknown lowercase
+          // attribute straight through to the DOM, where this is the real
+          // attribute name. The on-screen tiles are what the reveal waits on,
+          // so they get the browser's few parallel connections first and the
+          // rest of the frame fills in behind them.
+          fetchpriority={t.opening ? 'high' : 'low'}
           onLoad={() => {
             health.current.ok += 1
             health.current.bad = 0
+            if (t.opening) { health.current.okOpening += 1; health.current.seenOpening += 1 }
             settled()
           }}
           onError={(e) => {
@@ -135,6 +161,7 @@ export default function TileBase({ map }) {
             e.currentTarget.style.display = 'none'
             failed.current.add(t.url)
             health.current.bad += 1
+            if (t.opening) health.current.seenOpening += 1
             if (health.current.bad === FAIL_LIMIT && health.current.ok === 0) bump((n) => n + 1)
             settled()
           }}
