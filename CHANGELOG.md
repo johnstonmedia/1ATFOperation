@@ -17,6 +17,27 @@ keep entries short and focused on what a new collaborator needs to know.
 
 ---
 
+## 2026-10-10 — Home map tidy-up; white 1ATF hatch; no RHQ block in generated frames
+
+- **1ATF ground hatches WHITE** (`TASKFORCE_HATCH` in territory.js). Beacons,
+  zone outlines and label text keep `ASSURE_BLUE`.
+- **Home**: the map title / switch bar (`MapSwitch`) now sits ABOVE the map,
+  under the alert banners. The **CAMP PROGRESS** box (`CampControls`) is gone
+  from Home; the replay still drives the day the zone overlay reports. The
+  component file is kept, unused.
+- **Legend**: Singleton no longer declares an `artKey`, so the `+ BOUNDARIES`
+  toggle is gone. The lines themselves still draw.
+- **Print sheets are Ops Centre only** — the ops PDF button now reads
+  `🖨 PRINT SHEETS — N PAGES (PDF)` with the "A3 landscape, one page per
+  recorded day" caption; the public button under the Home map is removed.
+- **Generated camp frames no longer paint RHQ.** The live map's `R` cells were
+  carried into every frame and never overpainted, leaving an orange rectangle
+  in the white ground on the later days. RHQ is still the front's origin.
+  ⚠️ Existing frames must be rebuilt (**⚙ Build N Frames from Camp Plan**) to
+  pick this up. Commit b72ec0a.
+
+---
+
 ## 2026-09-17 — Reveal the satellite layer twice as fast; make a missing base map say so
 
 - **The tile reveal waited on all 352 tiles**, so it paid the latency of the

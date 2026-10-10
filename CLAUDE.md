@@ -661,6 +661,14 @@ assuming a page exists).
       the ink for no extra meaning and buried the satellite imagery. The
       OUTLINE and NAME carry the state; the wash only hints at extent. HQ is the
       exception at 0.16 — with no plan behind it, the wash is all it has.
+    - ⚠️ **1ATF ground is HATCHED WHITE** (`TASKFORCE_HATCH` in territory.js,
+      2026-10-10), not assure-blue. Only the hatch/legend/PDF chip changed:
+      beacons, zone outlines and label text still use `ASSURE_BLUE`. White has
+      no lighter variant, so `t` and `T` hatch identically.
+    - ⚠️ **Generated frames carry NO RHQ cells** (2026-10-10). They used to
+      keep the live map's `R` cells and never overpaint them, which left a
+      solid orange rectangle in the white ground on Days 2–4. RHQ is still the
+      front's ORIGIN (read off the live map); it just isn't painted.
     - **Ink over imagery, not over pixel art** (2026-09-15): `HATCH_OPACITY` in
       terrainRender.js is **0.66**, up from 0.48, and `lighten()`'s default in
       territory.js is **0.3**, down from 0.5. Both were tuned when the map was
@@ -708,10 +716,9 @@ assuming a page exists).
   - A map may declare an **`artKey`** (+ `artKeyLabel`): what its own art
     carries under the territory hatch, rendered by
     [MapLegend.jsx](src/components/MapLegend.jsx) behind a `+ <artKeyLabel>`
-    toggle next to the company key. Singleton's is the two boundary lines,
-    labelled `BOUNDARIES`; NSW has none, and so shows no toggle. It is not
-    hand-written: Singleton sets `artKey: LINE_KEY` from `lib/mapLines.js`, the
-    same module that draws the lines, so the key can't drift from them.
+    toggle next to the company key. **No map sets one now** — Singleton's
+    `BOUNDARIES` toggle was removed at the unit's request (2026-10-10); to
+    restore it set `artKey: LINE_KEY` from `lib/mapLines.js`.
   - **`imageFilter`**: the page draws every map through `IMAGE_FILTER`
     (`contrast(140%) sepia(60%) …` in `terrainRender.js`), which was written
     for flat pixel art and would crush satellite imagery to black and stain it
@@ -1009,12 +1016,11 @@ assuming a page exists).
   collection, not a `content/*` slice — public read, RHQ write, same shape as
   the others); `campaignDefaultStart` is a normal `SINGLE_SLICES` entry so
   it's already covered by the generic `content/*` rule.
-- **PDF export** ([src/lib/framesPdf.js](src/lib/framesPdf.js)) — in **two
-  places**: `🖨 Export N Frames as PDF` in Ops Centre → Map: Territory →
-  Campaign replay, and a **public `🖨 PRINT SHEETS` button under the map on
-  Home** (`PrintSheets` in Home.jsx). The public one is deliberate and safe:
-  it prints exactly the frames the replay above already plays, because Home
-  hands it the RELEASED set, so it can never leak a day RHQ has not revealed.
+- **PDF export** ([src/lib/framesPdf.js](src/lib/framesPdf.js)) — **Ops Centre
+  only** (2026-10-10): `🖨 PRINT SHEETS — N PAGES (PDF)` in Map: Territory →
+  Campaign replay. It used to also sit publicly under the Home map; that was
+  removed at the unit's request. The ops button prints EVERY frame, revealed
+  or not.
   One
   **A3-LANDSCAPE** page per frame at 150 dpi, cropped to the map's own ground so
   print shows what the screen shows. These are WALL SHEETS read from across
