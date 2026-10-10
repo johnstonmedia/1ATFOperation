@@ -132,13 +132,14 @@ export function buildCampFrames(mapId, territory) {
   const advance = orderOutward(ao, cols, ox, oy)
 
   return [0, ...days.map((d) => d.n)].map((day, i) => {
-    const cells = base.split('')
+    // ⚠️ RHQ's cells are NOT carried into generated frames (2026-10-10). They
+    // used to be, and never overpainted — which left a solid orange rectangle
+    // sitting in the middle of the white 1ATF ground on the later days. RHQ is
+    // still where the front starts (originOf reads it off the live map above);
+    // it just isn't painted. RHQ can still hand-paint it onto any frame.
+    const cells = base.replace(/[Rr]/g, '.').split('')
     const progress = zoneProgress(mapId, day)
-    // RHQ ground is never overpainted — it is the one fixed thing on the
-    // board, and S COY NL sits right on top of it.
-    const paintCell = (idx, mark) => {
-      if (cells[idx] !== 'R' && cells[idx] !== 'r') cells[idx] = mark
-    }
+    const paintCell = (idx, mark) => { cells[idx] = mark }
 
     // 1. The threat holds the whole area of operations...
     for (const idx of ao) paintCell(idx, MERIDIAN_CODE)

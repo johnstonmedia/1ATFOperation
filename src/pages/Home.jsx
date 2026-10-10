@@ -7,12 +7,9 @@ import { useUnseen, useUnseenIntel, hasIntelBaseline, markIntelSeen } from '../h
 import { decryptProgress } from '../lib/intelProgress'
 import { COMPANIES, PHONETIC, smeacOf, movementsOf } from '../firebase/seed'
 import { mapById, territorySlice, campaignStartSlice, framesForMap, zoneVisibilitySlice, isMapPublic, publicMaps } from '../lib/maps'
-import { visibleZones, zonesForFrame } from '../lib/mapZones'
+import { visibleZones } from '../lib/mapZones'
 import { zoneProgress, hasCampPlan } from '../lib/campPlan'
 import { sortFrames, releasedFrames } from '../lib/campaign'
-import { exportFramesPdf, framesPdfSupported } from '../lib/framesPdf'
-import { downloadBlob } from '../lib/replayExport'
-import CampControls from '../components/CampControls'
 import useViewedMap from '../hooks/useViewedMap'
 
 const RECRUITS = ['Alpha', 'Bravo', 'Charlie', 'Delta']
@@ -91,7 +88,6 @@ export default function Home() {
     () => sortFrames(frames).map((f) => (typeof f.day === 'number' ? f.day : null)),
     [frames],
   )
-  const replayDrivesDay = frameDays.length > 0 && frameDays.every((d) => d !== null)
   const onFrame = useCallback((idx) => {
     const d = frameDays[idx]
     if (typeof d === 'number') setDay(d)
@@ -139,16 +135,15 @@ export default function Home() {
         <Link to="/briefings" className="alert-banner">⚠ NEW BRIEFING / TASKING POSTED — TAP TO VIEW</Link>
       )}
 
-      {/* Animated campaign-history replay; plain static map when no campaign
-          start state has been recorded yet. */}
-      <CampaignReplayMap territory={territory} frames={frames} zones={allZones} zoneProgress={campProgress} defaultStartId={state[campaignStartSlice(live.id)]} onFrame={onFrame} />
-      {hasCampPlan(live.id) && (
-        <CampControls
-          mapId={live.id} day={day} onDay={setDay} dayFromReplay={replayDrivesDay}
-        />
-      )}
+      {/* Which map this is, and the way back to the other one — ABOVE the
+          map, under the alert banners, so it reads as the map's title. */}
       <MapSwitch live={live} defaultId={defaultMap.id} isOverride={isOverride} onView={viewMap} state={state} />
-      <PrintSheets territory={territory} frames={frames} zones={allZones} zoneSlice={state[zoneVisibilitySlice(live.id)]} mapId={live.id} />
+
+      {/* Animated campaign-history replay; plain static map when no campaign
+          start state has been recorded yet. The CAMP PROGRESS box that sat
+          under it was removed (2026-10-10); the replay still sets the day the
+          zone overlay reports. The print button moved to the Ops Centre. */}
+      <CampaignReplayMap territory={territory} frames={frames} zones={allZones} zoneProgress={campProgress} defaultStartId={state[campaignStartSlice(live.id)]} onFrame={onFrame} />
 
       <div className="row wrap" style={{ marginTop: 20, gap: 16, alignItems: 'flex-start' }}>
         <div style={{ flex: '1 1 420px' }}>
@@ -164,60 +159,7 @@ export default function Home() {
   )
 }
 
-// Download the released frames as printable sheets.
-//
-// PUBLIC on purpose. The same export exists in the Ops Centre, but the people
-// who want these are the ones at camp standing in front of a board, not RHQ at
-// a laptop — and nothing here is privileged: it prints exactly the frames the
-// replay above already plays. `frames` is the RELEASED set (Home filters it),
-// so a sheet can never show a day RHQ has not revealed.
-//
-// Hidden entirely when there is nothing to print, and the render is heavy
-// enough (five pages at print resolution, plus tiles) to need a busy state.
-function PrintSheets({ territory, frames, zones, zoneSlice, mapId }) {
-  const [busy, setBusy] = useState(false)
-  const [err, setErr] = useState('')
-  const plan = hasCampPlan(mapId)
-  if (!frames?.length || !framesPdfSupported()) return null
-
-  const run = async () => {
-    setErr('')
-    setBusy(true)
-    try {
-      const sorted = sortFrames(frames)
-      const { blob } = await exportFramesPdf({
-        territory,
-        frames: sorted,
-        zones,
-        // A frame may show its own selection of areas — same rule the replay
-        // above follows, so the sheets can't print areas the screen hid.
-        zonesAt: (i) => zonesForFrame(mapById(mapId), zoneSlice, sorted[i]?.hiddenZones),
-        progressFor: plan
-          ? (i) => (typeof sorted[i]?.day === 'number' ? zoneProgress(mapId, sorted[i].day) : null)
-          : null,
-      })
-      downloadBlob(blob, `1atf-progress-${new Date().toISOString().slice(0, 10)}.pdf`)
-    } catch (e) {
-      setErr(e?.message || 'Could not build the PDF.')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  return (
-    <div className="row center wrap" style={{ gap: 10, marginTop: 10 }}>
-      <button className="ghost" onClick={run} disabled={busy} style={{ fontSize: 11 }}>
-        {busy ? 'BUILDING…' : `🖨 PRINT SHEETS — ${frames.length} PAGE${frames.length === 1 ? '' : 'S'} (PDF)`}
-      </button>
-      <span className="mono dim" style={{ fontSize: 10 }}>
-        A3 landscape, one page per recorded day
-      </span>
-      {err && <span className="mono" style={{ fontSize: 10, color: 'var(--hostile)' }}>{err}</span>}
-    </div>
-  )
-}
-
-// Map switch, under the map. RHQ picks which map a visitor LANDS on; this
+// Map switch, above the map. RHQ picks which map a visitor LANDS on; this
 // lets them look at the others without a login and without changing anything
 // published. One button per map that isn't on screen, so a third map needs no
 // new UI — with two maps that is exactly the single "view the other one"
@@ -231,7 +173,7 @@ function MapSwitch({ live, defaultId, isOverride, onView, state }) {
   const others = publicMaps(defaultId, state).filter((m) => m.id !== live.id)
   if (!others.length) return null
   return (
-    <div className="row between center wrap" style={{ gap: 10, marginTop: 10 }}>
+    <div className="row between center wrap" style={{ gap: 10, marginBottom: 10 }}>
       <div className="row center wrap" style={{ gap: 8, minWidth: 0 }}>
         <span className="mono" style={{ fontSize: 12, color: '#fff', letterSpacing: 1 }}>
           {live.name.toUpperCase()}

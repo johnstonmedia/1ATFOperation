@@ -920,9 +920,9 @@ function CampaignPanel({
             className="ghost"
             onClick={doExportPdf}
             disabled={count === 0 || pdfBusy || !framesPdfSupported()}
-            title={count === 0 ? 'No frames recorded yet' : 'Print every frame to a PDF, one page each, with a key'}
+            title={count === 0 ? 'No frames recorded yet' : 'A3 landscape, one page per recorded day'}
           >
-            {pdfBusy ? 'Rendering…' : `🖨 Export ${count} Frame${count === 1 ? '' : 's'} as PDF`}
+            {pdfBusy ? 'BUILDING…' : `🖨 PRINT SHEETS — ${count} PAGE${count === 1 ? '' : 'S'} (PDF)`}
           </button>
         )}
         {active && !exporting && (
@@ -942,6 +942,11 @@ function CampaignPanel({
           </>
         )}
       </div>
+      {active && count > 0 && (
+        <div className="mono dim" style={{ fontSize: 10 }}>
+          🖨 Print sheets: A3 landscape, one page per recorded day — every frame, revealed or not.
+        </div>
+      )}
       {active && hasRecentFrame && (
         <label className="row center wrap" style={{ gap: 8 }}>
           <span className="mono dim" style={{ fontSize: 10, letterSpacing: 1, flex: '0 0 auto' }}>IMAGE HEADLINE</span>

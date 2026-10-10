@@ -34,7 +34,6 @@
 // Grid sizing rule, for anyone adding a map: cols/rows must divide the art's
 // pixel size exactly (here, one cell per 3x3 block of source pixels), so the
 // paintable grid stays aligned to the pixel art instead of straddling it.
-import { LINE_KEY } from './mapLines'
 
 const asset = (file) => import.meta.env.BASE_URL + 'map/' + file
 
@@ -144,10 +143,10 @@ export const MAPS = [
       // on the page or on paper, is this one source. (`map.image` remains the
       // offline floor — the same ground, not another provider's.)
     },
-    // The key comes from the same module that draws the lines, so a colour
-    // change can't leave the legend describing something nothing renders.
-    artKeyLabel: 'BOUNDARIES',
-    artKey: LINE_KEY,
+    // No art key: the BOUNDARIES toggle under the map was removed at the
+    // unit's request (2026-10-10). To bring it back, set
+    // `artKeyLabel: 'BOUNDARIES', artKey: LINE_KEY` — LINE_KEY comes from the
+    // module that draws the lines, so the key can't drift from them.
   },
 ]
 

@@ -38,6 +38,11 @@ const RHQ_COLOR = COMPANIES.find((c) => c.letter === 'R')?.accent || '#f39c12'
 // 1ATF-held cell, every recaptured stronghold beacon and the map key row.
 export const ASSURE_BLUE = '#0b6fd8'
 export const SCU_LABEL = '1ATF'
+// What 1ATF-held ground is HATCHED in — white, so taken ground reads as
+// cleared rather than as another force's colour (2026-10-10). Separate from
+// ASSURE_BLUE on purpose: beacons, zone outlines and label text keep the blue,
+// where white would vanish into the labels around them.
+export const TASKFORCE_HATCH = '#ffffff'
 
 // The 1ATF owner code. An activity area is only CONQUERED once every company
 // the plan sends there has been through it; at that point the ground stops
@@ -57,7 +62,7 @@ export const MERIDIAN_CODE = 'M'
 // Paint palette on the recruit map = six companies + 1ATF + Meridian.
 export const PAINT = [
   ...COMPANIES.filter((c) => c.letter !== 'R').map((c) => ({ code: c.letter, label: c.name, color: c.accent })),
-  { code: TASKFORCE_CODE, label: SCU_LABEL, color: ASSURE_BLUE },
+  { code: TASKFORCE_CODE, label: SCU_LABEL, color: TASKFORCE_HATCH },
   { code: MERIDIAN_CODE, label: 'Meridian', color: MERIDIAN_COLOR },
 ]
 export const RHQ_PAINT = { code: 'R', label: 'RHQ', color: RHQ_COLOR }
