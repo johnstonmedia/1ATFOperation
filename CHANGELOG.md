@@ -17,6 +17,16 @@ keep entries short and focused on what a new collaborator needs to know.
 
 ---
 
+## 2026-10-11 — 1ATF is slate cornflower
+
+- **1ATF's colour is now `#6f95c4`** everywhere — hatch, legend, beacons, zone
+  outlines, "1ATF" tags, PDF. Supersedes the 2026-10-10 white hatch (which
+  disappeared into the NSW map's cream terrain) and the old `#0b6fd8` (nearly
+  Alpha's `#2e7dd1`). Chosen by the unit from rendered comparisons of ~16
+  candidates on both maps. `TASKFORCE_HATCH` is now an alias of `ASSURE_BLUE`.
+
+---
+
 ## 2026-10-10 — Home map tidy-up; white 1ATF hatch; no RHQ block in generated frames
 
 - **1ATF ground hatches WHITE** (`TASKFORCE_HATCH` in territory.js). Beacons,

@@ -661,10 +661,13 @@ assuming a page exists).
       the ink for no extra meaning and buried the satellite imagery. The
       OUTLINE and NAME carry the state; the wash only hints at extent. HQ is the
       exception at 0.16 — with no plan behind it, the wash is all it has.
-    - ⚠️ **1ATF ground is HATCHED WHITE** (`TASKFORCE_HATCH` in territory.js,
-      2026-10-10), not assure-blue. Only the hatch/legend/PDF chip changed:
-      beacons, zone outlines and label text still use `ASSURE_BLUE`. White has
-      no lighter variant, so `t` and `T` hatch identically.
+    - ⚠️ **1ATF is SLATE CORNFLOWER `#6f95c4`** (2026-10-11) — hatch,
+      beacons, zone outlines and label text alike (`ASSURE_BLUE`, with
+      `TASKFORCE_HATCH` aliased to it in territory.js). Picked off rendered
+      comparisons on BOTH maps: the old `#0b6fd8` was nearly Alpha's
+      `#2e7dd1`, and white (2026-10-10, one day) vanished into the NSW map's
+      cream terrain. Judge any replacement on both maps, and keep it clear of
+      Alpha.
     - ⚠️ **Generated frames carry NO RHQ cells** (2026-10-10). They used to
       keep the live map's `R` cells and never overpaint them, which left a
       solid orange rectangle in the white ground on Days 2–4. RHQ is still the
@@ -674,8 +677,8 @@ assuming a page exists).
       territory.js is **0.3**, down from 0.5. Both were tuned when the map was
       flat art; over satellite a half-transparent line vanishes into tree canopy
       and shadow, and a 50% tint read as empty ground rather than as ground
-      loosely held. `MERIDIAN_COLOR` is `#d81826` and `ASSURE_BLUE` `#0b6fd8` —
-      deeper and more saturated than the originals for the same reason.
+      loosely held. `MERIDIAN_COLOR` is `#d81826` — deeper and more saturated than the
+      original for the same reason. (`ASSURE_BLUE` has since moved; see above.)
     - ⚠️ The converter **refuses to guess**: a cell that is not a recognisable
       company is reported by name and skipped, never silently dropped, and the
       run always prints what it ignored. The sheet legitimately contains

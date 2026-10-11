@@ -35,14 +35,18 @@ const RHQ_COLOR = COMPANIES.find((c) => c.letter === 'R')?.accent || '#f39c12'
 // Colour and name for ground the WHOLE task force holds — deliberately NOT one
 // of the six company accents, so a unit-wide win reads as one at a glance.
 // Single source of truth: change these two values to restyle/relabel every
-// 1ATF-held cell, every recaptured stronghold beacon and the map key row.
-export const ASSURE_BLUE = '#0b6fd8'
+// 1ATF-held cell, every recaptured stronghold beacon, zone outline and the map
+// key row.
+// ⚠️ Slate cornflower, chosen 2026-10-11 off rendered comparisons on BOTH maps.
+// The old #0b6fd8 sat almost on top of Alpha (#2e7dd1); white (briefly used
+// 2026-10-10) vanished into the NSW map's cream terrain. This is muted and
+// lighter than Alpha, so the two never read as the same force. Keep any
+// replacement well clear of Alpha's hue AND judge it on both maps.
+export const ASSURE_BLUE = '#6f95c4'
 export const SCU_LABEL = '1ATF'
-// What 1ATF-held ground is HATCHED in — white, so taken ground reads as
-// cleared rather than as another force's colour (2026-10-10). Separate from
-// ASSURE_BLUE on purpose: beacons, zone outlines and label text keep the blue,
-// where white would vanish into the labels around them.
-export const TASKFORCE_HATCH = '#ffffff'
+// What 1ATF-held ground is hatched in. Kept as its own name so the hatch can be
+// split from the markers again without hunting for call sites; today they match.
+export const TASKFORCE_HATCH = ASSURE_BLUE
 
 // The 1ATF owner code. An activity area is only CONQUERED once every company
 // the plan sends there has been through it; at that point the ground stops
