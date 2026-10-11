@@ -19,6 +19,10 @@ keep entries short and focused on what a new collaborator needs to know.
 
 ## 2026-10-11 — 1ATF is slate cornflower
 
+- **No DEFAULT tag on the Home map bar.** The public site no longer says which
+  map is RHQ's default; the VIEWING tag on a non-default map stays, and the Ops
+  Centre still shows DEFAULT.
+
 - **1ATF's colour is now `#6f95c4`** everywhere — hatch, legend, beacons, zone
   outlines, "1ATF" tags, PDF. Supersedes the 2026-10-10 white hatch (which
   disappeared into the NSW map's cream terrain) and the old `#0b6fd8` (nearly

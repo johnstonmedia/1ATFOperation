@@ -178,9 +178,9 @@ function MapSwitch({ live, defaultId, isOverride, onView, state }) {
         <span className="mono" style={{ fontSize: 12, color: '#fff', letterSpacing: 1 }}>
           {live.name.toUpperCase()}
         </span>
-        {live.id === defaultId ? (
-          <span className="tag" style={{ fontSize: 9, color: 'var(--accent)', borderColor: 'var(--accent)' }}>DEFAULT</span>
-        ) : (
+        {/* No DEFAULT tag on the public site (removed 2026-10-11) — which map
+            RHQ made the default is admin business; the Ops Centre still shows it. */}
+        {live.id !== defaultId && (
           <span className="tag" style={{ fontSize: 9 }}>VIEWING</span>
         )}
         <span className="mono dim" style={{ fontSize: 10, letterSpacing: 0.5 }}>{live.sub}</span>
