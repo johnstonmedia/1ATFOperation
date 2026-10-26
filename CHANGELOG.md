@@ -17,6 +17,51 @@ keep entries short and focused on what a new collaborator needs to know.
 
 ---
 
+## 2026-10-26 — Load collections in parallel; stop loading the whole audit log
+
+Chasing a report that the site was getting progressively laggier.
+
+- **It is not a leak.** Measured and ruled out first: three minutes idle on the
+  Regional map holds heap at 11.9 MB, nodes at 904, listeners at 174 and 61 fps,
+  all flat; twelve Home→Intel→Briefings round trips leave heap 14.8→12.2 MB,
+  nodes 1321→1253, listeners +13, tile images steady at 352 and canvases at 11.
+  Nothing accumulates in the browser.
+- **The seven collection reads were SERIAL.** `loadFirebase` awaited each one in
+  a `for` loop, so six round trips of latency sat in front of every page load
+  for nothing — they have no dependency on each other. Now `Promise.all`, like
+  the content slices above them already were.
+- **`audit` grew forever and was loaded in full.** Every RHQ action appends an
+  entry and nothing trims them, so the Ops Centre got measurably slower every
+  month. The load is capped at the 300 most recent; the panel says so, and the
+  Clear confirmation now says it deletes every entry *including those not
+  shown*, because claiming "all 300" about an irreversible action would be a
+  lie.
+- ⚠️ **Only `audit` may be capped**, and the reason is `persistCollection`:
+  it DELETES any document missing from what it is handed. `audit` is the only
+  collection nothing writes back wholesale (`logAudit` appends one document;
+  the sole whole-array write is Clear, which means it). `support` and
+  `resetRequests` ARE written back whole by HelpAdmin — capping those would
+  destroy data. Check that property before adding to `COLLECTION_LIMIT`.
+- ⚠️ **Still open, and the biggest number: `campaignFrames` is 646 KB at five
+  frames.** A Regional frame is 132,192 characters, every visitor downloads the
+  whole collection on every page load, hidden frames included, and it grows by
+  132 KB every time RHQ adds one. Not changed here — it needs a real decision
+  about loading frames per map or on demand.
+- ⚠️ **A correction.** A first pass appeared to show client-side boot cost
+  scaling with frame count (1.3 s at 5 frames to 5.5 s at 20). A controlled
+  re-run varying only `prefers-reduced-motion` showed no such scaling — 2.4 s
+  at 5 frames against 2.0 s at 20, with the boot auto-play worth ~600–900 ms
+  either way. The first table was noise and should not be quoted.
+- ⚠️ **The Firestore path is unverified.** LOCAL MODE never calls
+  `loadFirebase`, and a dev sandbox cannot reach the project, so the parallel
+  reads and the audit cap are verified by construction and by build only. What
+  was exercised in a browser: the cap notice, the reworded Clear confirmation,
+  and the public map still rendering.
+- Incidental: 40 Regional frames exceeds the browser's localStorage quota, so
+  LOCAL MODE cannot hold a campaign that size.
+
+---
+
 ## 2026-09-17 — firestore.rules published; the standing blocker is cleared
 
 - **RHQ published `firestore.rules` to the Firebase Console.** It had never

@@ -122,8 +122,26 @@ function saveLocal(state) {
 
 /* ---------------------------- FIREBASE MODE ---------------------------- */
 
+// ⚠️ THE ONE COLLECTION THAT GROWS FOREVER. Every RHQ action appends an audit
+// entry and nothing ever trims them, so a year in, every Ops Centre load drags
+// the whole history down before the console renders. The panel only ever shows
+// the most recent anyway, so the LOAD is capped here.
+//
+// ⚠️ ONLY `audit` MAY BE CAPPED, and the reason is `persistCollection`: it
+// DELETES any document missing from what it is handed, so a partial load that
+// gets written back wholesale silently destroys the rest. `audit` is the only
+// collection nothing does that to — `logAudit` uses `appendItem` (one new
+// document), and the single wholesale write is the Clear button, which means
+// to delete everything. `support` and `resetRequests` ARE written back whole
+// by HelpAdmin, so capping them would delete real data. Check that property
+// before adding anything to this list.
+//
+// `orderBy('ts')` also skips documents with no `ts` field; every entry
+// `logAudit` has ever written has one.
+const COLLECTION_LIMIT = { audit: 300 }
+
 async function loadFirebase() {
-  const { doc, getDoc, collection, getDocs } = await import('firebase/firestore')
+  const { doc, getDoc, collection, getDocs, query, orderBy, limit } = await import('firebase/firestore')
   const out = structuredClone(DEFAULT_STATE)
   // A read that fails still falls back to the seed — the site must render for
   // a signed-out visitor, and several collections are legitimately unreadable
@@ -149,18 +167,30 @@ async function loadFirebase() {
       }
     }),
   )
-  for (const coll of COLLECTION_SLICES) {
-    try {
-      const snap = await getDocs(collection(db, coll))
-      out[coll] = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
-    } catch (e) {
-      // Expected for a signed-out / non-RHQ visitor on the RHQ-only
-      // collections; a real problem on the world-readable ones.
-      fail(coll, e)
-    }
-  }
+  // ⚠️ IN PARALLEL, like the slices above. This was a serial `for await` loop,
+  // so seven collection reads queued one behind the other and the app could not
+  // render until the last one came back — six round trips of latency on every
+  // single page load, for nothing. They do not depend on each other.
+  await Promise.all(
+    COLLECTION_SLICES.map(async (coll) => {
+      try {
+        const ref = collection(db, coll)
+        const cap = COLLECTION_LIMIT[coll]
+        const snap = await getDocs(cap ? query(ref, orderBy('ts', 'desc'), limit(cap)) : ref)
+        out[coll] = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+      } catch (e) {
+        // Expected for a signed-out / non-RHQ visitor on the RHQ-only
+        // collections; a real problem on the world-readable ones.
+        fail(coll, e)
+      }
+    }),
+  )
   return out
 }
+
+// What the audit load is capped at, for the panel's own copy — it must not
+// claim to be showing, or deleting, a number it cannot know.
+export const AUDIT_LOAD_LIMIT = COLLECTION_LIMIT.audit
 
 async function saveFirebaseSlice(slice, value) {
   const { doc, setDoc } = await import('firebase/firestore')

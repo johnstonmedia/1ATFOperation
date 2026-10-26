@@ -270,6 +270,23 @@ assuming a page exists).
 - Data layer in `src/lib/store.js` (mode-agnostic: same async API over
   Firestore or localStorage). `DataContext` provides `updateSlice`,
   `replaceRoster`, `append`, `reportError`, `reload`, `logAudit`.
+- ⚠️ **What a page load actually costs, and what grows** (2026-10-26).
+  `loadFirebase` reads every `SINGLE_SLICES` doc and every `COLLECTION_SLICES`
+  collection, all in **parallel** — the collections used to be a serial `for
+  await` loop, which put six round trips of latency in front of every load for
+  nothing. Two things in there grow without bound:
+  - **`audit`**, appended to by every RHQ action and never trimmed. Its load is
+    capped by `COLLECTION_LIMIT` in store.js (300 most recent, `orderBy('ts')`).
+    ⚠️ **Nothing else may be added to that cap without checking
+    `persistCollection`**, which DELETES any document missing from what it is
+    handed: a partial load written back wholesale destroys the rest. `audit` is
+    safe because `logAudit` appends single documents and the only whole-array
+    write is the deliberate Clear. `support`/`resetRequests` are written back
+    whole by HelpAdmin and must stay uncapped.
+  - **`campaignFrames`**, at **132,192 characters per Regional frame** — 646 KB
+    for five — fetched in full by every visitor on every load, hidden frames
+    included. Still unsolved; it needs frames loaded per map or on demand
+    rather than a cap, since the replay genuinely needs the ones it plays.
 - Defaults/seed content in [src/firebase/seed.js](src/firebase/seed.js).
 
 ## Maps (`src/lib/maps.js`) — there is more than one (2026-09-12)

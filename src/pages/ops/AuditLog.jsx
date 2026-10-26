@@ -1,6 +1,7 @@
 import { useData } from '../../context/DataContext'
 import { useConfirm } from '../../context/ConfirmContext'
 import { OpsHeader } from './OperationsCentre'
+import { AUDIT_LOAD_LIMIT } from '../../lib/store'
 
 // Read-only record of RHQ actions (content saves, roster changes, password
 // resets, distributions). Written via useAudit; stored in the `audit` collection
@@ -10,10 +11,18 @@ export default function AuditLog() {
   const confirm = useConfirm()
   const entries = [...(state.audit || [])].sort((a, b) => (b.ts || 0) - (a.ts || 0))
 
+  // ⚠️ The LOAD is capped (see COLLECTION_LIMIT in store.js), so `entries` is
+  // the most recent page, not the whole log — but Clear really does delete
+  // everything, including entries never loaded. Saying "all 300" would be a
+  // lie about an irreversible action.
+  const capped = entries.length >= AUDIT_LOAD_LIMIT
+
   const clearAll = async () => {
     const ok = await confirm({
       title: 'Clear audit log',
-      message: `Permanently delete all ${entries.length} audit entries? This cannot be undone.`,
+      message: capped
+        ? `Permanently delete EVERY audit entry — including any older than the ${AUDIT_LOAD_LIMIT} shown here? This cannot be undone.`
+        : `Permanently delete all ${entries.length} audit entries? This cannot be undone.`,
       danger: true,
       confirmLabel: 'Clear all',
     })
@@ -25,6 +34,13 @@ export default function AuditLog() {
       <OpsHeader title="Audit Log" sub="ADMIN // RHQ ACTIONS">
         {entries.length > 0 && <button className="danger ghost" onClick={clearAll}>Clear log</button>}
       </OpsHeader>
+
+      {capped && (
+        <div className="panel panel-pad mono dim" style={{ fontSize: 11, marginBottom: 10 }}>
+          Showing the {AUDIT_LOAD_LIMIT} most recent actions. Older entries are still stored — they
+          are just not loaded, so the console doesn{'\u2019'}t get slower every month.
+        </div>
+      )}
 
       {entries.length === 0 ? (
         <div className="panel panel-pad mono dim" style={{ fontSize: 13 }}>No recorded actions yet.</div>
